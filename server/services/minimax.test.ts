@@ -27,4 +27,21 @@ describe('minimax client', () => {
 
     await expect(client.request('/test', { method: 'POST', body: {} })).rejects.toBeInstanceOf(MiniMaxError)
   })
+
+  it('removes thinking tags from chat replies', async () => {
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async () => new Response(JSON.stringify({
+        choices: [{
+          message: {
+            content: '<think>hidden reasoning</think>星信已连接。',
+          },
+        }],
+      }), { status: 200 }),
+    })
+
+    await expect(client.chat([])).resolves.toEqual({
+      reply: '星信已连接。',
+    })
+  })
 })

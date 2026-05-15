@@ -63,6 +63,10 @@ function normalizeText(value: unknown) {
   return typeof value === 'string' ? value : ''
 }
 
+function stripThinkingTags(text: string) {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+}
+
 function normalizeAudioResult(response: any): AudioResult {
   return {
     url: normalizeText(response?.data?.url ?? response?.data?.audio_url ?? response?.audio_url ?? response?.url) || undefined,
@@ -143,7 +147,7 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       })
 
       return {
-        reply: normalizeText(response?.choices?.[0]?.message?.content ?? response?.reply ?? response?.text),
+        reply: stripThinkingTags(normalizeText(response?.choices?.[0]?.message?.content ?? response?.reply ?? response?.text)),
       }
     },
 
