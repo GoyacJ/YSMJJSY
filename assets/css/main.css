@@ -1261,8 +1261,11 @@ body {
   }
 
   .star-chat {
-    right: 50%;
+    right: auto;
+    left: 1rem;
     bottom: 1rem;
+    width: calc(100vw - 5.4rem);
+    transform: none;
   }
 
   .star-chat form {
@@ -1276,7 +1279,7 @@ body {
 
   .profile-settings {
     right: 1rem;
-    bottom: 12.25rem;
+    bottom: 1rem;
   }
 
   .media-panel__actions {

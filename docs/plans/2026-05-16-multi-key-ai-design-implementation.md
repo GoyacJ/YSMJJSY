@@ -1311,6 +1311,12 @@ Append checkpoint:
 
 - Added bottom settings entry for updating assistant name and MBTI after first setup.
 - Verification: `npm run test -- components/ProfileSettingsSheet.test.ts`
+
+### Checkpoint: Multi-Key AI Design Verification
+
+- Ran full unit, build, and E2E verification for public key creation, key profile, bottom composer, and design mode.
+- Checked desktop and mobile browser flows.
+- Verification: `npm run test`; `npm run build`; `npx playwright test`
 ```
 
 ---
