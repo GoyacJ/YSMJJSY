@@ -113,6 +113,30 @@ git commit -m "chore: scaffold nuxt app"
 
 ### Task 2: Add Letter Content And Persona
 
+### Checkpoint: Task 1
+
+Status: completed.
+
+Implemented:
+
+- Scaffolded Nuxt 4 app.
+- Added runtime config placeholders for MiniMax, unlock code, session secret, and SQLite path.
+- Added Tailwind CSS through `@tailwindcss/vite`.
+- Added initial single-page letter shell.
+- Installed planned dependencies.
+
+Verification:
+
+```bash
+npm run build
+```
+
+Result: passed.
+
+Note:
+
+- `@nuxt/ui` is installed but not enabled in `nuxt.config.ts` yet. Enabling it caused production build to wait on Google font/icon metadata requests. The project currently uses custom CSS and Tailwind utilities; Nuxt UI can be enabled later only if configured to avoid remote font/icon fetches.
+
 **Files:**
 - Create: `content/letter.ts`
 - Create: `content/persona.ts`
