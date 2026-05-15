@@ -1462,6 +1462,27 @@ git commit -m "test: add main flow e2e coverage"
 
 ### Task 14: Add Deployment Docs
 
+### Checkpoint: Task 13
+
+Status: completed.
+
+Implemented:
+
+- Added Playwright config for desktop Chrome and mobile viewport smoke coverage.
+- Added main-flow E2E for wrong password, `100522` unlock, letter view, star scene, and mocked star chat reply.
+- Added `@playwright/test`.
+- Fixed unlock code validation to trim both sides.
+- Made `/api/unlock` prefer `NUXT_UNLOCK_CODE` so server-side runtime env works in E2E and deployment.
+
+Verification:
+
+```bash
+npm run test -- server/services/session.test.ts
+npx playwright test
+```
+
+Result: passed.
+
 **Files:**
 - Create: `README.md`
 - Create: `docs/deployment.md`

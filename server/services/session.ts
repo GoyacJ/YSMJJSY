@@ -1,5 +1,5 @@
 export function isValidUnlockCode(input: string, expected: string) {
-  return input.trim() === expected
+  return input.trim() === expected.trim()
 }
 
 export function getSessionCookieName() {

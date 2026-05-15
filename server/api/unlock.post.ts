@@ -8,8 +8,9 @@ const unlockBodySchema = z.object({
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const body = unlockBodySchema.safeParse(await readBody(event))
+  const expectedUnlockCode = process.env.NUXT_UNLOCK_CODE || config.unlockCode || '100522'
 
-  if (!body.success || !isValidUnlockCode(body.data.code, config.unlockCode || '100522')) {
+  if (!body.success || !isValidUnlockCode(body.data.code, expectedUnlockCode)) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Invalid unlock code',
