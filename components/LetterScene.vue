@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { finalConfession, letterParagraphs, memoryMoments } from '../content/letter'
+
+const emit = defineEmits<{
+  finished: []
+}>()
 </script>
 
 <template>
@@ -38,6 +42,9 @@ import { finalConfession, letterParagraphs, memoryMoments } from '../content/let
       <footer class="letter-scene__final">
         <h2>{{ finalConfession.title }}</h2>
         <p>{{ finalConfession.subtitle }}</p>
+        <button type="button" @click="emit('finished')">
+          去看星空
+        </button>
       </footer>
     </div>
   </section>

@@ -227,6 +227,63 @@ body {
   line-height: 2;
 }
 
+.letter-scene__final button {
+  min-height: 3rem;
+  margin-top: 1.75rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 1.35rem;
+  color: #fffaf8;
+  background: #9d6873;
+  cursor: pointer;
+  font: inherit;
+}
+
+.star-scene {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  overflow: hidden;
+  color: #fff8e8;
+  background: #111a35;
+}
+
+.star-scene__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.star-scene__content {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 2rem, 42rem);
+  text-align: center;
+}
+
+.star-scene__kicker {
+  margin: 0;
+  color: rgb(255 235 190 / 0.74);
+  font-size: 0.78rem;
+  letter-spacing: 0.24em;
+}
+
+.star-scene h2 {
+  margin: 1rem 0 0;
+  font-size: clamp(2.8rem, 12vw, 6.5rem);
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+.star-scene p:last-child {
+  max-width: 34rem;
+  margin: 1.25rem auto 0;
+  color: rgb(255 248 232 / 0.78);
+  line-height: 2;
+}
+
 @media (max-width: 520px) {
   .unlock-gate__form {
     grid-template-columns: 1fr;

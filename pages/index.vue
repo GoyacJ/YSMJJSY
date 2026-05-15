@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const phase = ref<'locked' | 'reading'>('locked')
+const phase = ref<'locked' | 'reading' | 'star'>('locked')
 const { unlock } = useUnlock()
 </script>
 
@@ -10,6 +10,9 @@ const { unlock } = useUnlock()
       :unlock="unlock"
       @unlocked="phase = 'reading'"
     />
-    <LetterScene v-else />
+    <LetterScene v-else-if="phase === 'reading'" @finished="phase = 'star'" />
+    <ClientOnly v-else>
+      <StarScene />
+    </ClientOnly>
   </main>
 </template>

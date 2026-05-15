@@ -1149,6 +1149,31 @@ git commit -m "feat: add starry finale scene"
 
 ### Task 11: Build Star Chat UI
 
+### Checkpoint: Task 10
+
+Status: completed.
+
+Implemented:
+
+- Added deterministic `520` star point helper.
+- Added client-only Canvas star scene.
+- Added high-DPI redraw, resize handling, reduced-motion behavior, and unmount cleanup.
+- Added letter-to-star transition button.
+- Wired `pages/index.vue` reading phase to star phase.
+
+Verification:
+
+```bash
+npm run test -- server/utils/star-map.test.ts
+npm run build
+```
+
+Result: passed.
+
+Note:
+
+- The pure star map helper lives in `utils/star-map.ts` so client components can import it. `server/utils/star-map.ts` re-exports it to keep the planned test path.
+
 **Files:**
 - Create: `components/StarChat.vue`
 - Create: `components/StarChat.test.ts`
