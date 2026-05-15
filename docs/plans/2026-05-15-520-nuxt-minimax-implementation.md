@@ -1749,3 +1749,9 @@ Manual checks:
 
 - Added key normalization, lookup hashing, IP hashing, and pure rate-limit helpers.
 - Verification: `npm run test -- server/services/key-access.test.ts server/services/rate-limit.test.ts`
+
+### Checkpoint: Public Key Creation And Sessions
+
+- Added public key creation, hashed key lookup, duplicate detection, and signed key sessions.
+- Replaced global unlock session with key-scoped session context.
+- Verification: `npm run test -- server/services/session.test.ts server/api/keys.post.test.ts server/services/key-access.test.ts`; `npm run build`

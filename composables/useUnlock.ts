@@ -1,5 +1,8 @@
 export type UnlockResult = {
   ok: boolean
+  keyId?: string
+  needsConfig?: boolean
+  message?: string
 }
 
 export function useUnlock() {
@@ -27,9 +30,31 @@ export function useUnlock() {
     }
   }
 
+  async function createKey(key: string): Promise<UnlockResult> {
+    pending.value = true
+    error.value = ''
+
+    try {
+      const result = await $fetch<UnlockResult>('/api/keys', {
+        method: 'POST',
+        body: { key },
+      })
+
+      return result
+    }
+    catch {
+      error.value = '这把钥匙暂时不能保存。'
+      return { ok: false }
+    }
+    finally {
+      pending.value = false
+    }
+  }
+
   return {
     pending: readonly(pending),
     error: readonly(error),
     unlock,
+    createKey,
   }
 }
