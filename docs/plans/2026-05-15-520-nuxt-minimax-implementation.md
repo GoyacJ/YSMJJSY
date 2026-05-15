@@ -677,6 +677,31 @@ git commit -m "feat: add minimax service client"
 
 ### Task 7: Add Chat API
 
+### Checkpoint: Task 6
+
+Status: completed.
+
+Implemented:
+
+- Added MiniMax service client.
+- Added bearer authorization and optional group id header.
+- Added normalized response types for chat, TTS, image, video, and music.
+- Added upstream error wrapper.
+- Added client tests.
+
+Verification:
+
+```bash
+npm run test -- server/services/minimax.test.ts
+npm run build
+```
+
+Result: passed.
+
+Note:
+
+- MiniMax endpoint paths are isolated in `server/services/minimax.ts`. If MiniMax changes a path or response shape, only this service should need updates.
+
 **Files:**
 - Create: `server/api/chat.post.ts`
 - Create: `server/api/chat.post.test.ts`
