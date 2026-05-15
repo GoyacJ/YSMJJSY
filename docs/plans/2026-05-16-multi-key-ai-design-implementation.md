@@ -23,7 +23,7 @@
 ## Execution Rules
 
 - Execute tasks in order with `superpowers:executing-plans`.
-- After each task passes its listed verification, append that task's checkpoint to `docs/plans/2026-05-15-520-nuxt-minimax-implementation.md`.
+- After each task passes its listed verification, append that task's checkpoint to `docs/plans/2026-05-16-multi-key-ai-design-implementation.md`.
 - Commit after each completed task unless the working tree contains unrelated user changes.
 - Suggested commit messages:
   - Task 1: `feat: add multi-key persistence schema`
@@ -1511,3 +1511,24 @@ Affected APIs:
 
 Keep `100522` usable by creating a default key profile during migration or first unlock.
 If this is not desired, remove this compatibility in Task 3 and update E2E accordingly.
+
+---
+
+## Execution Checkpoints
+
+### Checkpoint: Multi-Key Schema
+
+- Added key profiles, key designs, usage limits, attachments, and key-scoped data columns.
+- Added repository tests for key lookup and usage counters.
+- Verification: `npm run test -- server/db/sqlite.test.ts`
+
+### Checkpoint: Key Hashing And Rate Limits
+
+- Added key normalization, lookup hashing, IP hashing, and pure rate-limit helpers.
+- Verification: `npm run test -- server/services/key-access.test.ts server/services/rate-limit.test.ts`
+
+### Checkpoint: Public Key Creation And Sessions
+
+- Added public key creation, hashed key lookup, duplicate detection, and signed key sessions.
+- Replaced global unlock session with key-scoped session context.
+- Verification: `npm run test -- server/services/session.test.ts server/api/keys.post.test.ts server/services/key-access.test.ts`; `npm run build`
