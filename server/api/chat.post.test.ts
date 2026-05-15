@@ -21,6 +21,7 @@ describe('chat api helpers', () => {
     const messages = buildStarChatMessages({
       userMessage: '看看这张图',
       imageDescription: '图片里是一片星空。',
+      attachmentNotes: [],
       assistantName: '星信',
       mbti: 'INTJ',
       memories: [],
@@ -31,5 +32,22 @@ describe('chat api helpers', () => {
       role: 'user',
       content: '看看这张图\n\n用户附带图片描述：图片里是一片星空。',
     })
+  })
+
+  it('adds audio and video attachment metadata to context', () => {
+    const messages = buildStarChatMessages({
+      userMessage: '看看附件',
+      attachmentNotes: [
+        '用户附带了一个音频文件：voice.mp3，类型 audio/mpeg。当前版本不直接解析该文件内容。',
+        '用户附带了一个视频文件：clip.mp4，类型 video/mp4。当前版本不直接解析该文件内容。',
+      ],
+      assistantName: '星信',
+      mbti: 'INTJ',
+      memories: [],
+      recentConversation: [],
+    })
+
+    expect(String(messages.at(-1)?.content)).toContain('voice.mp3')
+    expect(String(messages.at(-1)?.content)).toContain('clip.mp4')
   })
 })

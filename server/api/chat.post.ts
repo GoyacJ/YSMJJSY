@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { finalConfession, letterParagraphs, memoryMoments } from '../../content/letter'
 import { starLetterPersona } from '../../content/persona'
 import {
+  createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
   createMemoryRepository,
@@ -18,17 +19,24 @@ import { assertWithinLimit, usageLimits } from '../services/rate-limit'
 
 const chatBodySchema = z.object({
   message: z.string().trim().max(1000).default(''),
+  attachments: z.array(z.object({
+    kind: z.enum(['image', 'video', 'audio']),
+    dataUrl: z.string().regex(/^data:(?:image\/(?:png|jpeg|webp)|audio\/(?:mpeg|mp3|mp4|m4a|wav|webm)|video\/(?:mp4|webm|quicktime));base64,[A-Za-z0-9+/=]+$/).max(28_000_000),
+    name: z.string().trim().min(1).max(160),
+    mimeType: z.string().trim().min(1).max(80),
+  })).max(3).default([]),
   imageDataUrl: z.string()
     .regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/)
     .max(3_000_000)
     .optional(),
-}).refine(data => data.message.length > 0 || data.imageDataUrl, {
+}).refine(data => data.message.length > 0 || data.imageDataUrl || data.attachments.length > 0, {
   message: 'Message or image is required',
 })
 
 type BuildStarChatMessagesInput = {
   userMessage: string
   imageDescription?: string
+  attachmentNotes?: string[]
   assistantName?: string
   mbti?: string
   memories: string[]
@@ -56,13 +64,19 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
   const memoryText = input.memories.length > 0
     ? input.memories.map(item => `- ${item}`).join('\n')
     : '还没有被允许保存的情绪或偏好。'
-  const userContent = input.imageDescription
-    ? [
-        input.userMessage || '请看这张图片，用温柔简洁的方式回应。',
-        '',
-        `用户附带图片描述：${input.imageDescription}`,
-      ].join('\n')
-    : input.userMessage
+  const userContentParts = [
+    input.userMessage || '请看附件，用温柔简洁的方式回应。',
+  ]
+
+  if (input.imageDescription) {
+    userContentParts.push('', `用户附带图片描述：${input.imageDescription}`)
+  }
+
+  if (input.attachmentNotes?.length) {
+    userContentParts.push('', ...input.attachmentNotes)
+  }
+
+  const userContent = userContentParts.join('\n')
 
   return [
     {
@@ -137,6 +151,7 @@ export default defineEventHandler(async (event) => {
 
   const conversations = createConversationRepository(config.sqlitePath)
   const memories = createMemoryRepository(config.sqlitePath)
+  const attachmentRepo = createAttachmentRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
   const usage = createUsageLimitRepository(config.sqlitePath)
   const client = createMiniMaxClient({
@@ -153,6 +168,13 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  if (body.data.attachments.length > 0 && !assertWithinLimit({ current: currentUsage?.uploadCount ?? 0, max: usageLimits.uploadPerKeyPerDay })) {
+    throw createError({
+      statusCode: 429,
+      statusMessage: '今天的星光先到这里。',
+    })
+  }
+
   usage.incrementUsage({
     keyId,
     ipHash: createIpHash(getClientIp(event), config.sessionSecret),
@@ -160,17 +182,35 @@ export default defineEventHandler(async (event) => {
     bucket: 'chat',
   })
 
+  if (body.data.attachments.length > 0) {
+    usage.incrementUsage({
+      keyId,
+      ipHash: createIpHash(getClientIp(event), config.sessionSecret),
+      date: today,
+      bucket: 'upload',
+    })
+  }
+
   const recentConversation = conversations.listRecentConversationsByKey(keyId, 12)
   const savedMemories = memories.listMemoriesByKey(keyId).map(memory => memory.content)
-  const imageDescription = body.data.imageDataUrl
+  const firstImage = body.data.attachments.find(attachment => attachment.kind === 'image')
+  const imageDataUrl = body.data.imageDataUrl || firstImage?.dataUrl
+  const imageDescription = imageDataUrl
     ? await withMiniMaxErrorBoundary(
-        () => client.describeImage(body.data.imageDataUrl!, body.data.message || '请描述这张图片，保留和情绪、场景、文字有关的信息。'),
+        () => client.describeImage(imageDataUrl, body.data.message || '请描述这张图片，保留和情绪、场景、文字有关的信息。'),
         'Image understanding failed',
       )
     : undefined
+  const attachmentNotes = body.data.attachments
+    .filter(attachment => attachment.kind !== 'image')
+    .map((attachment) => {
+      const label = attachment.kind === 'audio' ? '音频' : '视频'
+      return `用户附带了一个${label}文件：${attachment.name}，类型 ${attachment.mimeType}。当前版本不直接解析该文件内容。`
+    })
   const messages = buildStarChatMessages({
     userMessage: body.data.message,
     imageDescription,
+    attachmentNotes,
     assistantName: profile?.assistantName || '星信',
     mbti: profile?.mbti || 'INTJ',
     memories: savedMemories,
@@ -179,14 +219,27 @@ export default defineEventHandler(async (event) => {
 
   const result = await withMiniMaxErrorBoundary(() => client.chat(messages), 'Chat generation failed')
   const now = new Date().toISOString()
+  const userConversationId = nanoid()
 
   conversations.addConversation({
-    id: nanoid(),
+    id: userConversationId,
     keyId,
     role: 'user',
-    content: body.data.message || '[图片消息]',
+    content: body.data.message || '[附件消息]',
     createdAt: now,
   })
+  for (const attachment of body.data.attachments) {
+    attachmentRepo.addAttachment({
+      id: nanoid(),
+      keyId,
+      conversationId: userConversationId,
+      type: attachment.kind,
+      mimeType: attachment.mimeType,
+      filename: attachment.name,
+      dataUrl: attachment.dataUrl,
+      createdAt: now,
+    })
+  }
   conversations.addConversation({
     id: nanoid(),
     keyId,

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
+  createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
   createMediaTaskRepository,
@@ -114,5 +117,35 @@ describe('sqlite repositories', () => {
 
     expect(repo.getMediaTaskByKey('key_1', 'task_1')?.id).toBe('task_1')
     expect(repo.getMediaTaskByKey('key_2', 'task_1')).toBeUndefined()
+  })
+
+  it('stores attachments by key and conversation', () => {
+    const path = join(tmpdir(), `ysmjjsy-attachment-${Date.now()}-${Math.random()}.sqlite`)
+    const profiles = createKeyProfileRepository(path)
+    const repo = createAttachmentRepository(path)
+
+    profiles.addKeyProfile({
+      id: 'key_1',
+      keyLookupHash: 'lookup_attachment',
+      assistantName: '',
+      mbti: '',
+      configuredAt: null,
+      createdIpHash: 'ip_hash',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+    })
+    repo.addAttachment({
+      id: 'att_1',
+      keyId: 'key_1',
+      conversationId: 'c1',
+      type: 'audio',
+      mimeType: 'audio/mpeg',
+      filename: 'voice.mp3',
+      dataUrl: 'data:audio/mpeg;base64,abc',
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+
+    expect(repo.listAttachmentsByConversation('key_1', 'c1')).toHaveLength(1)
+    expect(repo.listAttachmentsByConversation('key_2', 'c1')).toHaveLength(0)
   })
 })

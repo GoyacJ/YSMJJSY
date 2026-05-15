@@ -1569,3 +1569,10 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Rebuilt StarChat as a bottom composer with attachment, voice, design, and send controls.
 - Added design mode placeholder and mode-specific submit behavior.
 - Verification: `npm run test -- components/StarChat.test.ts`; `npm run build`
+
+### Checkpoint: Attachment Persistence And Chat Context
+
+- Added key-scoped attachment persistence.
+- Extended chat requests for image, audio, and video attachments.
+- Preserved image understanding and added safe metadata context for audio/video.
+- Verification: `npm run test -- server/api/chat.post.test.ts server/db/sqlite.test.ts`; `npm run build`
