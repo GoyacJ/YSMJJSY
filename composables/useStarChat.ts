@@ -6,6 +6,20 @@ export type StarChatMessage = {
   imageDataUrl?: string
 }
 
+export type AttachmentKind = 'image' | 'video' | 'audio'
+
+export type StarChatAttachment = {
+  kind: AttachmentKind
+  dataUrl: string
+  name: string
+  mimeType: string
+}
+
+export type StarChatSendPayload = {
+  message: string
+  attachments: StarChatAttachment[]
+}
+
 export type StarChatReply = {
   reply: string
 }
@@ -15,21 +29,26 @@ export function useStarChat() {
   const pending = ref(false)
   const error = ref('')
 
-  async function sendMessage(message: string, imageDataUrl?: string): Promise<StarChatReply> {
-    const text = message.trim()
+  async function sendMessage(payload: StarChatSendPayload): Promise<StarChatReply> {
+    const text = payload.message.trim()
+    const image = payload.attachments.find(attachment => attachment.kind === 'image')
 
-    if (!text && !imageDataUrl) {
+    if (!text && payload.attachments.length === 0) {
       return { reply: '' }
     }
 
     pending.value = true
     error.value = ''
-    messages.value.push({ role: 'user', content: text || '发送了一张图片', imageDataUrl })
+    messages.value.push({ role: 'user', content: text || '发送了一个附件', imageDataUrl: image?.dataUrl })
 
     try {
       const result = await $fetch<StarChatReply>('/api/chat', {
         method: 'POST',
-        body: { message: text, imageDataUrl },
+        body: {
+          message: text,
+          attachments: payload.attachments,
+          imageDataUrl: image?.dataUrl,
+        },
       })
 
       messages.value.push({ role: 'assistant', content: result.reply })

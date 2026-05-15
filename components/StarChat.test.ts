@@ -25,26 +25,31 @@ describe('StarChat', () => {
   })
 
   it('sends user message and renders reply', async () => {
+    const sendMessage = vi.fn(async () => ({ reply: '这封信是真的。' }))
     const wrapper = mountStarChat({
       props: {
-        sendMessage: async () => ({ reply: '这封信是真的。' }),
+        sendMessage,
       },
     })
 
     await wrapper.find('textarea').setValue('这封信是真的吗？')
     await wrapper.find('form').trigger('submit.prevent')
 
+    expect(sendMessage).toHaveBeenCalledWith({ message: '这封信是真的吗？', attachments: [] })
     expect(wrapper.text()).toContain('这封信是真的')
   })
 
-  it('shows voice and image controls', () => {
+  it('shows bottom multimodal controls', () => {
     const wrapper = mountStarChat()
 
+    expect(wrapper.classes()).toContain('star-chat--bottom')
+    expect(wrapper.get('label[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
-    expect(wrapper.get('label[aria-label="添加图片"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="设计模式"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="发送"]').exists()).toBe(true)
   })
 
-  it('sends selected image with the message', async () => {
+  it('sends selected image attachment with the message', async () => {
     const sendMessage = vi.fn(async () => ({ reply: '我看到了这张图。' }))
     const wrapper = mountStarChat({
       props: {
@@ -75,8 +80,39 @@ describe('StarChat', () => {
     await wrapper.find('textarea').setValue('看看这张图')
     await wrapper.find('form').trigger('submit.prevent')
 
-    expect(sendMessage).toHaveBeenCalledWith('看看这张图', 'data:image/png;base64,abc')
+    expect(sendMessage).toHaveBeenCalledWith({
+      message: '看看这张图',
+      attachments: [{
+        kind: 'image',
+        dataUrl: 'data:image/png;base64,abc',
+        name: 'star.png',
+        mimeType: 'image/png',
+      }],
+    })
     expect(wrapper.text()).toContain('我看到了这张图。')
+  })
+
+  it('uses design mode placeholder and emits design requests', async () => {
+    const wrapper = mountStarChat()
+
+    await wrapper.get('button[aria-label="设计模式"]').trigger('click')
+
+    expect(wrapper.get('textarea').attributes('placeholder')).toBe('请输入你的创意想法')
+
+    await wrapper.find('textarea').setValue('把页面改成月光感')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    expect(wrapper.emitted('designRequested')?.[0]).toEqual(['把页面改成月光感'])
+  })
+
+  it('marks thread active after user interaction', async () => {
+    const wrapper = mountStarChat()
+
+    expect(wrapper.attributes('data-thread-active')).toBe('false')
+
+    await wrapper.get('.star-chat__thread').trigger('click')
+
+    expect(wrapper.attributes('data-thread-active')).toBe('true')
   })
 
   it('fills the input from browser speech recognition', async () => {

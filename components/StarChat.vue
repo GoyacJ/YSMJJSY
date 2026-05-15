@@ -1,20 +1,50 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
-import { useStarChat, type StarChatMessage, type StarChatReply } from '../composables/useStarChat'
+import {
+  useStarChat,
+  type AttachmentKind,
+  type StarChatAttachment,
+  type StarChatMessage,
+  type StarChatReply,
+  type StarChatSendPayload,
+} from '../composables/useStarChat'
 
 const props = defineProps<{
-  sendMessage?: (message: string, imageDataUrl?: string) => Promise<StarChatReply>
+  sendMessage?: (payload: StarChatSendPayload) => Promise<StarChatReply>
+}>()
+
+const emit = defineEmits<{
+  designRequested: [instruction: string]
 }>()
 
 const input = ref('')
 const pending = ref(false)
 const error = ref('')
 const localMessages = ref<StarChatMessage[]>([])
-const imageDataUrl = ref('')
-const imageName = ref('')
+const attachments = ref<StarChatAttachment[]>([])
 const listening = ref(false)
+const mode = ref<'chat' | 'design'>('chat')
+const threadActive = ref(false)
 const chat = useStarChat()
 let recognition: { start: () => void; stop?: () => void; abort?: () => void; lang: string; interimResults: boolean; onresult: ((event: any) => void) | null; onerror: (() => void) | null; onend: (() => void) | null } | null = null
+
+const attachmentRules: Record<AttachmentKind, { mimeTypes: string[], maxSize: number, label: string }> = {
+  image: {
+    mimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+    maxSize: 2_000_000,
+    label: '图片需要是 2MB 内的 PNG、JPG 或 WebP。',
+  },
+  audio: {
+    mimeTypes: ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a', 'audio/wav', 'audio/webm'],
+    maxSize: 8_000_000,
+    label: '音频需要是 8MB 内的 MP3、M4A、WAV 或 WebM。',
+  },
+  video: {
+    mimeTypes: ['video/mp4', 'video/webm', 'video/quicktime'],
+    maxSize: 20_000_000,
+    label: '视频需要是 20MB 内的 MP4、WebM 或 MOV。',
+  },
+}
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -25,31 +55,55 @@ function readFileAsDataUrl(file: File) {
   })
 }
 
-async function handleImageChange(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+function getAttachmentKind(file: File): AttachmentKind | undefined {
+  if (file.type.startsWith('image/')) return 'image'
+  if (file.type.startsWith('audio/')) return 'audio'
+  if (file.type.startsWith('video/')) return 'video'
+}
 
-  if (!file) {
-    return
-  }
+async function handleAttachmentChange(event: Event) {
+  const files = Array.from((event.target as HTMLInputElement).files ?? []).slice(0, 3)
 
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 2_000_000) {
-    error.value = '图片需要是 2MB 内的 PNG、JPG 或 WebP。'
+  if (files.length === 0) {
     return
   }
 
   try {
-    imageDataUrl.value = await readFileAsDataUrl(file)
-    imageName.value = file.name
+    const nextAttachments: StarChatAttachment[] = []
+
+    for (const file of files) {
+      const kind = getAttachmentKind(file)
+
+      if (!kind) {
+        error.value = '只能添加图片、音频或视频。'
+        return
+      }
+
+      const rule = attachmentRules[kind]
+
+      if (!rule.mimeTypes.includes(file.type) || file.size > rule.maxSize) {
+        error.value = rule.label
+        return
+      }
+
+      nextAttachments.push({
+        kind,
+        dataUrl: await readFileAsDataUrl(file),
+        name: file.name,
+        mimeType: file.type,
+      })
+    }
+
+    attachments.value = nextAttachments
     error.value = ''
   }
   catch {
-    error.value = '这张图片没有读到。'
+    error.value = '附件没有读到。'
   }
 }
 
-function removeImage() {
-  imageDataUrl.value = ''
-  imageName.value = ''
+function removeAttachment(index: number) {
+  attachments.value.splice(index, 1)
 }
 
 function startVoiceInput() {
@@ -84,22 +138,33 @@ function startVoiceInput() {
 
 async function submit() {
   const text = input.value.trim()
-  const image = imageDataUrl.value
+  const selectedAttachments = [...attachments.value]
 
-  if ((!text && !image) || pending.value) {
+  if ((!text && selectedAttachments.length === 0) || pending.value) {
+    return
+  }
+
+  if (mode.value === 'design') {
+    emit('designRequested', text)
+    input.value = ''
     return
   }
 
   pending.value = true
   error.value = ''
-  localMessages.value.push({ role: 'user', content: text || '发送了一张图片', imageDataUrl: image || undefined })
+  localMessages.value.push({
+    role: 'user',
+    content: text || '发送了一个附件',
+    imageDataUrl: selectedAttachments.find(attachment => attachment.kind === 'image')?.dataUrl,
+  })
   input.value = ''
-  removeImage()
+  attachments.value = []
 
   try {
+    const payload = { message: text, attachments: selectedAttachments }
     const result = props.sendMessage
-      ? await props.sendMessage(text, image || undefined)
-      : await chat.sendMessage(text, image || undefined)
+      ? await props.sendMessage(payload)
+      : await chat.sendMessage(payload)
 
     if (result.reply) {
       localMessages.value.push({ role: 'assistant', content: result.reply })
@@ -119,14 +184,23 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside class="star-chat" aria-label="星信">
+  <aside
+    class="star-chat star-chat--bottom"
+    aria-label="星信"
+    :data-thread-active="String(threadActive)"
+  >
     <div class="star-chat__note">
       <header class="star-chat__header">
         <p>星信</p>
         <span>这封信里的星光</span>
       </header>
 
-      <div class="star-chat__thread star-chat__messages" aria-live="polite">
+      <div
+        class="star-chat__thread star-chat__messages"
+        aria-live="polite"
+        @click="threadActive = true"
+        @touchstart.passive="threadActive = true"
+      >
         <p v-if="localMessages.length === 0" class="star-chat__empty">
           你可以问这封信里的任何一句话。
         </p>
@@ -147,13 +221,16 @@ onBeforeUnmount(() => {
 
       <form class="star-chat__composer" @submit.prevent="submit">
         <label class="sr-only" for="star-chat-input">和星信说话</label>
-        <textarea
-          id="star-chat-input"
-          v-model="input"
-          rows="2"
-          placeholder="写一张星信"
-        />
         <div class="star-chat__tools">
+          <label class="star-chat__attachment-button star-chat__icon-button" aria-label="添加附件">
+            +
+            <input
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp,audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"
+              @change="handleAttachmentChange"
+            >
+          </label>
           <button
             type="button"
             class="star-chat__icon-button"
@@ -163,10 +240,24 @@ onBeforeUnmount(() => {
           >
             {{ listening ? '听' : '声' }}
           </button>
-          <label class="star-chat__image-button star-chat__icon-button" aria-label="添加图片">
-            图
-            <input type="file" accept="image/png,image/jpeg,image/webp" @change="handleImageChange">
-          </label>
+          <button
+            type="button"
+            class="star-chat__icon-button"
+            :data-active="mode === 'design'"
+            aria-label="设计模式"
+            @click="mode = mode === 'design' ? 'chat' : 'design'"
+          >
+            设
+          </button>
+        </div>
+        <textarea
+          id="star-chat-input"
+          v-model="input"
+          rows="2"
+          :placeholder="mode === 'design' ? '请输入你的创意想法' : '写一张星信'"
+          @focus="threadActive = true"
+        />
+        <div class="star-chat__tools">
           <button
             class="star-chat__icon-button star-chat__icon-button--send"
             type="submit"
@@ -178,12 +269,15 @@ onBeforeUnmount(() => {
         </div>
       </form>
 
-      <div v-if="imageDataUrl" class="star-chat__image-preview">
-        <img :src="imageDataUrl" alt="">
-        <span>{{ imageName }}</span>
-        <button type="button" @click="removeImage">
-          移除
-        </button>
+      <div v-if="attachments.length" class="star-chat__attachment-preview">
+        <article v-for="(attachment, index) in attachments" :key="`${attachment.name}-${index}`">
+          <img v-if="attachment.kind === 'image'" :src="attachment.dataUrl" alt="">
+          <span v-else>{{ attachment.kind === 'audio' ? '音' : '视' }}</span>
+          <p>{{ attachment.name }}</p>
+          <button type="button" @click="removeAttachment(index)">
+            移除
+          </button>
+        </article>
       </div>
 
       <p v-if="error" class="star-chat__error" role="alert">

@@ -1563,3 +1563,9 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Added MiniMax JSON-only design schema generation.
 - Verified preview does not persist until explicit commit.
 - Verification: `npm run test -- server/api/design.test.ts server/services/minimax.test.ts server/api/keys.post.test.ts`; `npm run build`
+
+### Checkpoint: Bottom Multimodal Composer
+
+- Rebuilt StarChat as a bottom composer with attachment, voice, design, and send controls.
+- Added design mode placeholder and mode-specific submit behavior.
+- Verification: `npm run test -- components/StarChat.test.ts`; `npm run build`
