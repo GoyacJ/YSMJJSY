@@ -442,6 +442,26 @@ git commit -m "feat: add sqlite storage"
 
 ### Task 5: Add Memory Filtering
 
+### Checkpoint: Task 4
+
+Status: completed.
+
+Implemented:
+
+- Added SQLite schema for conversations, memories, and media tasks.
+- Added conversation, memory, and media task repositories.
+- Added directory creation for file-backed SQLite paths.
+- Added in-memory repository test.
+
+Verification:
+
+```bash
+npm run test -- server/db/sqlite.test.ts
+npm run build
+```
+
+Result: passed.
+
 **Files:**
 - Create: `server/services/memory.ts`
 - Create: `server/services/memory.test.ts`
