@@ -220,6 +220,27 @@ git commit -m "feat: add letter content and persona"
 
 ### Task 3: Add Session Unlock
 
+### Checkpoint: Task 2
+
+Status: completed.
+
+Implemented:
+
+- Added replaceable local letter content.
+- Added memory moments.
+- Added final confession copy.
+- Added restrained “星信” persona.
+- Added content tests.
+
+Verification:
+
+```bash
+npm run test -- content/letter.test.ts
+npm run build
+```
+
+Result: passed.
+
 **Files:**
 - Create: `server/services/session.ts`
 - Create: `server/services/session.test.ts`
