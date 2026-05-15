@@ -1576,3 +1576,9 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Extended chat requests for image, audio, and video attachments.
 - Preserved image understanding and added safe metadata context for audio/video.
 - Verification: `npm run test -- server/api/chat.post.test.ts server/db/sqlite.test.ts`; `npm run build`
+
+### Checkpoint: Design Mode Client Flow
+
+- Added design preview, save, and discard flow.
+- Wired design mode composer to schema preview and commit APIs.
+- Verification: `npm run test -- components/DesignPreviewSheet.test.ts components/StarChat.test.ts`; `npm run build`

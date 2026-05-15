@@ -435,6 +435,63 @@ body {
   line-height: 1.8;
 }
 
+.design-preview-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(15 19 35 / 0.62);
+  backdrop-filter: blur(14px);
+}
+
+.design-preview-sheet__panel {
+  display: grid;
+  width: min(100%, 56rem);
+  max-height: min(86vh, 54rem);
+  border: 1px solid rgb(255 235 190 / 0.16);
+  border-radius: 0.7rem;
+  overflow: hidden;
+  background: #fff8f3;
+  box-shadow: 0 2rem 5rem rgb(0 0 0 / 0.35);
+}
+
+.design-preview-sheet__preview {
+  max-height: 72vh;
+  overflow: auto;
+}
+
+.design-preview-sheet__preview .dynamic-star-page {
+  min-height: 36rem;
+  padding-bottom: 4rem;
+}
+
+.design-preview-sheet__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  border-top: 1px solid rgb(135 82 93 / 0.12);
+  padding: 0.8rem;
+  background: rgb(255 250 245 / 0.95);
+}
+
+.design-preview-sheet__actions button {
+  min-height: 2.7rem;
+  border: 1px solid rgb(135 82 93 / 0.16);
+  border-radius: 999px;
+  padding: 0 1rem;
+  color: #87525d;
+  font: inherit;
+  background: rgb(255 255 255 / 0.64);
+  cursor: pointer;
+}
+
+.design-preview-sheet__actions button:last-child {
+  color: #fffaf8;
+  background: #9d6873;
+}
+
 .letter-scene {
   min-height: 100vh;
   padding: clamp(2rem, 8vw, 6rem) 1.25rem;
