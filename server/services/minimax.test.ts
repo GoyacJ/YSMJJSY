@@ -189,4 +189,38 @@ describe('minimax client', () => {
       expect.objectContaining({ key: 'video', label: '做一段', used: 0, total: 0, remaining: 0, available: false }),
     ])
   })
+
+  it('generates JSON-only design patches', async () => {
+    let requestBody: any
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body))
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: '{"version":1,"theme":"star-letter","palette":"rose-gold","title":"给你的信","subtitle":"今天认真写给你。","sections":[{"type":"letter","text":"新的段落。"}]}',
+            },
+          }],
+        }), { status: 200 })
+      },
+    })
+
+    const result = await client.generateDesignPatch({
+      currentSchema: {
+        version: 1,
+        theme: 'star-letter',
+        palette: 'rose-gold',
+        title: '给你的信',
+        subtitle: '今天认真写给你。',
+        sections: [{ type: 'letter', text: '旧段落。' }],
+      },
+      instruction: '改一下',
+      assistantName: '星信',
+      mbti: 'INTJ',
+    })
+
+    expect(result).toMatchObject({ title: '给你的信' })
+    expect(JSON.stringify(requestBody.messages)).toContain('只返回 JSON')
+  })
 })

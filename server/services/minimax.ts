@@ -1,5 +1,6 @@
 import type { ExtractedMemory } from './memory'
 import { Buffer } from 'node:buffer'
+import type { StarPageDesignSchema } from '../../types/design-schema'
 
 type Fetcher = typeof fetch
 
@@ -38,6 +39,13 @@ export type MusicResult = AudioResult
 
 export type VisionResult = {
   description: string
+}
+
+export type DesignPatchInput = {
+  currentSchema: StarPageDesignSchema
+  instruction: string
+  assistantName: string
+  mbti: string
 }
 
 export type MiniMaxQuotaKind = 'chat' | 'audio' | 'image' | 'music' | 'video'
@@ -140,6 +148,18 @@ function normalizeVisionDescription(response: any) {
     ?? response?.description
     ?? response?.choices?.[0]?.message?.content,
   ))
+}
+
+function parseJsonObject(text: string) {
+  const normalized = stripThinkingTags(text)
+  const start = normalized.indexOf('{')
+  const end = normalized.lastIndexOf('}')
+
+  if (start === -1 || end === -1 || end <= start) {
+    throw new MiniMaxError('MiniMax did not return JSON')
+  }
+
+  return JSON.parse(normalized.slice(start, end + 1))
 }
 
 function normalizeVideoStatus(status: string): VideoStatusResult['status'] {
@@ -286,6 +306,35 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       catch {
         return []
       }
+    },
+
+    async generateDesignPatch(input: DesignPatchInput): Promise<unknown> {
+      const result = await this.chat([
+        {
+          role: 'system',
+          content: [
+            '你是这个 520 星信页面的设计助手。',
+            `你的称呼是：${input.assistantName}`,
+            `MBTI 性格设定：${input.mbti}`,
+            '只返回 JSON。',
+            '不要返回 Markdown。',
+            '不要返回 HTML、CSS、JavaScript 或解释。',
+            '只能输出符合 StarPageDesignSchema 的完整对象。',
+            '允许字段：version、theme、palette、title、subtitle、sections。',
+            'section 只能是 letter、memory-map、star-scene。',
+            '保持温柔、安静、像一封信，带一点星空仪式感。',
+          ].join('\n'),
+        },
+        {
+          role: 'user',
+          content: [
+            `当前 schema：${JSON.stringify(input.currentSchema)}`,
+            `修改要求：${input.instruction}`,
+          ].join('\n\n'),
+        },
+      ])
+
+      return parseJsonObject(result.reply)
     },
 
     async textToSpeech(text: string): Promise<AudioResult> {

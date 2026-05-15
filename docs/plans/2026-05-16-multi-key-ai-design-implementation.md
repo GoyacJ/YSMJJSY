@@ -1556,3 +1556,10 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Added safe design schema validation and dynamic page rendering.
 - Added a whitelist renderer for letter, memory-map, and star-scene sections.
 - Verification: `npm run test -- server/services/design-schema.test.ts components/DynamicStarPage.test.ts`; `npm run build`
+
+### Checkpoint: AI Design Preview And Commit
+
+- Added design load, preview, and commit APIs.
+- Added MiniMax JSON-only design schema generation.
+- Verified preview does not persist until explicit commit.
+- Verification: `npm run test -- server/api/design.test.ts server/services/minimax.test.ts server/api/keys.post.test.ts`; `npm run build`

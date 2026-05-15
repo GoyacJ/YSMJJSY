@@ -9,6 +9,7 @@ import {
 import { createIpHash, createKeyLookupHash, normalizeKey } from '../services/key-access'
 import { assertWithinLimit, usageLimits } from '../services/rate-limit'
 import { createKeySessionToken, getSessionCookieName } from '../services/session'
+import { createDefaultDesignSchema } from '../services/design-schema'
 
 const PUBLIC_CREATE_KEY_ID = '__public_create__'
 
@@ -25,25 +26,7 @@ export function buildCreatedKeyResponse(keyId: string) {
 }
 
 export function createDefaultDesignSchemaJson() {
-  return JSON.stringify({
-    version: 1,
-    theme: 'star-letter',
-    palette: 'rose-gold',
-    title: '给你的信',
-    subtitle: '有些话今天认真写给你。',
-    sections: [
-      {
-        type: 'letter',
-        layout: 'moon-wrap',
-        text: '这里会慢慢写下只属于这把钥匙的内容。',
-      },
-      {
-        type: 'star-scene',
-        density: 0.64,
-        caption: '每一颗星都可以被重新设计。',
-      },
-    ],
-  })
+  return JSON.stringify(createDefaultDesignSchema())
 }
 
 function getClientIp(event: H3Event) {
