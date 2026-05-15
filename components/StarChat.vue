@@ -78,5 +78,7 @@ async function submit() {
     <p v-if="error" class="star-chat__error" role="alert">
       {{ error }}
     </p>
+
+    <MediaCreationPanel :source-text="localMessages.at(-1)?.content || '这封信里的星光'" />
   </aside>
 </template>

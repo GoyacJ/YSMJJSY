@@ -1377,6 +1377,27 @@ git commit -m "feat: add media creation panel"
 
 ### Task 13: Add E2E Smoke Tests
 
+### Checkpoint: Task 12
+
+Status: completed.
+
+Implemented:
+
+- Added `useMediaTasks`.
+- Added `MediaCreationPanel` with four explicit media actions.
+- Added `GeneratedAsset` rendering for audio, image, video, pending, and failed states.
+- Wired media creation into the `StarChat` panel.
+- Added responsive styles for generated media.
+
+Verification:
+
+```bash
+npm run test -- components/MediaCreationPanel.test.ts
+npm run build
+```
+
+Result: passed.
+
 **Files:**
 - Create: `playwright.config.ts`
 - Create: `tests/e2e/main-flow.spec.ts`
