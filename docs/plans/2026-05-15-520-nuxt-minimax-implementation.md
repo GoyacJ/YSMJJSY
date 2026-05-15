@@ -792,6 +792,32 @@ git commit -m "feat: add star letter chat api"
 
 ### Task 8: Add Media APIs
 
+### Checkpoint: Task 7
+
+Status: completed.
+
+Implemented:
+
+- Added `/api/chat`.
+- Added `buildStarChatMessages` helper.
+- Included persona, letter context, saved memories, recent conversation, and current user message.
+- Saved user and assistant turns to SQLite.
+- Added best-effort memory extraction after replies.
+- Kept memory extraction failure from breaking chat.
+
+Verification:
+
+```bash
+npm run test -- server/api/chat.post.test.ts server/services/memory.test.ts
+npm run build
+```
+
+Result: passed.
+
+Note:
+
+- `chat.post.ts` explicitly imports `h3` helpers so its pure helper can be imported by Vitest without relying on Nuxt auto-import globals.
+
 **Files:**
 - Create: `server/api/tts.post.ts`
 - Create: `server/api/image.post.ts`
