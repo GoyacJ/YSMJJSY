@@ -337,6 +337,31 @@ git commit -m "feat: add unlock session gate"
 
 ### Task 4: Add SQLite Storage
 
+### Checkpoint: Task 3
+
+Status: completed.
+
+Implemented:
+
+- Added unlock code validation service.
+- Added `/api/unlock`.
+- Added httpOnly session cookie.
+- Added API session middleware for `/api/*`.
+- Added `useUnlock` composable.
+
+Verification:
+
+```bash
+npm run test -- server/services/session.test.ts
+npm run build
+```
+
+Result: passed.
+
+Note:
+
+- Session token is intentionally simple for the first version. It protects the MiniMax proxy from casual direct browser access, but it is not a full account system.
+
 **Files:**
 - Create: `server/db/schema.ts`
 - Create: `server/db/sqlite.ts`
