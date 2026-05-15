@@ -1738,3 +1738,9 @@ Manual checks:
 - Ran full unit, build, and Playwright verification.
 - Checked unlock, letter, Pretext flow, star scene, StarChat, and quota row in browser.
 - Verification: `npm run test`; `npm run build`; `npx playwright test`
+
+### Checkpoint: Multi-Key Schema
+
+- Added key profiles, key designs, usage limits, attachments, and key-scoped data columns.
+- Added repository tests for key lookup and usage counters.
+- Verification: `npm run test -- server/db/sqlite.test.ts`

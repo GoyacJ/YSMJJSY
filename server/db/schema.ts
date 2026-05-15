@@ -1,12 +1,14 @@
 export const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
+    key_id TEXT,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
     created_at TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
+    key_id TEXT,
     type TEXT NOT NULL,
     content TEXT NOT NULL,
     importance REAL NOT NULL,
@@ -14,6 +16,7 @@ export const schemaStatements = [
   )`,
   `CREATE TABLE IF NOT EXISTS media_tasks (
     id TEXT PRIMARY KEY,
+    key_id TEXT,
     type TEXT NOT NULL,
     provider_task_id TEXT,
     status TEXT NOT NULL,
@@ -22,5 +25,45 @@ export const schemaStatements = [
     error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS key_profiles (
+    id TEXT PRIMARY KEY,
+    key_lookup_hash TEXT NOT NULL UNIQUE,
+    assistant_name TEXT NOT NULL DEFAULT '',
+    mbti TEXT NOT NULL DEFAULT '',
+    configured_at TEXT,
+    created_ip_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS key_designs (
+    key_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    schema_json TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (key_id, version),
+    FOREIGN KEY (key_id) REFERENCES key_profiles(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS key_usage_limits (
+    key_id TEXT NOT NULL,
+    ip_hash TEXT NOT NULL,
+    date TEXT NOT NULL,
+    create_count INTEGER NOT NULL DEFAULT 0,
+    chat_count INTEGER NOT NULL DEFAULT 0,
+    design_count INTEGER NOT NULL DEFAULT 0,
+    upload_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (key_id, ip_hash, date)
+  )`,
+  `CREATE TABLE IF NOT EXISTS attachments (
+    id TEXT PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    conversation_id TEXT,
+    type TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    data_url TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (key_id) REFERENCES key_profiles(id)
   )`,
 ]
