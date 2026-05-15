@@ -1550,3 +1550,9 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Added public key creation mode to the unlock gate.
 - Wired created/unlocked results into the first-time setup flow.
 - Verification: `npm run test -- components/UnlockGate.test.ts`; `npm run build`
+
+### Checkpoint: Schema-Driven Page Renderer
+
+- Added safe design schema validation and dynamic page rendering.
+- Added a whitelist renderer for letter, memory-map, and star-scene sections.
+- Verification: `npm run test -- server/services/design-schema.test.ts components/DynamicStarPage.test.ts`; `npm run build`
