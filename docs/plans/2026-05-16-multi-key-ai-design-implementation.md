@@ -1306,6 +1306,11 @@ Append checkpoint:
 - Added design preview, save, and discard flow.
 - Wired design mode composer to schema preview and commit APIs.
 - Verification: `npm run test -- components/DesignPreviewSheet.test.ts components/StarChat.test.ts`
+
+### Checkpoint: Bottom Settings
+
+- Added bottom settings entry for updating assistant name and MBTI after first setup.
+- Verification: `npm run test -- components/ProfileSettingsSheet.test.ts`
 ```
 
 ---

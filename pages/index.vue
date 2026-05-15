@@ -40,6 +40,7 @@ async function enterStar() {
       <DynamicStarPage v-if="currentSchema" :schema="currentSchema" />
       <StarScene v-else />
       <StarChat @design-requested="previewDesign" />
+      <ProfileSettingsSheet />
       <DesignPreviewSheet
         v-if="previewSchema"
         :schema="previewSchema"
