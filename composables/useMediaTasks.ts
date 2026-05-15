@@ -3,7 +3,7 @@ export type GeneratedAssetKind = 'audio' | 'image' | 'video' | 'music'
 export type GeneratedAssetItem = {
   id: string
   kind: GeneratedAssetKind
-  status: 'pending' | 'succeeded' | 'failed'
+  status: 'pending' | 'processing' | 'succeeded' | 'failed'
   url?: string
   base64?: string
   error?: string

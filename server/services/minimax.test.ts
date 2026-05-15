@@ -44,4 +44,48 @@ describe('minimax client', () => {
       reply: '星信已连接。',
     })
   })
+
+  it('normalizes hex audio responses to base64', async () => {
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async () => new Response(JSON.stringify({
+        data: {
+          audio: '494433',
+        },
+      }), { status: 200 }),
+    })
+
+    await expect(client.textToSpeech('测试')).resolves.toEqual({
+      base64: 'SUQz',
+    })
+  })
+
+  it('treats non-zero provider status codes as upstream failures', async () => {
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async () => new Response(JSON.stringify({
+        base_resp: {
+          status_code: 1004,
+          status_msg: 'invalid model',
+        },
+      }), { status: 200 }),
+    })
+
+    await expect(client.textToSpeech('测试')).rejects.toBeInstanceOf(MiniMaxError)
+  })
+
+  it('uses the current MiniMax video model', async () => {
+    let requestBody: any
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body))
+        return new Response(JSON.stringify({ task_id: 'task-1' }), { status: 200 })
+      },
+    })
+
+    await client.createVideoTask('星空')
+
+    expect(requestBody.model).toBe('MiniMax-Hailuo-2.3')
+  })
 })

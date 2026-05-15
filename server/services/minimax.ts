@@ -1,4 +1,5 @@
 import type { ExtractedMemory } from './memory'
+import { Buffer } from 'node:buffer'
 
 type Fetcher = typeof fetch
 
@@ -53,6 +54,7 @@ type MiniMaxClientOptions = {
 type RequestOptions = {
   method?: 'GET' | 'POST'
   body?: unknown
+  timeoutMs?: number
 }
 
 function toJsonBody(body: unknown) {
@@ -67,11 +69,34 @@ function stripThinkingTags(text: string) {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
 }
 
-function normalizeAudioResult(response: any): AudioResult {
-  return {
-    url: normalizeText(response?.data?.url ?? response?.data?.audio_url ?? response?.audio_url ?? response?.url) || undefined,
-    base64: normalizeText(response?.data?.audio ?? response?.audio ?? response?.base64) || undefined,
+function isHexAudio(value: string) {
+  return value.length > 0 && value.length % 2 === 0 && /^[\da-f]+$/i.test(value)
+}
+
+function normalizeAudioValue(value: unknown) {
+  const audio = normalizeText(value)
+
+  if (!audio) {
+    return {}
   }
+
+  if (audio.startsWith('http')) {
+    return { url: audio }
+  }
+
+  return {
+    base64: isHexAudio(audio) ? Buffer.from(audio, 'hex').toString('base64') : audio,
+  }
+}
+
+function normalizeAudioResult(response: any): AudioResult {
+  const url = normalizeText(response?.data?.url ?? response?.data?.audio_url ?? response?.audio_url ?? response?.url)
+
+  if (url) {
+    return { url }
+  }
+
+  return normalizeAudioValue(response?.data?.audio ?? response?.audio ?? response?.base64)
 }
 
 function normalizeImageResult(response: any): ImageResult {
@@ -118,6 +143,7 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
         ...(options.groupId ? { 'X-MiniMax-Group-Id': options.groupId } : {}),
       },
       body: toJsonBody(requestOptions.body),
+      signal: AbortSignal.timeout(requestOptions.timeoutMs ?? 120_000),
     })
 
     const text = await response.text()
@@ -130,7 +156,13 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       return {} as T
     }
 
-    return JSON.parse(text) as T
+    const parsed: any = JSON.parse(text)
+
+    if (typeof parsed?.base_resp?.status_code === 'number' && parsed.base_resp.status_code !== 0) {
+      throw new MiniMaxError('MiniMax provider error', parsed.base_resp.status_code, text)
+    }
+
+    return parsed as T
   }
 
   return {
@@ -171,7 +203,7 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
           text,
           stream: false,
           voice_setting: {
-            voice_id: 'Chinese (Mandarin)_Warm_Bestie',
+            voice_id: 'male-qn-qingse',
             speed: 0.95,
             vol: 1,
             pitch: 0,
@@ -182,6 +214,7 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
             format: 'mp3',
             channel: 1,
           },
+          output_format: 'url',
         },
       })
 
@@ -206,8 +239,10 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       const response: any = await request('/v1/video_generation', {
         method: 'POST',
         body: {
-          model: 'video-01',
+          model: 'MiniMax-Hailuo-2.3',
           prompt,
+          duration: 6,
+          resolution: '768P',
         },
       })
 
@@ -218,20 +253,38 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
 
     async getVideoTask(taskId: string): Promise<VideoStatusResult> {
       const response: any = await request(`/v1/query/video_generation?task_id=${encodeURIComponent(taskId)}`)
+      const status = normalizeVideoStatus(normalizeText(response?.status ?? response?.data?.status))
+      const directUrl = normalizeText(response?.file_url ?? response?.data?.file_url ?? response?.url)
+      const fileId = normalizeText(response?.file_id ?? response?.data?.file_id)
+
+      if (status === 'succeeded' && !directUrl && fileId) {
+        const fileResponse: any = await request(`/v1/files/retrieve?file_id=${encodeURIComponent(fileId)}`)
+        return {
+          status,
+          url: normalizeText(fileResponse?.file?.download_url ?? fileResponse?.download_url) || undefined,
+        }
+      }
 
       return {
-        status: normalizeVideoStatus(normalizeText(response?.status ?? response?.data?.status)),
-        url: normalizeText(response?.file_url ?? response?.data?.file_url ?? response?.url) || undefined,
+        status,
+        url: directUrl || undefined,
       }
     },
 
     async generateMusic(prompt: string): Promise<MusicResult> {
       const response = await request('/v1/music_generation', {
         method: 'POST',
+        timeoutMs: 180_000,
         body: {
           model: 'music-2.6',
           prompt,
+          is_instrumental: true,
           output_format: 'url',
+          audio_setting: {
+            sample_rate: 44100,
+            bitrate: 256000,
+            format: 'mp3',
+          },
         },
       })
 

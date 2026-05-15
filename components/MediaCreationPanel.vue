@@ -19,19 +19,23 @@ function addAsset(asset: Omit<GeneratedAssetItem, 'id'>) {
   }
 
   assets.value.unshift(item)
-  return item
+  return item.id
+}
+
+function updateAsset(id: string, patch: Partial<GeneratedAssetItem>) {
+  assets.value = assets.value.map(asset => asset.id === id ? { ...asset, ...patch } : asset)
 }
 
 async function createSpeech() {
   pendingKind.value = 'audio'
-  const asset = addAsset({ kind: 'audio', status: 'pending' })
+  const assetId = addAsset({ kind: 'audio', status: 'pending' })
 
   try {
     const result = await media.createSpeech(props.sourceText)
-    Object.assign(asset, { status: 'succeeded', ...result })
+    updateAsset(assetId, { status: 'succeeded', ...result })
   }
   catch {
-    Object.assign(asset, { status: 'failed', error: '这段声音没有生成好。' })
+    updateAsset(assetId, { status: 'failed', error: '这段声音没有生成好。' })
   }
   finally {
     pendingKind.value = ''
@@ -40,14 +44,14 @@ async function createSpeech() {
 
 async function createImage() {
   pendingKind.value = 'image'
-  const asset = addAsset({ kind: 'image', status: 'pending' })
+  const assetId = addAsset({ kind: 'image', status: 'pending' })
 
   try {
     const result = await media.createImage(props.sourceText)
-    Object.assign(asset, { status: 'succeeded', ...result })
+    updateAsset(assetId, { status: 'succeeded', ...result })
   }
   catch {
-    Object.assign(asset, { status: 'failed', error: '这张图没有生成好。' })
+    updateAsset(assetId, { status: 'failed', error: '这张图没有生成好。' })
   }
   finally {
     pendingKind.value = ''
@@ -56,15 +60,16 @@ async function createImage() {
 
 async function createVideo() {
   pendingKind.value = 'video'
-  const asset = addAsset({ kind: 'video', status: 'pending' })
+  const assetId = addAsset({ kind: 'video', status: 'pending' })
 
   try {
     const task = await media.createVideo(props.sourceText)
+    updateAsset(assetId, { status: 'processing' })
     const result = await media.pollVideoTask(task.taskId)
-    Object.assign(asset, result)
+    updateAsset(assetId, result)
   }
   catch {
-    Object.assign(asset, { status: 'failed', error: '这段视频还没准备好。' })
+    updateAsset(assetId, { status: 'failed', error: '这段视频还没准备好。' })
   }
   finally {
     pendingKind.value = ''
@@ -73,14 +78,14 @@ async function createVideo() {
 
 async function createMusic() {
   pendingKind.value = 'music'
-  const asset = addAsset({ kind: 'music', status: 'pending' })
+  const assetId = addAsset({ kind: 'music', status: 'pending' })
 
   try {
     const result = await media.createMusic(props.sourceText)
-    Object.assign(asset, { status: 'succeeded', ...result })
+    updateAsset(assetId, { status: 'succeeded', ...result })
   }
   catch {
-    Object.assign(asset, { status: 'failed', error: '这首歌没有生成好。' })
+    updateAsset(assetId, { status: 'failed', error: '这首歌没有生成好。' })
   }
   finally {
     pendingKind.value = ''

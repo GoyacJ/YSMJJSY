@@ -11,8 +11,14 @@ defineProps<{
     <p v-if="asset.status === 'pending'">
       正在生成
     </p>
+    <p v-else-if="asset.status === 'processing'">
+      正在处理中
+    </p>
     <p v-else-if="asset.status === 'failed'">
       {{ asset.error || '没有生成好。' }}
+    </p>
+    <p v-else-if="!asset.url && !asset.base64">
+      没有拿到可播放文件。
     </p>
     <template v-else>
       <audio
