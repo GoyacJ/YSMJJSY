@@ -1744,3 +1744,8 @@ Manual checks:
 - Added key profiles, key designs, usage limits, attachments, and key-scoped data columns.
 - Added repository tests for key lookup and usage counters.
 - Verification: `npm run test -- server/db/sqlite.test.ts`
+
+### Checkpoint: Key Hashing And Rate Limits
+
+- Added key normalization, lookup hashing, IP hashing, and pure rate-limit helpers.
+- Verification: `npm run test -- server/services/key-access.test.ts server/services/rate-limit.test.ts`
