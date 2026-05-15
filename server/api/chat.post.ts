@@ -9,11 +9,18 @@ import { normalizeMemoryType, shouldPersistMemory } from '../services/memory'
 import { withMiniMaxErrorBoundary } from '../services/api-errors'
 
 const chatBodySchema = z.object({
-  message: z.string().trim().min(1).max(1000),
+  message: z.string().trim().max(1000).default(''),
+  imageDataUrl: z.string()
+    .regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/)
+    .max(3_000_000)
+    .optional(),
+}).refine(data => data.message.length > 0 || data.imageDataUrl, {
+  message: 'Message or image is required',
 })
 
 type BuildStarChatMessagesInput = {
   userMessage: string
+  imageDescription?: string
   memories: string[]
   recentConversation: Pick<ConversationRecord, 'role' | 'content'>[]
 }
@@ -37,6 +44,13 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
   const memoryText = input.memories.length > 0
     ? input.memories.map(item => `- ${item}`).join('\n')
     : '还没有被允许保存的情绪或偏好。'
+  const userContent = input.imageDescription
+    ? [
+        input.userMessage || '请看这张图片，用温柔简洁的方式回应。',
+        '',
+        `用户附带图片描述：${input.imageDescription}`,
+      ].join('\n')
+    : input.userMessage
 
   return [
     {
@@ -56,7 +70,7 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
     }) satisfies MiniMaxMessage),
     {
       role: 'user',
-      content: input.userMessage,
+      content: userContent,
     },
   ]
 }
@@ -100,8 +114,15 @@ export default defineEventHandler(async (event) => {
 
   const recentConversation = conversations.listRecentConversations(12)
   const savedMemories = memories.listMemories().map(memory => memory.content)
+  const imageDescription = body.data.imageDataUrl
+    ? await withMiniMaxErrorBoundary(
+        () => client.describeImage(body.data.imageDataUrl!, body.data.message || '请描述这张图片，保留和情绪、场景、文字有关的信息。'),
+        'Image understanding failed',
+      )
+    : undefined
   const messages = buildStarChatMessages({
     userMessage: body.data.message,
+    imageDescription,
     memories: savedMemories,
     recentConversation,
   })
@@ -112,7 +133,7 @@ export default defineEventHandler(async (event) => {
   conversations.addConversation({
     id: nanoid(),
     role: 'user',
-    content: body.data.message,
+    content: body.data.message || '[图片消息]',
     createdAt: now,
   })
   conversations.addConversation({
@@ -123,6 +144,12 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
+    if (!body.data.message) {
+      return {
+        reply: result.reply,
+      }
+    }
+
     const extracted = await client.extractMemory(buildMemoryExtractionMessages(body.data.message, result.reply))
 
     for (const memory of extracted) {

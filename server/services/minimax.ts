@@ -5,7 +5,10 @@ type Fetcher = typeof fetch
 
 export type MiniMaxMessage = {
   role: 'system' | 'user' | 'assistant'
-  content: string
+  content: string | Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  >
 }
 
 export type ChatResult = {
@@ -32,6 +35,23 @@ export type VideoStatusResult = {
 }
 
 export type MusicResult = AudioResult
+
+export type VisionResult = {
+  description: string
+}
+
+export type MiniMaxQuotaKind = 'chat' | 'audio' | 'image' | 'music' | 'video'
+
+export type MiniMaxQuotaItem = {
+  key: MiniMaxQuotaKind
+  label: string
+  modelName: string
+  used: number
+  total: number
+  remaining: number
+  available: boolean
+  resetAt?: string
+}
 
 export class MiniMaxError extends Error {
   constructor(
@@ -112,6 +132,16 @@ function normalizeImageResult(response: any): ImageResult {
   }
 }
 
+function normalizeVisionDescription(response: any) {
+  return stripThinkingTags(normalizeText(
+    response?.content
+    ?? response?.data?.content
+    ?? response?.data?.description
+    ?? response?.description
+    ?? response?.choices?.[0]?.message?.content,
+  ))
+}
+
 function normalizeVideoStatus(status: string): VideoStatusResult['status'] {
   const normalized = status.toLowerCase()
 
@@ -128,6 +158,69 @@ function normalizeVideoStatus(status: string): VideoStatusResult['status'] {
   }
 
   return 'pending'
+}
+
+const quotaDefinitions: Array<{
+  key: MiniMaxQuotaKind
+  label: string
+  find: (modelName: string) => boolean
+}> = [
+  {
+    key: 'chat',
+    label: '星信',
+    find: modelName => modelName === 'MiniMax-M*',
+  },
+  {
+    key: 'audio',
+    label: '听一听',
+    find: modelName => modelName === 'speech-hd',
+  },
+  {
+    key: 'image',
+    label: '画一张',
+    find: modelName => modelName === 'image-01',
+  },
+  {
+    key: 'music',
+    label: '写一首',
+    find: modelName => modelName === 'music-2.6',
+  },
+  {
+    key: 'video',
+    label: '做一段',
+    find: modelName => modelName === 'MiniMax-Hailuo-2.3-6s-768p',
+  },
+]
+
+function numberOrZero(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function resetAtFrom(value: unknown) {
+  const timestamp = numberOrZero(value)
+  return timestamp > 0 ? new Date(timestamp).toISOString() : undefined
+}
+
+export function normalizeTokenPlanRemains(response: any): MiniMaxQuotaItem[] {
+  const remains = Array.isArray(response?.model_remains) ? response.model_remains : []
+
+  return quotaDefinitions.map((definition) => {
+    const item = remains.find((entry: any) => definition.find(normalizeText(entry?.model_name))) ?? {}
+    const total = numberOrZero(item.current_interval_total_count)
+    const used = numberOrZero(item.current_interval_usage_count)
+    const remaining = Math.max(0, total - used)
+
+    return {
+      key: definition.key,
+      label: definition.label,
+      modelName: normalizeText(item.model_name),
+      used,
+      total,
+      remaining,
+      available: total > 0 && remaining > 0,
+      resetAt: resetAtFrom(item.end_time),
+    }
+  })
 }
 
 export function createMiniMaxClient(options: MiniMaxClientOptions) {
@@ -199,7 +292,7 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       const response = await request('/v1/t2a_v2', {
         method: 'POST',
         body: {
-          model: 'speech-02-turbo',
+          model: 'speech-2.8-hd',
           text,
           stream: false,
           voice_setting: {
@@ -233,6 +326,18 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       })
 
       return normalizeImageResult(response)
+    },
+
+    async describeImage(imageDataUrl: string, prompt: string): Promise<string> {
+      const response = await request('/v1/coding_plan/vlm', {
+        method: 'POST',
+        body: {
+          prompt,
+          image_url: imageDataUrl,
+        },
+      })
+
+      return normalizeVisionDescription(response)
     },
 
     async createVideoTask(prompt: string): Promise<VideoTaskResult> {
@@ -289,6 +394,11 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       })
 
       return normalizeAudioResult(response)
+    },
+
+    async getTokenPlanRemains(): Promise<MiniMaxQuotaItem[]> {
+      const response = await request('https://www.minimaxi.com/v1/token_plan/remains')
+      return normalizeTokenPlanRemains(response)
     },
   }
 }

@@ -3,6 +3,7 @@ import { readonly, ref } from 'vue'
 export type StarChatMessage = {
   role: 'user' | 'assistant'
   content: string
+  imageDataUrl?: string
 }
 
 export type StarChatReply = {
@@ -14,21 +15,21 @@ export function useStarChat() {
   const pending = ref(false)
   const error = ref('')
 
-  async function sendMessage(message: string): Promise<StarChatReply> {
+  async function sendMessage(message: string, imageDataUrl?: string): Promise<StarChatReply> {
     const text = message.trim()
 
-    if (!text) {
+    if (!text && !imageDataUrl) {
       return { reply: '' }
     }
 
     pending.value = true
     error.value = ''
-    messages.value.push({ role: 'user', content: text })
+    messages.value.push({ role: 'user', content: text || '发送了一张图片', imageDataUrl })
 
     try {
       const result = await $fetch<StarChatReply>('/api/chat', {
         method: 'POST',
-        body: { message: text },
+        body: { message: text, imageDataUrl },
       })
 
       messages.value.push({ role: 'assistant', content: result.reply })

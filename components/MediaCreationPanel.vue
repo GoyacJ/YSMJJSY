@@ -95,6 +95,8 @@ async function createMusic() {
 
 <template>
   <section class="media-panel" aria-label="纪念内容生成">
+    <MiniMaxQuotaPanel />
+
     <div class="media-panel__actions">
       <button type="button" :disabled="pendingKind !== ''" @click="createSpeech">
         听一听

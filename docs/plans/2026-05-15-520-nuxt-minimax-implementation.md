@@ -1637,3 +1637,68 @@ Result: passed.
 Note:
 
 - `/code-review-expert` and `/security-review` are not available as callable tools in this environment, so the same review checks were performed locally.
+
+---
+
+### Checkpoint: MiniMax Token Plan Alignment
+
+Status: completed.
+
+Implemented:
+
+- Switched TTS from `speech-02-turbo` to `speech-2.8-hd`, which is the tested model that consumes the available `speech-hd` Token Plan quota.
+- Added a server-only MiniMax Token Plan quota endpoint at `/api/minimax/quota`.
+- Added a compact quota display above the media generation buttons.
+- Displayed audio, image, music, and video quota states. Video remains visible as unavailable because the current Token Plan reports `0/0`.
+- Added tests for TTS model selection, Token Plan quota normalization, and quota panel rendering.
+
+Verification:
+
+```bash
+npx vitest run server/services/minimax.test.ts components/MiniMaxQuotaPanel.test.ts components/MediaCreationPanel.test.ts
+npm run test
+npm run build
+npx playwright test
+```
+
+Result: passed.
+
+Manual checks:
+
+- Real MiniMax `speech-2.8-hd` request returned success.
+- Browser flow reached the star page.
+- `/api/minimax/quota` returned `200`.
+- `/api/tts` returned `200`.
+- Real MiniMax `music-2.6` request returned success with audio data.
+- Refreshing the quota panel updated the displayed speech quota.
+
+---
+
+### Checkpoint: Multimodal Star Chat
+
+Status: completed.
+
+Implemented:
+
+- Added browser speech input to the star chat. It uses Web Speech API and fills the existing text box.
+- Added image selection, validation, preview, removal, and submission in the star chat.
+- Extended `/api/chat` to accept an optional `imageDataUrl` without exposing MiniMax credentials to the browser.
+- Added server-side image validation for PNG, JPEG, and WebP data URLs.
+- Added MiniMax image understanding through `/v1/coding_plan/vlm`.
+- Kept long-term memory extraction text-only. Image content is used for the current reply but is not persisted as inferred memory.
+- Added tests for voice controls, image preview/submission, image understanding calls, and image-description context.
+
+Verification:
+
+```bash
+npm run test
+npm run build
+npx playwright test
+```
+
+Result: passed.
+
+Manual checks:
+
+- Local `/api/chat` request with an attached PNG returned `200`.
+- The reply correctly described the test image: red background with white `red` text.
