@@ -922,6 +922,30 @@ git commit -m "feat: add minimax media APIs"
 
 ### Task 9: Build Unlock And Letter UI
 
+### Checkpoint: Task 8
+
+Status: completed.
+
+Implemented:
+
+- Added media prompt normalization.
+- Added video status mapping.
+- Added `/api/tts`.
+- Added `/api/image`.
+- Added `/api/music`.
+- Added `/api/video/tasks`.
+- Added `/api/video/tasks/:id`.
+- Persisted app-level video task rows in SQLite.
+
+Verification:
+
+```bash
+npm run test -- server/api/media.test.ts
+npm run build
+```
+
+Result: passed.
+
 **Files:**
 - Create: `components/UnlockGate.vue`
 - Create: `components/LetterScene.vue`
