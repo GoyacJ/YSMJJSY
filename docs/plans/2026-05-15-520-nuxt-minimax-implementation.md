@@ -554,6 +554,26 @@ git commit -m "feat: add emotional memory filtering"
 
 ### Task 6: Add MiniMax Service
 
+### Checkpoint: Task 5
+
+Status: completed.
+
+Implemented:
+
+- Added memory filtering rules.
+- Added inference-pattern rejection.
+- Added memory type normalization.
+- Added `/api/memory` read endpoint.
+
+Verification:
+
+```bash
+npm run test -- server/services/memory.test.ts
+npm run build
+```
+
+Result: passed.
+
 **Files:**
 - Create: `server/services/minimax.ts`
 - Create: `server/services/minimax.test.ts`
