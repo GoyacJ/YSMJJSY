@@ -3,6 +3,9 @@ import { ref } from 'vue'
 
 type UnlockResult = {
   ok: boolean
+  keyId?: string
+  needsConfig?: boolean
+  message?: string
 }
 
 const props = defineProps<{
@@ -10,7 +13,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  unlocked: []
+  unlocked: [result: UnlockResult]
 }>()
 
 const code = ref('')
@@ -25,7 +28,7 @@ async function submit() {
     const result = await props.unlock(code.value)
 
     if (result.ok) {
-      emit('unlocked')
+      emit('unlocked', result)
       return
     }
 

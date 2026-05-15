@@ -211,6 +211,78 @@ body {
   color: #9b4d5c;
 }
 
+.key-setup {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem 1.25rem;
+}
+
+.key-setup__panel {
+  width: min(100%, 32rem);
+  border: 1px solid rgb(135 82 93 / 0.13);
+  border-radius: 0.55rem;
+  padding: clamp(2rem, 6vw, 3.5rem);
+  background:
+    radial-gradient(circle at 18% 8%, rgb(255 255 255 / 0.82), transparent 15rem),
+    linear-gradient(180deg, rgb(255 253 249 / 0.94), rgb(252 243 235 / 0.9));
+  box-shadow: 0 2rem 5rem rgb(128 78 86 / 0.12);
+}
+
+.key-setup__kicker {
+  margin: 0;
+  color: var(--rose-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+}
+
+.key-setup h1 {
+  margin: 0.9rem 0 2rem;
+  font-size: clamp(1.8rem, 6vw, 2.65rem);
+  font-weight: 600;
+  line-height: 1.16;
+}
+
+.key-setup label {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  color: var(--ink-soft);
+}
+
+.key-setup input,
+.key-setup select {
+  min-height: 3rem;
+  border: 1px solid rgb(135 82 93 / 0.18);
+  border-radius: 0.45rem;
+  padding: 0 0.9rem;
+  color: var(--ink);
+  font: inherit;
+  background: rgb(255 255 255 / 0.55);
+}
+
+.key-setup button {
+  width: 100%;
+  min-height: 3.1rem;
+  margin-top: 1.4rem;
+  border: 1px solid rgb(135 82 93 / 0.16);
+  border-radius: 999px;
+  color: #fffaf8;
+  font: inherit;
+  background: #9d6873;
+  cursor: pointer;
+}
+
+.key-setup button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.key-setup__error {
+  margin: 1rem 0 0;
+  color: #9b4d5c;
+}
+
 .letter-scene {
   min-height: 100vh;
   padding: clamp(2rem, 8vw, 6rem) 1.25rem;

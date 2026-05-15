@@ -1,6 +1,12 @@
 <script setup lang="ts">
-const phase = ref<'locked' | 'reading' | 'star'>('locked')
+import type { UnlockResult } from '../composables/useUnlock'
+
+const phase = ref<'locked' | 'configuring' | 'reading' | 'star'>('locked')
 const { unlock } = useUnlock()
+
+function handleUnlocked(result: UnlockResult) {
+  phase.value = result.needsConfig ? 'configuring' : 'reading'
+}
 </script>
 
 <template>
@@ -8,7 +14,11 @@ const { unlock } = useUnlock()
     <UnlockGate
       v-if="phase === 'locked'"
       :unlock="unlock"
-      @unlocked="phase = 'reading'"
+      @unlocked="handleUnlocked"
+    />
+    <KeySetupPanel
+      v-else-if="phase === 'configuring'"
+      @configured="phase = 'reading'"
     />
     <LetterScene v-else-if="phase === 'reading'" @finished="phase = 'star'" />
     <ClientOnly v-else>

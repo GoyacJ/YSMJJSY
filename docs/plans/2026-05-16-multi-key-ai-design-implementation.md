@@ -1532,3 +1532,9 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Added public key creation, hashed key lookup, duplicate detection, and signed key sessions.
 - Replaced global unlock session with key-scoped session context.
 - Verification: `npm run test -- server/services/session.test.ts server/api/keys.post.test.ts server/services/key-access.test.ts`; `npm run build`
+
+### Checkpoint: Key Profile Setup
+
+- Added first-time assistant name and MBTI configuration.
+- Added key profile API and setup panel.
+- Verification: `npm run test -- server/api/key/profile.test.ts components/KeySetupPanel.test.ts`; `npm run build`
