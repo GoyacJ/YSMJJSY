@@ -10,13 +10,16 @@ type UnlockResult = {
 
 const props = defineProps<{
   unlock: (code: string) => Promise<UnlockResult>
+  createKey: (code: string) => Promise<UnlockResult>
 }>()
 
 const emit = defineEmits<{
   unlocked: [result: UnlockResult]
+  created: [result: UnlockResult]
 }>()
 
 const code = ref('')
+const mode = ref<'enter' | 'create'>('enter')
 const pending = ref(false)
 const error = ref('')
 
@@ -25,18 +28,28 @@ async function submit() {
   error.value = ''
 
   try {
-    const result = await props.unlock(code.value)
+    const result = mode.value === 'create'
+      ? await props.createKey(code.value)
+      : await props.unlock(code.value)
 
     if (result.ok) {
-      emit('unlocked', result)
+      emit(mode.value === 'create' ? 'created' : 'unlocked', result)
       return
     }
 
-    error.value = '这不是这封信的钥匙。'
+    error.value = mode.value === 'create'
+      ? '这把钥匙暂时不能保存。'
+      : '这不是这封信的钥匙。'
   }
   finally {
     pending.value = false
   }
+}
+
+function switchMode(nextMode: 'enter' | 'create') {
+  mode.value = nextMode
+  code.value = ''
+  error.value = ''
 }
 </script>
 
@@ -62,16 +75,39 @@ async function submit() {
         <input
           id="unlock-code"
           v-model="code"
-          inputmode="numeric"
           autocomplete="off"
-          maxlength="12"
-          placeholder="输入钥匙"
+          maxlength="64"
+          :placeholder="mode === 'create' ? '写下新钥匙' : '输入钥匙'"
           class="unlock-gate__code-line"
         >
-        <button type="submit" :disabled="pending">
-          {{ pending ? '正在打开' : '打开这封信' }}
+        <button
+          type="button"
+          :disabled="pending"
+          :aria-label="mode === 'create' ? '保存钥匙' : '打开这封信'"
+          @click="submit"
+        >
+          {{ pending ? '请稍等' : mode === 'create' ? '保存钥匙' : '打开这封信' }}
         </button>
       </form>
+
+      <div class="unlock-gate__mode-actions">
+        <button
+          v-if="mode === 'enter'"
+          type="button"
+          aria-label="创建钥匙"
+          @click="switchMode('create')"
+        >
+          创建钥匙
+        </button>
+        <button
+          v-else
+          type="button"
+          aria-label="返回输入"
+          @click="switchMode('enter')"
+        >
+          返回输入
+        </button>
+      </div>
 
       <p v-if="error" class="unlock-gate__error" role="alert">
         {{ error }}

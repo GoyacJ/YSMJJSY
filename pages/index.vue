@@ -2,7 +2,7 @@
 import type { UnlockResult } from '../composables/useUnlock'
 
 const phase = ref<'locked' | 'configuring' | 'reading' | 'star'>('locked')
-const { unlock } = useUnlock()
+const { unlock, createKey } = useUnlock()
 
 function handleUnlocked(result: UnlockResult) {
   phase.value = result.needsConfig ? 'configuring' : 'reading'
@@ -14,7 +14,9 @@ function handleUnlocked(result: UnlockResult) {
     <UnlockGate
       v-if="phase === 'locked'"
       :unlock="unlock"
+      :create-key="createKey"
       @unlocked="handleUnlocked"
+      @created="handleUnlocked"
     />
     <KeySetupPanel
       v-else-if="phase === 'configuring'"

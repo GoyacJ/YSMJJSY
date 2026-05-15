@@ -1544,3 +1544,9 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Scoped chat, memory, media tasks, and persona to the active key.
 - Added chat usage limit before MiniMax calls.
 - Verification: `npm run test -- server/api/chat.post.test.ts server/db/sqlite.test.ts server/api/media.test.ts`; `npm run build`
+
+### Checkpoint: Create-Or-Enter Gate
+
+- Added public key creation mode to the unlock gate.
+- Wired created/unlocked results into the first-time setup flow.
+- Verification: `npm run test -- components/UnlockGate.test.ts`; `npm run build`
