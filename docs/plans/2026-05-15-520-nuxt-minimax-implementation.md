@@ -1540,6 +1540,23 @@ git commit -m "docs: add nuxt deployment guide"
 
 ### Task 15: Final Verification And Review
 
+### Checkpoint: Task 14
+
+Status: completed.
+
+Implemented:
+
+- Added `README.md` with local setup, env vars, common commands, and production start command.
+- Added `docs/deployment.md` with VPS, Nginx, HTTPS, `NUXT_*` env vars, SQLite path, backup note, and systemd example.
+
+Verification:
+
+```bash
+npm run build
+```
+
+Result: passed.
+
 **Files:**
 - Review all changed files.
 
