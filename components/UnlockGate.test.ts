@@ -13,6 +13,7 @@ describe('UnlockGate', () => {
     await wrapper.find('input').setValue('100522')
     await wrapper.find('form').trigger('submit.prevent')
 
+    expect(wrapper.find('.unlock-gate__envelope').exists()).toBe(true)
     expect(wrapper.emitted('unlocked')).toBeTruthy()
   })
 

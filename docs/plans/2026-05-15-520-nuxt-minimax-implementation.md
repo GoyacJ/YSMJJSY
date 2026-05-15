@@ -1702,3 +1702,39 @@ Manual checks:
 
 - Local `/api/chat` request with an attached PNG returned `200`.
 - The reply correctly described the test image: red background with white `red` text.
+
+### Checkpoint: Editorial Content Shape
+
+- Added editorial paragraph layout names.
+- Updated letter content tests for Pretext-backed layouts.
+- Verification: `npm run test -- content/letter.test.ts`
+
+### Checkpoint: Real Pretext Layout
+
+- Replaced placeholder Pretext paragraph rendering with client-side line layout.
+- Added moon, date, and star-trail text flow variants.
+- Verification: `npm run build`
+
+### Checkpoint: Envelope And Editorial Letter
+
+- Reworked unlock into an envelope-style gate.
+- Reworked the letter scene into editorial sheets and star-coordinate memories.
+- Verification: `npm run test -- components/UnlockGate.test.ts`; `npm run build`
+
+### Checkpoint: Letter To Star Transition
+
+- Added restrained paper-to-starry-scene transition polish.
+- Preserved reduced-motion behavior.
+- Verification: `npm run build`
+
+### Checkpoint: Star Chat Visual Redesign
+
+- Reworked StarChat as a night-note overlay while preserving text, voice, image, and media creation behavior.
+- Reworked MiniMax quota as a compact star-energy status row.
+- Verification: `npm run test -- components/StarChat.test.ts components/MiniMaxQuotaPanel.test.ts`; `npm run build`
+
+### Checkpoint: Editorial Starletter Verification
+
+- Ran full unit, build, and Playwright verification.
+- Checked unlock, letter, Pretext flow, star scene, StarChat, and quota row in browser.
+- Verification: `npm run test`; `npm run build`; `npx playwright test`

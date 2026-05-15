@@ -89,6 +89,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="star-scene" aria-label="星空告白">
     <canvas ref="canvas" class="star-scene__canvas" aria-hidden="true" />
+    <div class="star-scene__entry-glow" aria-hidden="true" />
     <div class="star-scene__content">
       <p class="star-scene__kicker">
         5.20

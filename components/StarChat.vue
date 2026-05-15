@@ -120,69 +120,77 @@ onBeforeUnmount(() => {
 
 <template>
   <aside class="star-chat" aria-label="星信">
-    <header>
-      <p>星信</p>
-      <span>这封信里的星光</span>
-    </header>
+    <div class="star-chat__note">
+      <header class="star-chat__header">
+        <p>星信</p>
+        <span>这封信里的星光</span>
+      </header>
 
-    <div class="star-chat__messages" aria-live="polite">
-      <p v-if="localMessages.length === 0" class="star-chat__empty">
-        你可以问这封信里的任何一句话。
-      </p>
-      <article
-        v-for="(message, index) in localMessages"
-        :key="`${message.role}-${index}`"
-        :data-role="message.role"
-      >
-        <img
-          v-if="message.imageDataUrl"
-          class="star-chat__message-image"
-          :src="message.imageDataUrl"
-          alt=""
+      <div class="star-chat__thread star-chat__messages" aria-live="polite">
+        <p v-if="localMessages.length === 0" class="star-chat__empty">
+          你可以问这封信里的任何一句话。
+        </p>
+        <article
+          v-for="(message, index) in localMessages"
+          :key="`${message.role}-${index}`"
+          :data-role="message.role"
         >
-        <span>{{ message.content }}</span>
-      </article>
-    </div>
+          <img
+            v-if="message.imageDataUrl"
+            class="star-chat__message-image"
+            :src="message.imageDataUrl"
+            alt=""
+          >
+          <span>{{ message.content }}</span>
+        </article>
+      </div>
 
-    <form @submit.prevent="submit">
-      <label class="sr-only" for="star-chat-input">和星信说话</label>
-      <textarea
-        id="star-chat-input"
-        v-model="input"
-        rows="2"
-        placeholder="和星信说句话"
-      />
-      <div class="star-chat__tools">
-        <button
-          type="button"
-          :disabled="pending || listening"
-          aria-label="语音输入"
-          @click="startVoiceInput"
-        >
-          {{ listening ? '听着' : '语音' }}
-        </button>
-        <label class="star-chat__image-button" aria-label="添加图片">
-          图片
-          <input type="file" accept="image/png,image/jpeg,image/webp" @change="handleImageChange">
-        </label>
-        <button type="submit" :disabled="pending">
-          {{ pending ? '等待' : '发送' }}
+      <form class="star-chat__composer" @submit.prevent="submit">
+        <label class="sr-only" for="star-chat-input">和星信说话</label>
+        <textarea
+          id="star-chat-input"
+          v-model="input"
+          rows="2"
+          placeholder="写一张星信"
+        />
+        <div class="star-chat__tools">
+          <button
+            type="button"
+            class="star-chat__icon-button"
+            :disabled="pending || listening"
+            aria-label="语音输入"
+            @click="startVoiceInput"
+          >
+            {{ listening ? '听' : '声' }}
+          </button>
+          <label class="star-chat__image-button star-chat__icon-button" aria-label="添加图片">
+            图
+            <input type="file" accept="image/png,image/jpeg,image/webp" @change="handleImageChange">
+          </label>
+          <button
+            class="star-chat__icon-button star-chat__icon-button--send"
+            type="submit"
+            :disabled="pending"
+            aria-label="发送"
+          >
+            {{ pending ? '等' : '寄' }}
+          </button>
+        </div>
+      </form>
+
+      <div v-if="imageDataUrl" class="star-chat__image-preview">
+        <img :src="imageDataUrl" alt="">
+        <span>{{ imageName }}</span>
+        <button type="button" @click="removeImage">
+          移除
         </button>
       </div>
-    </form>
 
-    <div v-if="imageDataUrl" class="star-chat__image-preview">
-      <img :src="imageDataUrl" alt="">
-      <span>{{ imageName }}</span>
-      <button type="button" @click="removeImage">
-        移除
-      </button>
+      <p v-if="error" class="star-chat__error" role="alert">
+        {{ error }}
+      </p>
+
+      <MediaCreationPanel :source-text="localMessages.at(-1)?.content || '这封信里的星光'" />
     </div>
-
-    <p v-if="error" class="star-chat__error" role="alert">
-      {{ error }}
-    </p>
-
-    <MediaCreationPanel :source-text="localMessages.at(-1)?.content || '这封信里的星光'" />
   </aside>
 </template>

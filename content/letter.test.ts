@@ -8,6 +8,13 @@ describe('letter content', () => {
     expect(letterParagraphs.every((item) => item.text.length <= 120)).toBe(true)
   })
 
+  it('includes editorial Pretext layouts', () => {
+    expect(letterParagraphs.some(item => item.layout === 'moon-wrap')).toBe(true)
+    expect(letterParagraphs.some(item => item.layout === 'date-orbit')).toBe(true)
+    expect(letterParagraphs.some(item => item.layout === 'star-trail')).toBe(true)
+    expect(memoryMoments.length).toBeGreaterThanOrEqual(3)
+  })
+
   it('keeps memory moments small', () => {
     expect(memoryMoments.length).toBeGreaterThanOrEqual(3)
     expect(memoryMoments.length).toBeLessThanOrEqual(5)

@@ -21,23 +21,26 @@ const error = ref('')
 
 const visibleQuotas = computed(() => quotas.value.filter(item => item.key !== 'chat'))
 
-function usedPercent(item: MiniMaxQuotaItem) {
-  return item.total > 0 ? `${Math.min(100, (item.used / item.total) * 100)}%` : '0%'
-}
-
 function formatQuota(item: MiniMaxQuotaItem) {
   return item.total > 0 ? `${item.remaining}/${item.total}` : '暂不可用'
 }
 
-function formatReset(resetAt?: string) {
-  if (!resetAt) {
-    return ''
+function formatLabel(item: MiniMaxQuotaItem) {
+  const labels: Record<MiniMaxQuotaItem['key'], string> = {
+    chat: '星信',
+    audio: '语音',
+    image: '图像',
+    music: '音乐',
+    video: '视频',
   }
 
-  return new Date(resetAt).toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return labels[item.key] || item.label
+}
+
+function formatQuotaText(item: MiniMaxQuotaItem) {
+  return item.available && item.total > 0
+    ? `${formatLabel(item)} ${formatQuota(item)}`
+    : `${formatLabel(item)}暂不可用`
 }
 
 async function loadQuota() {
@@ -65,7 +68,7 @@ onMounted(() => {
 <template>
   <section class="quota-panel" aria-label="MiniMax 当前额度">
     <header class="quota-panel__header">
-      <span>额度</span>
+      <span>星能量</span>
       <button type="button" :disabled="pending" @click="loadQuota">
         {{ pending ? '读取中' : '刷新' }}
       </button>
@@ -75,27 +78,16 @@ onMounted(() => {
       {{ error }}
     </p>
 
-    <div v-else-if="visibleQuotas.length > 0" class="quota-panel__list">
-      <div
+    <p v-else-if="visibleQuotas.length > 0" class="quota-panel__status" role="status">
+      <span
         v-for="item in visibleQuotas"
         :key="item.key"
-        class="quota-panel__item"
+        class="quota-panel__status-item"
         :data-available="item.available"
       >
-        <div class="quota-panel__meta">
-          <span>{{ item.label }}</span>
-          <small>
-            {{ formatQuota(item) }}
-            <template v-if="item.resetAt">
-              · {{ formatReset(item.resetAt) }}
-            </template>
-          </small>
-        </div>
-        <div class="quota-panel__track" aria-hidden="true">
-          <span :style="{ width: usedPercent(item) }" />
-        </div>
-      </div>
-    </div>
+        {{ formatQuotaText(item) }}
+      </span>
+    </p>
 
     <p v-else class="quota-panel__empty" role="status">
       {{ pending ? '读取中' : '暂无额度数据' }}

@@ -1,7 +1,7 @@
 export type LetterParagraph = {
   id: string
   text: string
-  layout?: 'normal' | 'heart-wrap' | 'date-wrap' | 'photo-wrap'
+  layout?: 'normal' | 'moon-wrap' | 'date-orbit' | 'star-trail'
 }
 
 export type MemoryMoment = {
@@ -19,18 +19,18 @@ export const letterParagraphs: LetterParagraph[] = [
   },
   {
     id: 'quiet',
-    text: '喜欢不是突然发生的，是很多个很小的瞬间，慢慢有了方向。',
-    layout: 'heart-wrap',
+    text: '喜欢不是突然发生的，是很多个很小的瞬间，慢慢有了方向。像夜里一小段月光，不吵，却一直在。',
+    layout: 'moon-wrap',
   },
   {
     id: 'ordinary-days',
-    text: '想到你时，很多普通的日子会变得柔软一点。',
-    layout: 'date-wrap',
+    text: '想到你时，很多普通的日子会变得柔软一点。5.20 只是一个日期，但今天我想让它有一个认真落下的印记。',
+    layout: 'date-orbit',
   },
   {
     id: 'promise',
-    text: '如果可以，我想把之后很多个平常日子，都认真留给你。',
-    layout: 'normal',
+    text: '如果可以，我想把之后很多个平常日子，都认真留给你。把晚风、路灯和还没说完的话，慢慢写成同一条星轨。',
+    layout: 'star-trail',
   },
 ]
 
