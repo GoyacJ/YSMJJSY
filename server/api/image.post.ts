@@ -1,5 +1,6 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
+import { withMiniMaxErrorBoundary } from '../services/api-errors'
 import { normalizeMediaPrompt } from '../services/media'
 import { createMiniMaxClient } from '../services/minimax'
 
@@ -20,5 +21,5 @@ export default defineEventHandler(async (event) => {
     groupId: config.minimaxGroupId,
   })
 
-  return client.generateImage(normalizeMediaPrompt(body.data.prompt))
+  return withMiniMaxErrorBoundary(() => client.generateImage(normalizeMediaPrompt(body.data.prompt)), 'Image generation failed')
 })

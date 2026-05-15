@@ -1,5 +1,6 @@
 import { createError, defineEventHandler, getRouterParam } from 'h3'
 import { createMediaTaskRepository } from '../../../db/sqlite'
+import { withMiniMaxErrorBoundary } from '../../../services/api-errors'
 import { createMiniMaxClient } from '../../../services/minimax'
 
 export default defineEventHandler(async (event) => {
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
     apiKey: config.minimaxApiKey,
     groupId: config.minimaxGroupId,
   })
-  const status = await client.getVideoTask(task.providerTaskId)
+  const status = await withMiniMaxErrorBoundary(() => client.getVideoTask(task.providerTaskId), 'Video task query failed')
 
   repo.updateMediaTask(id, {
     status: status.status,

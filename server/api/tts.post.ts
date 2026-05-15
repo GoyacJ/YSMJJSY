@@ -1,5 +1,6 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
+import { withMiniMaxErrorBoundary } from '../services/api-errors'
 import { createMiniMaxClient } from '../services/minimax'
 
 const ttsBodySchema = z.object({
@@ -19,5 +20,5 @@ export default defineEventHandler(async (event) => {
     groupId: config.minimaxGroupId,
   })
 
-  return client.textToSpeech(body.data.text)
+  return withMiniMaxErrorBoundary(() => client.textToSpeech(body.data.text), 'TTS generation failed')
 })

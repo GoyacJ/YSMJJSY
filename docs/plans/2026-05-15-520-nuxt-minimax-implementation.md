@@ -1607,3 +1607,33 @@ Only if fixes are made:
 git add .
 git commit -m "fix: address review feedback"
 ```
+
+---
+
+### Checkpoint: Task 15
+
+Status: completed.
+
+Implemented:
+
+- Ran full verification.
+- Performed local code review for API key exposure, session gate, MiniMax error handling, memory filtering, Canvas cleanup, and mobile layout.
+- Performed local security review for user input, API proxying, cookies, model calls, and persistent memory.
+- Added a server-only MiniMax error boundary so upstream response bodies are not returned through API routes.
+- Added a test for MiniMax error sanitization.
+- Made `/api/music` reject invalid request bodies instead of silently falling back to the default prompt.
+- Excluded Playwright E2E specs from Vitest.
+
+Verification:
+
+```bash
+npm run test
+npm run build
+npx playwright test
+```
+
+Result: passed.
+
+Note:
+
+- `/code-review-expert` and `/security-review` are not available as callable tools in this environment, so the same review checks were performed locally.

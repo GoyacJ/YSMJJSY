@@ -6,6 +6,7 @@ import { starLetterPersona } from '../../content/persona'
 import { createConversationRepository, createMemoryRepository, type ConversationRecord } from '../db/sqlite'
 import { createMiniMaxClient, type MiniMaxMessage } from '../services/minimax'
 import { normalizeMemoryType, shouldPersistMemory } from '../services/memory'
+import { withMiniMaxErrorBoundary } from '../services/api-errors'
 
 const chatBodySchema = z.object({
   message: z.string().trim().min(1).max(1000),
@@ -105,7 +106,7 @@ export default defineEventHandler(async (event) => {
     recentConversation,
   })
 
-  const result = await client.chat(messages)
+  const result = await withMiniMaxErrorBoundary(() => client.chat(messages), 'Chat generation failed')
   const now = new Date().toISOString()
 
   conversations.addConversation({

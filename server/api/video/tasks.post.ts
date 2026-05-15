@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
 import { createMediaTaskRepository } from '../../db/sqlite'
+import { withMiniMaxErrorBoundary } from '../../services/api-errors'
 import { normalizeMediaPrompt } from '../../services/media'
 import { createMiniMaxClient } from '../../services/minimax'
 
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
-    const result = await client.createVideoTask(prompt)
+    const result = await withMiniMaxErrorBoundary(() => client.createVideoTask(prompt), 'Video task failed')
 
     if (!result.providerTaskId) {
       throw new Error('MiniMax did not return a video task id')
