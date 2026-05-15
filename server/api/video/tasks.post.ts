@@ -11,7 +11,12 @@ const videoBodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+  const keyId = event.context.keyId
   const body = videoBodySchema.safeParse(await readBody(event))
+
+  if (!keyId) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
 
   if (!body.success) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid video prompt' })
@@ -29,6 +34,7 @@ export default defineEventHandler(async (event) => {
 
   repo.addMediaTask({
     id,
+    keyId,
     type: 'video',
     providerTaskId: null,
     status: 'pending',

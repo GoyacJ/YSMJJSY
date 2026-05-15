@@ -1538,3 +1538,9 @@ If this is not desired, remove this compatibility in Task 3 and update E2E accor
 - Added first-time assistant name and MBTI configuration.
 - Added key profile API and setup panel.
 - Verification: `npm run test -- server/api/key/profile.test.ts components/KeySetupPanel.test.ts`; `npm run build`
+
+### Checkpoint: Key-Scoped AI State
+
+- Scoped chat, memory, media tasks, and persona to the active key.
+- Added chat usage limit before MiniMax calls.
+- Verification: `npm run test -- server/api/chat.post.test.ts server/db/sqlite.test.ts server/api/media.test.ts`; `npm run build`

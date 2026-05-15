@@ -5,11 +5,14 @@ describe('chat api helpers', () => {
   it('includes persona, letter, memories, and user message', () => {
     const messages = buildStarChatMessages({
       userMessage: '这封信是真的吗？',
+      assistantName: '星信',
+      mbti: 'INTJ',
       memories: ['她喜欢星空'],
       recentConversation: [],
     })
 
     expect(JSON.stringify(messages)).toContain('星信')
+    expect(JSON.stringify(messages)).toContain('MBTI 性格设定：INTJ')
     expect(JSON.stringify(messages)).toContain('这封信是真的吗')
     expect(JSON.stringify(messages)).toContain('她喜欢星空')
   })
@@ -18,6 +21,8 @@ describe('chat api helpers', () => {
     const messages = buildStarChatMessages({
       userMessage: '看看这张图',
       imageDescription: '图片里是一片星空。',
+      assistantName: '星信',
+      mbti: 'INTJ',
       memories: [],
       recentConversation: [],
     })

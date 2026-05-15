@@ -1,12 +1,20 @@
 import { nanoid } from 'nanoid'
-import { createError, defineEventHandler, readBody } from 'h3'
+import { createError, defineEventHandler, getRequestHeader, readBody } from 'h3'
 import { z } from 'zod'
 import { finalConfession, letterParagraphs, memoryMoments } from '../../content/letter'
 import { starLetterPersona } from '../../content/persona'
-import { createConversationRepository, createMemoryRepository, type ConversationRecord } from '../db/sqlite'
+import {
+  createConversationRepository,
+  createKeyProfileRepository,
+  createMemoryRepository,
+  createUsageLimitRepository,
+  type ConversationRecord,
+} from '../db/sqlite'
 import { createMiniMaxClient, type MiniMaxMessage } from '../services/minimax'
 import { normalizeMemoryType, shouldPersistMemory } from '../services/memory'
 import { withMiniMaxErrorBoundary } from '../services/api-errors'
+import { createIpHash } from '../services/key-access'
+import { assertWithinLimit, usageLimits } from '../services/rate-limit'
 
 const chatBodySchema = z.object({
   message: z.string().trim().max(1000).default(''),
@@ -21,6 +29,8 @@ const chatBodySchema = z.object({
 type BuildStarChatMessagesInput = {
   userMessage: string
   imageDescription?: string
+  assistantName?: string
+  mbti?: string
   memories: string[]
   recentConversation: Pick<ConversationRecord, 'role' | 'content'>[]
 }
@@ -41,6 +51,8 @@ function buildLetterContext() {
 }
 
 export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMaxMessage[] {
+  const assistantName = input.assistantName || '星信'
+  const mbti = input.mbti || 'INTJ'
   const memoryText = input.memories.length > 0
     ? input.memories.map(item => `- ${item}`).join('\n')
     : '还没有被允许保存的情绪或偏好。'
@@ -58,6 +70,9 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
       content: [
         starLetterPersona,
         '',
+        `你的称呼是：${assistantName}`,
+        `MBTI 性格设定：${mbti}`,
+        '',
         buildLetterContext(),
         '',
         '已保存记忆：',
@@ -73,6 +88,13 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
       content: userContent,
     },
   ]
+}
+
+function getClientIp(event: Parameters<typeof getRequestHeader>[0]) {
+  return getRequestHeader(event, 'x-forwarded-for')?.split(',')[0]?.trim()
+    || getRequestHeader(event, 'x-real-ip')
+    || event.node.req.socket.remoteAddress
+    || 'unknown'
 }
 
 function buildMemoryExtractionMessages(userMessage: string, assistantReply: string): MiniMaxMessage[] {
@@ -96,7 +118,15 @@ function buildMemoryExtractionMessages(userMessage: string, assistantReply: stri
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
+  const keyId = event.context.keyId
   const body = chatBodySchema.safeParse(await readBody(event))
+
+  if (!keyId) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized',
+    })
+  }
 
   if (!body.success) {
     throw createError({
@@ -107,13 +137,31 @@ export default defineEventHandler(async (event) => {
 
   const conversations = createConversationRepository(config.sqlitePath)
   const memories = createMemoryRepository(config.sqlitePath)
+  const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
+  const usage = createUsageLimitRepository(config.sqlitePath)
   const client = createMiniMaxClient({
     apiKey: config.minimaxApiKey,
     groupId: config.minimaxGroupId,
   })
+  const today = new Date().toISOString().slice(0, 10)
+  const currentUsage = usage.getUsage(keyId, today)
 
-  const recentConversation = conversations.listRecentConversations(12)
-  const savedMemories = memories.listMemories().map(memory => memory.content)
+  if (!assertWithinLimit({ current: currentUsage?.chatCount ?? 0, max: usageLimits.chatPerKeyPerDay })) {
+    throw createError({
+      statusCode: 429,
+      statusMessage: '今天的星光先到这里。',
+    })
+  }
+
+  usage.incrementUsage({
+    keyId,
+    ipHash: createIpHash(getClientIp(event), config.sessionSecret),
+    date: today,
+    bucket: 'chat',
+  })
+
+  const recentConversation = conversations.listRecentConversationsByKey(keyId, 12)
+  const savedMemories = memories.listMemoriesByKey(keyId).map(memory => memory.content)
   const imageDescription = body.data.imageDataUrl
     ? await withMiniMaxErrorBoundary(
         () => client.describeImage(body.data.imageDataUrl!, body.data.message || '请描述这张图片，保留和情绪、场景、文字有关的信息。'),
@@ -123,6 +171,8 @@ export default defineEventHandler(async (event) => {
   const messages = buildStarChatMessages({
     userMessage: body.data.message,
     imageDescription,
+    assistantName: profile?.assistantName || '星信',
+    mbti: profile?.mbti || 'INTJ',
     memories: savedMemories,
     recentConversation,
   })
@@ -132,12 +182,14 @@ export default defineEventHandler(async (event) => {
 
   conversations.addConversation({
     id: nanoid(),
+    keyId,
     role: 'user',
     content: body.data.message || '[图片消息]',
     createdAt: now,
   })
   conversations.addConversation({
     id: nanoid(),
+    keyId,
     role: 'assistant',
     content: result.reply,
     createdAt: new Date().toISOString(),
@@ -159,6 +211,7 @@ export default defineEventHandler(async (event) => {
 
       memories.addMemory({
         id: nanoid(),
+        keyId,
         type: normalizeMemoryType(memory.type),
         content: memory.content.trim(),
         importance: memory.importance,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createConversationRepository,
   createKeyProfileRepository,
+  createMediaTaskRepository,
   createMemoryRepository,
   createUsageLimitRepository,
 } from './sqlite'
@@ -48,5 +50,69 @@ describe('sqlite repositories', () => {
     })
 
     expect(repo.getUsage('key_1', '2026-05-16')?.chatCount).toBe(1)
+  })
+
+  it('lists recent conversations by key only', () => {
+    const repo = createConversationRepository(':memory:')
+
+    repo.addConversation({
+      id: 'c1',
+      keyId: 'key_1',
+      role: 'user',
+      content: 'key 1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+    repo.addConversation({
+      id: 'c2',
+      keyId: 'key_2',
+      role: 'user',
+      content: 'key 2',
+      createdAt: '2026-05-16T00:01:00.000Z',
+    })
+
+    expect(repo.listRecentConversationsByKey('key_1').map(item => item.content)).toEqual(['key 1'])
+  })
+
+  it('lists memories by key only', () => {
+    const repo = createMemoryRepository(':memory:')
+
+    repo.addMemory({
+      id: 'm1',
+      keyId: 'key_1',
+      type: 'emotion',
+      content: 'key 1 memory',
+      importance: 0.8,
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+    repo.addMemory({
+      id: 'm2',
+      keyId: 'key_2',
+      type: 'emotion',
+      content: 'key 2 memory',
+      importance: 0.8,
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+
+    expect(repo.listMemoriesByKey('key_1').map(item => item.content)).toEqual(['key 1 memory'])
+  })
+
+  it('gets media tasks by key only', () => {
+    const repo = createMediaTaskRepository(':memory:')
+
+    repo.addMediaTask({
+      id: 'task_1',
+      keyId: 'key_1',
+      type: 'video',
+      providerTaskId: null,
+      status: 'pending',
+      prompt: 'star',
+      resultUrl: null,
+      error: null,
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+    })
+
+    expect(repo.getMediaTaskByKey('key_1', 'task_1')?.id).toBe('task_1')
+    expect(repo.getMediaTaskByKey('key_2', 'task_1')).toBeUndefined()
   })
 })
