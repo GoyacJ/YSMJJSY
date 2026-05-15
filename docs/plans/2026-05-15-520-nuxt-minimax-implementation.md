@@ -1263,6 +1263,26 @@ git commit -m "feat: add star letter chat UI"
 
 ### Task 12: Build Media Creation UI
 
+### Checkpoint: Task 11
+
+Status: completed.
+
+Implemented:
+
+- Added `useStarChat`.
+- Added `StarChat` floating panel.
+- Added message submit state, error state, and assistant reply rendering.
+- Wired `StarChat` into the star phase.
+
+Verification:
+
+```bash
+npm run test -- components/StarChat.test.ts
+npm run build
+```
+
+Result: passed.
+
 **Files:**
 - Create: `components/MediaCreationPanel.vue`
 - Create: `components/GeneratedAsset.vue`

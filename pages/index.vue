@@ -13,6 +13,7 @@ const { unlock } = useUnlock()
     <LetterScene v-else-if="phase === 'reading'" @finished="phase = 'star'" />
     <ClientOnly v-else>
       <StarScene />
+      <StarChat />
     </ClientOnly>
   </main>
 </template>
