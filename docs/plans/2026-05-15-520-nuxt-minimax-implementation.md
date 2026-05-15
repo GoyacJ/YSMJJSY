@@ -1044,6 +1044,32 @@ git commit -m "feat: add unlock and letter UI"
 
 ### Task 10: Build Star Scene
 
+### Checkpoint: Task 9
+
+Status: completed.
+
+Implemented:
+
+- Added `UnlockGate`.
+- Added `LetterScene`.
+- Added `PretextParagraph.client.vue` placeholder renderer.
+- Wired `pages/index.vue` from locked state to reading state.
+- Added warm paper UI styling.
+- Added Vitest Vue SFC test config.
+
+Verification:
+
+```bash
+npm run test -- components/UnlockGate.test.ts
+npm run build
+```
+
+Result: passed.
+
+Note:
+
+- `PretextParagraph.client.vue` currently renders a client-only styled paragraph with shape hints. Full Pretext measurement can be deepened later without changing the scene contract.
+
 **Files:**
 - Create: `components/StarScene.client.vue`
 - Create: `server/utils/star-map.ts`
