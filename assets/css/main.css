@@ -755,6 +755,83 @@ body {
   font-size: 0.86rem;
 }
 
+.star-memory-map {
+  position: fixed;
+  top: clamp(5rem, 10vh, 7rem);
+  right: clamp(1rem, 3vw, 2rem);
+  bottom: auto;
+  z-index: 4;
+}
+
+.star-memory-map button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid rgb(255 244 231 / 0.16);
+  border-radius: 999px;
+  padding: 0.5rem 0.8rem 0.5rem 0.55rem;
+  color: var(--chat-ink);
+  background: var(--chat-surface-soft);
+  box-shadow: 0 1rem 2.6rem rgb(0 0 0 / 0.22);
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+}
+
+.star-memory-map strong,
+.star-memory-map small {
+  display: block;
+  text-align: left;
+}
+
+.star-memory-map strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.star-memory-map small {
+  color: var(--chat-ink-soft);
+  font-size: 0.68rem;
+}
+
+.star-memory-map__constellation {
+  position: relative;
+  display: block;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  background: rgb(255 244 231 / 0.08);
+}
+
+.star-memory-map__constellation i {
+  position: absolute;
+  width: 0.22rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: rgb(255 241 190 / 0.92);
+  box-shadow: 0 0 0.8rem rgb(255 224 164 / 0.8);
+}
+
+.star-memory-map__constellation i:nth-child(1) {
+  top: 0.7rem;
+  left: 0.5rem;
+}
+
+.star-memory-map__constellation i:nth-child(2) {
+  top: 0.45rem;
+  left: 1.25rem;
+}
+
+.star-memory-map__constellation i:nth-child(3) {
+  top: 1.35rem;
+  left: 1.45rem;
+}
+
+.star-memory-map__constellation i:nth-child(4) {
+  top: 1.55rem;
+  left: 0.75rem;
+}
+
 .letter-scene {
   min-height: 100vh;
   padding: clamp(2rem, 8vw, 6rem) 1.25rem;
@@ -1686,6 +1763,16 @@ body {
     bottom: auto;
   }
 
+  .star-memory-map {
+    top: 5.1rem;
+    right: 0.85rem;
+    bottom: auto;
+  }
+
+  .star-memory-map small {
+    display: none;
+  }
+
   .star-quota {
     top: 1rem;
     right: 4.6rem;
@@ -1867,7 +1954,7 @@ body {
 }
 
 .star-chat__dock:focus-within {
-  animation: star-composer-breathe 2.4s ease-in-out infinite;
+  animation: star-composer-glow 2.4s ease-in-out infinite;
 }
 
 .star-chat__dock[data-mode="design"] {
@@ -1876,4 +1963,21 @@ body {
     0 1.4rem 3.5rem rgb(49 78 132 / 0.28),
     0 0 0 1px rgb(160 198 255 / 0.16),
     inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+
+@keyframes star-composer-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 1.2rem 3.2rem rgb(0 0 0 / 0.26),
+      0 0 0 0 rgb(255 244 231 / 0),
+      inset 0 1px 0 rgb(255 255 255 / 0.14);
+  }
+
+  50% {
+    box-shadow:
+      0 1.4rem 3.6rem rgb(0 0 0 / 0.3),
+      0 0 0 0.22rem rgb(255 244 231 / 0.1),
+      inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
 }

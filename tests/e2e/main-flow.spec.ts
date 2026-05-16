@@ -116,7 +116,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.getByRole('button', { name: '保存这个设计' }).click()
   await expect(page.getByText('保存后，这片星空会留在这把钥匙里。')).toBeVisible()
 
-  await page.getByRole('button', { name: '打开设置' }).click()
+  await page.getByRole('button', { name: '打开记忆星图' }).click()
   await expect(page.getByRole('dialog', { name: '星信设置' })).toBeVisible()
   await expect(page.getByRole('textbox', { name: '称呼' })).toHaveValue('月光')
   await expect(page.getByRole('combobox', { name: 'MBTI' })).toHaveValue('INFJ')

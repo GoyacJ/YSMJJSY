@@ -11,6 +11,7 @@ const {
 } = useKeyDesign()
 const { loadMessages } = useStarChat()
 const chatMessages = ref<StarChatMessage[]>([])
+const profileSettingsOpen = ref(false)
 
 onMounted(async () => {
   const schema = await loadDesign()
@@ -39,7 +40,12 @@ onMounted(async () => {
         <MiniMaxQuotaPanel />
       </aside>
       <StarChat :initial-messages="chatMessages" @design-requested="previewDesign" />
-      <ProfileSettingsSheet />
+      <StarMemoryMap @open-settings="profileSettingsOpen = true" />
+      <ProfileSettingsSheet
+        :open="profileSettingsOpen"
+        hide-trigger
+        @close="profileSettingsOpen = false"
+      />
       <DesignPreviewSheet
         v-if="previewSchema"
         :schema="previewSchema"

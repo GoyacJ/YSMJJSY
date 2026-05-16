@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 type ProfileUpdate = {
   assistantName: string
@@ -14,10 +14,13 @@ type ProfileResult = ProfileUpdate & {
 const props = defineProps<{
   loadProfile?: () => Promise<ProfileResult>
   saveProfile?: (input: ProfileUpdate) => Promise<ProfileResult>
+  open?: boolean
+  hideTrigger?: boolean
 }>()
 
 const emit = defineEmits<{
   updated: [profile: ProfileResult]
+  close: []
 }>()
 
 const mbtiOptions = [
@@ -39,7 +42,7 @@ const mbtiOptions = [
   'ESFP',
 ]
 
-const open = ref(false)
+const sheetOpen = ref(false)
 const assistantName = ref('星信')
 const mbti = ref('INTJ')
 const pending = ref(false)
@@ -57,7 +60,7 @@ async function defaultSaveProfile(input: ProfileUpdate) {
 }
 
 async function openSettings() {
-  open.value = true
+  sheetOpen.value = true
   pending.value = true
   error.value = ''
 
@@ -85,7 +88,7 @@ async function submit() {
     }
     const profile = props.saveProfile ? await props.saveProfile(input) : await defaultSaveProfile(input)
     emit('updated', profile)
-    open.value = false
+    closeSettings()
   }
   catch {
     error.value = '设置没有保存成功。'
@@ -94,11 +97,32 @@ async function submit() {
     pending.value = false
   }
 }
+
+function closeSettings() {
+  sheetOpen.value = false
+  emit('close')
+}
+
+watch(
+  () => props.open,
+  (nextOpen) => {
+    if (nextOpen) {
+      void openSettings()
+      return
+    }
+
+    if (nextOpen === false) {
+      sheetOpen.value = false
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div class="profile-settings">
     <button
+      v-if="!hideTrigger"
       type="button"
       class="profile-settings__trigger"
       aria-label="打开设置"
@@ -107,11 +131,11 @@ async function submit() {
       设
     </button>
 
-    <div v-if="open" class="profile-settings__sheet" role="dialog" aria-label="星信设置">
+    <div v-if="sheetOpen" class="profile-settings__sheet" role="dialog" aria-label="星信设置">
       <form class="profile-settings__panel" @submit.prevent="submit">
         <header>
           <p>设置</p>
-          <button type="button" aria-label="关闭设置" @click="open = false">
+          <button type="button" aria-label="关闭设置" @click="closeSettings">
             关
           </button>
         </header>
