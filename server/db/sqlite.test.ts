@@ -76,6 +76,25 @@ describe('sqlite repositories', () => {
     expect(repo.listRecentConversationsByKey('key_1').map(item => item.content)).toEqual(['key 1'])
   })
 
+  it('stores structured conversation message json', () => {
+    const repo = createConversationRepository(':memory:')
+
+    repo.addConversation({
+      id: 'c1',
+      keyId: 'key_1',
+      role: 'assistant',
+      content: '生成好了。',
+      messageJson: JSON.stringify({
+        role: 'assistant',
+        content: '生成好了。',
+        parts: [{ type: 'image', base64: 'img' }],
+      }),
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+
+    expect(repo.listRecentConversationsByKey('key_1')[0]?.messageJson).toContain('"image"')
+  })
+
   it('lists memories by key only', () => {
     const repo = createMemoryRepository(':memory:')
 

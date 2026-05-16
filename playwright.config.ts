@@ -7,6 +7,7 @@ export default defineConfig({
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: true,
     env: {
+      NUXT_DEVTOOLS_ENABLED: 'false',
       NUXT_UNLOCK_CODE: '100522',
       NUXT_SESSION_SECRET: 'e2e-secret',
       NUXT_SQLITE_PATH: './data/e2e.sqlite',

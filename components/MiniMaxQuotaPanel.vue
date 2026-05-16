@@ -22,7 +22,7 @@ const error = ref('')
 const visibleQuotas = computed(() => quotas.value.filter(item => item.key !== 'chat'))
 
 function formatQuota(item: MiniMaxQuotaItem) {
-  return item.total > 0 ? `${item.remaining}/${item.total}` : '暂不可用'
+  return item.total > 0 ? `${item.used}/${item.total}` : '暂不可用'
 }
 
 function formatLabel(item: MiniMaxQuotaItem) {
@@ -39,7 +39,7 @@ function formatLabel(item: MiniMaxQuotaItem) {
 
 function formatQuotaText(item: MiniMaxQuotaItem) {
   return item.available && item.total > 0
-    ? `${formatLabel(item)} ${formatQuota(item)}`
+    ? `${formatLabel(item)}已用 ${formatQuota(item)}`
     : `${formatLabel(item)}暂不可用`
 }
 

@@ -97,6 +97,19 @@ function stripThinkingTags(text: string) {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
 }
 
+function stripStreamingThinkingTags(text: string) {
+  return stripThinkingTags(text).replace(/<think>[\s\S]*$/i, '').trim()
+}
+
+function extractChatStreamDelta(payload: any) {
+  return normalizeText(
+    payload?.choices?.[0]?.delta?.content
+    ?? payload?.choices?.[0]?.message?.content
+    ?? payload?.delta
+    ?? payload?.text,
+  )
+}
+
 function isHexAudio(value: string) {
   return value.length > 0 && value.length % 2 === 0 && /^[\da-f]+$/i.test(value)
 }
@@ -125,6 +138,14 @@ function normalizeAudioResult(response: any): AudioResult {
   }
 
   return normalizeAudioValue(response?.data?.audio ?? response?.audio ?? response?.base64)
+}
+
+function normalizeAudioHex(value: unknown) {
+  return normalizeText(value)
+}
+
+function extractAudioStreamHex(payload: any) {
+  return normalizeAudioHex(payload?.data?.audio ?? payload?.audio ?? payload?.base64)
 }
 
 function normalizeImageResult(response: any): ImageResult {
@@ -193,7 +214,7 @@ const quotaDefinitions: Array<{
   {
     key: 'audio',
     label: '听一听',
-    find: modelName => modelName === 'speech-hd',
+    find: modelName => ['speech-hd', 'speech-2.8-hd'].includes(modelName),
   },
   {
     key: 'image',
@@ -208,7 +229,7 @@ const quotaDefinitions: Array<{
   {
     key: 'video',
     label: '做一段',
-    find: modelName => modelName === 'MiniMax-Hailuo-2.3-6s-768p',
+    find: modelName => ['MiniMax-Hailuo-2.3-6s-768p', 'MiniMax-Hailuo-2.3'].includes(modelName),
   },
 ]
 
@@ -278,6 +299,131 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
     return parsed as T
   }
 
+  async function* streamChatRequest(messages: MiniMaxMessage[]): AsyncGenerator<string> {
+    const response = await fetcher(new URL('/v1/chat/completions', baseUrl), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${options.apiKey}`,
+        'Content-Type': 'application/json',
+        ...(options.groupId ? { 'X-MiniMax-Group-Id': options.groupId } : {}),
+      },
+      body: toJsonBody({
+        model: 'MiniMax-M2.7',
+        messages,
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    })
+
+    if (!response.ok) {
+      throw new MiniMaxError('MiniMax request failed', response.status, await response.text())
+    }
+
+    if (!response.body) {
+      return
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let rawReply = ''
+    let visibleReply = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done })
+      const events = buffer.split(/\n\n/)
+      buffer = events.pop() ?? ''
+
+      for (const event of events) {
+        for (const line of event.split('\n')) {
+          const data = line.startsWith('data:') ? line.slice(5).trim() : ''
+
+          if (!data || data === '[DONE]') {
+            continue
+          }
+
+          const parsed = JSON.parse(data)
+
+          if (typeof parsed?.base_resp?.status_code === 'number' && parsed.base_resp.status_code !== 0) {
+            throw new MiniMaxError('MiniMax provider error', parsed.base_resp.status_code, data)
+          }
+
+          rawReply += extractChatStreamDelta(parsed)
+          const nextVisibleReply = stripStreamingThinkingTags(rawReply)
+
+          if (nextVisibleReply.length > visibleReply.length) {
+            const delta = nextVisibleReply.slice(visibleReply.length)
+            visibleReply = nextVisibleReply
+            yield delta
+          }
+        }
+      }
+
+      if (done) {
+        break
+      }
+    }
+  }
+
+  async function* streamJsonRequest(path: string, body: unknown, timeoutMs = 120_000): AsyncGenerator<any> {
+    const response = await fetcher(new URL(path, baseUrl), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${options.apiKey}`,
+        'Content-Type': 'application/json',
+        ...(options.groupId ? { 'X-MiniMax-Group-Id': options.groupId } : {}),
+      },
+      body: toJsonBody(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+
+    if (!response.ok) {
+      throw new MiniMaxError('MiniMax request failed', response.status, await response.text())
+    }
+
+    if (!response.body) {
+      return
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done })
+      const lines = buffer.split(/\n/)
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        const data = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed
+
+        if (!data || data === '[DONE]') {
+          continue
+        }
+
+        const parsed = JSON.parse(data)
+
+        if (typeof parsed?.base_resp?.status_code === 'number' && parsed.base_resp.status_code !== 0) {
+          throw new MiniMaxError('MiniMax provider error', parsed.base_resp.status_code, data)
+        }
+
+        yield parsed
+      }
+
+      if (done) {
+        const data = buffer.trim().startsWith('data:') ? buffer.trim().slice(5).trim() : buffer.trim()
+
+        if (data && data !== '[DONE]') {
+          yield JSON.parse(data)
+        }
+        break
+      }
+    }
+  }
+
   return {
     request,
 
@@ -294,6 +440,10 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       return {
         reply: stripThinkingTags(normalizeText(response?.choices?.[0]?.message?.content ?? response?.reply ?? response?.text)),
       }
+    },
+
+    chatStream(messages: MiniMaxMessage[]) {
+      return streamChatRequest(messages)
     },
 
     async extractMemory(messages: MiniMaxMessage[]): Promise<ExtractedMemory[]> {
@@ -361,6 +511,33 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       })
 
       return normalizeAudioResult(response)
+    },
+
+    async *textToSpeechStream(text: string): AsyncGenerator<string> {
+      for await (const chunk of streamJsonRequest('/v1/t2a_v2', {
+        model: 'speech-2.8-hd',
+        text,
+        stream: true,
+        voice_setting: {
+          voice_id: 'male-qn-qingse',
+          speed: 0.95,
+          vol: 1,
+          pitch: 0,
+        },
+        audio_setting: {
+          sample_rate: 32000,
+          bitrate: 128000,
+          format: 'mp3',
+          channel: 1,
+        },
+        output_format: 'hex',
+      })) {
+        const hex = extractAudioStreamHex(chunk)
+
+        if (hex) {
+          yield hex
+        }
+      }
     },
 
     async generateImage(prompt: string): Promise<ImageResult> {
@@ -443,6 +620,27 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       })
 
       return normalizeAudioResult(response)
+    },
+
+    async *generateMusicStream(prompt: string): AsyncGenerator<string> {
+      for await (const chunk of streamJsonRequest('/v1/music_generation', {
+        model: 'music-2.6',
+        prompt,
+        stream: true,
+        is_instrumental: true,
+        output_format: 'hex',
+        audio_setting: {
+          sample_rate: 44100,
+          bitrate: 256000,
+          format: 'mp3',
+        },
+      }, 180_000)) {
+        const hex = extractAudioStreamHex(chunk)
+
+        if (hex) {
+          yield hex
+        }
+      }
     },
 
     async getTokenPlanRemains(): Promise<MiniMaxQuotaItem[]> {

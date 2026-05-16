@@ -9,34 +9,143 @@ function flushPromises() {
 function mountStarChat(options: Parameters<typeof mount<typeof StarChat>>[1] = {}) {
   return mount(StarChat, {
     ...options,
-    global: {
-      ...(options.global || {}),
-      stubs: {
-        MediaCreationPanel: true,
-        ...(options.global?.stubs || {}),
-      },
-    },
+  })
+}
+
+function createStreamReply(reply: string, message = {
+  role: 'assistant' as const,
+  content: reply,
+  parts: [{ type: 'text' as const, text: reply }],
+}) {
+  return vi.fn(async (_payload, onEvent) => {
+    onEvent({ type: 'message', reply, message })
+    return { reply, message }
   })
 }
 
 describe('StarChat', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    delete (globalThis as any).$fetch
   })
 
   it('sends user message and renders reply', async () => {
-    const sendMessage = vi.fn(async () => ({ reply: '这封信是真的。' }))
+    const sendMessageStream = createStreamReply('这封信是真的。')
     const wrapper = mountStarChat({
       props: {
-        sendMessage,
+        sendMessageStream,
       },
     })
 
     await wrapper.find('textarea').setValue('这封信是真的吗？')
     await wrapper.find('form').trigger('submit.prevent')
 
-    expect(sendMessage).toHaveBeenCalledWith({ message: '这封信是真的吗？', attachments: [] })
+    expect(sendMessageStream).toHaveBeenCalledWith({ message: '这封信是真的吗？', attachments: [], intent: 'auto' }, expect.any(Function))
     expect(wrapper.text()).toContain('这封信是真的')
+    expect(wrapper.find('.star-chat__header').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('这封信里的星光')
+  })
+
+  it('renders saved messages from the current key', () => {
+    const wrapper = mountStarChat({
+      props: {
+        initialMessages: [
+          { role: 'user', content: '昨晚说到星空。' },
+          {
+            role: 'assistant',
+            content: '我还记得那片星空。',
+            parts: [{ type: 'text' as const, text: '我还记得那片星空。' }],
+          },
+        ],
+      },
+    })
+
+    expect(wrapper.text()).toContain('昨晚说到星空。')
+    expect(wrapper.text()).toContain('我还记得那片星空。')
+  })
+
+  it('renders structured text and audio parts in the chat thread', async () => {
+    const sendMessageStream = createStreamReply('先慢慢呼吸。', {
+        role: 'assistant' as const,
+        content: '先慢慢呼吸。',
+        parts: [
+          { type: 'text' as const, text: '先慢慢呼吸。' },
+          { type: 'audio' as const, base64: 'abc' },
+        ],
+      })
+    const wrapper = mountStarChat({ props: { sendMessageStream } })
+
+    await wrapper.find('textarea').setValue('读给我听')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    expect(wrapper.text()).toContain('先慢慢呼吸。')
+    expect(wrapper.get('audio').attributes('src')).toBe('data:audio/mpeg;base64,abc')
+  })
+
+  it('renders image, music, video, and status parts in assistant messages', async () => {
+    const sendMessageStream = createStreamReply('生成好了。', {
+        role: 'assistant' as const,
+        content: '生成好了。',
+        parts: [
+          { type: 'status' as const, text: '正在生成' },
+          { type: 'image' as const, base64: 'img' },
+          { type: 'music' as const, base64: 'song' },
+          { type: 'video' as const, url: 'https://example.com/star.mp4' },
+        ],
+      })
+    const wrapper = mountStarChat({ props: { sendMessageStream } })
+
+    await wrapper.find('textarea').setValue('画一张星空')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    expect(wrapper.text()).toContain('正在生成')
+    expect(wrapper.get('img[alt="生成的图片"]').attributes('src')).toBe('data:image/png;base64,img')
+    expect(wrapper.get('audio[data-kind="music"]').attributes('src')).toBe('data:audio/mpeg;base64,song')
+    expect(wrapper.get('video').attributes('src')).toBe('https://example.com/star.mp4')
+  })
+
+  it('restores media parts with download links from saved messages', () => {
+    const wrapper = mountStarChat({
+      props: {
+        initialMessages: [{
+          role: 'assistant',
+          content: '生成好了。',
+          parts: [
+            { type: 'text' as const, text: '生成好了。' },
+            { type: 'image' as const, base64: 'img' },
+            { type: 'audio' as const, base64: 'audio' },
+            { type: 'music' as const, base64: 'song' },
+            { type: 'video' as const, url: 'https://example.com/star.mp4' },
+          ],
+        }],
+      },
+    })
+
+    expect(wrapper.get('img[alt="生成的图片"]').attributes('src')).toBe('data:image/png;base64,img')
+    expect(wrapper.get('audio[data-kind="audio"]').attributes('src')).toBe('data:audio/mpeg;base64,audio')
+    expect(wrapper.get('audio[data-kind="music"]').attributes('src')).toBe('data:audio/mpeg;base64,song')
+    expect(wrapper.get('video').attributes('src')).toBe('https://example.com/star.mp4')
+    expect(wrapper.get('a[download="star-image.png"]').attributes('href')).toBe('data:image/png;base64,img')
+    expect(wrapper.get('a[download="star-audio.mp3"]').attributes('href')).toBe('data:audio/mpeg;base64,audio')
+    expect(wrapper.get('a[download="star-music.mp3"]').attributes('href')).toBe('data:audio/mpeg;base64,song')
+    expect(wrapper.get('a[download="star-video.mp4"]').attributes('href')).toBe('https://example.com/star.mp4')
+  })
+
+  it('copies a message from the message action button', async () => {
+    const writeText = vi.fn(async () => undefined)
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText },
+    })
+    const wrapper = mountStarChat({
+      props: {
+        initialMessages: [{ role: 'assistant', content: '我还记得那片星空。' }],
+      },
+    })
+
+    await wrapper.get('button[aria-label="复制消息"]').trigger('click')
+
+    expect(writeText).toHaveBeenCalledWith('我还记得那片星空。')
   })
 
   it('shows bottom multimodal controls', () => {
@@ -44,19 +153,71 @@ describe('StarChat', () => {
 
     expect(wrapper.classes()).toContain('star-chat--bottom')
     expect(wrapper.get('.star-chat__dock').exists()).toBe(true)
-    expect(wrapper.get('label[aria-label="添加附件"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="设计模式"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="听一听"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="画一张"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="做一段"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="写一首"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="发送"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('完全访问权限')
+    expect(wrapper.text()).not.toContain('完全访问权限')
     expect(wrapper.get('textarea').attributes('placeholder')).toBe('要求后续变更')
   })
 
-  it('sends selected image attachment with the message', async () => {
-    const sendMessage = vi.fn(async () => ({ reply: '我看到了这张图。' }))
+  it('opens attachment options from the plus button', async () => {
+    const wrapper = mountStarChat()
+
+    expect(wrapper.find('.star-chat__attachment-popover').exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="添加附件"]').trigger('click')
+
+    expect(wrapper.get('.star-chat__attachment-popover').exists()).toBe(true)
+    expect(wrapper.get('label[aria-label="上传图片"]').exists()).toBe(true)
+    expect(wrapper.get('label[aria-label="上传音频"]').exists()).toBe(true)
+    expect(wrapper.get('label[aria-label="上传视频"]').exists()).toBe(true)
+  })
+
+  it('closes attachment options when clicking outside', async () => {
+    const wrapper = mountStarChat({
+      attachTo: document.body,
+    })
+
+    await wrapper.get('button[aria-label="添加附件"]').trigger('click')
+    expect(wrapper.find('.star-chat__attachment-popover').exists()).toBe(true)
+
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.star-chat__attachment-popover').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('sends with Enter and keeps Shift Enter for new lines', async () => {
+    const sendMessageStream = createStreamReply('收到。')
     const wrapper = mountStarChat({
       props: {
-        sendMessage,
+        sendMessageStream,
+      },
+    })
+    const textarea = wrapper.find('textarea')
+
+    await textarea.setValue('第一行')
+    await textarea.trigger('keydown.enter', { shiftKey: true })
+
+    expect(sendMessageStream).not.toHaveBeenCalled()
+
+    await textarea.trigger('keydown.enter')
+
+    expect(sendMessageStream).toHaveBeenCalledWith({ message: '第一行', attachments: [], intent: 'auto' }, expect.any(Function))
+  })
+
+  it('sends selected image attachment with the message', async () => {
+    const sendMessageStream = createStreamReply('我看到了这张图。')
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
       },
     })
 
@@ -72,7 +233,8 @@ describe('StarChat', () => {
 
     vi.stubGlobal('FileReader', MockFileReader)
 
-    const input = wrapper.get('input[type="file"]')
+    await wrapper.get('button[aria-label="添加附件"]').trigger('click')
+    const input = wrapper.get('input[accept="image/png,image/jpeg,image/webp"]')
     const file = new File(['abc'], 'star.png', { type: 'image/png' })
     Object.defineProperty(input.element, 'files', {
       value: [file],
@@ -83,15 +245,16 @@ describe('StarChat', () => {
     await wrapper.find('textarea').setValue('看看这张图')
     await wrapper.find('form').trigger('submit.prevent')
 
-    expect(sendMessage).toHaveBeenCalledWith({
+    expect(sendMessageStream).toHaveBeenCalledWith({
       message: '看看这张图',
+      intent: 'auto',
       attachments: [{
         kind: 'image',
         dataUrl: 'data:image/png;base64,abc',
         name: 'star.png',
         mimeType: 'image/png',
       }],
-    })
+    }, expect.any(Function))
     expect(wrapper.text()).toContain('我看到了这张图。')
   })
 
@@ -108,14 +271,264 @@ describe('StarChat', () => {
     expect(wrapper.emitted('designRequested')?.[0]).toEqual(['把页面改成月光感'])
   })
 
-  it('marks thread active after user interaction', async () => {
+  it('sends selected media intent through the chat request only', async () => {
+    const sendMessageStream = createStreamReply('画好了。', {
+        role: 'assistant' as const,
+        content: '画好了。',
+        parts: [{ type: 'image' as const, url: 'https://example.com/star.png' }],
+      })
+    vi.stubGlobal('fetch', vi.fn())
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.get('button[aria-label="画一张"]').trigger('click')
+    await wrapper.find('textarea').setValue('月光星空')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    expect(sendMessageStream).toHaveBeenCalledWith({
+      message: '月光星空',
+      attachments: [],
+      intent: 'image',
+    }, expect.any(Function))
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('renders streamed reply deltas before the final message', async () => {
+    let continueStream!: () => void
+    const streamGate = new Promise<void>((resolve) => {
+      continueStream = resolve
+    })
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      onEvent({ type: 'delta', text: '你' })
+      await streamGate
+      onEvent({ type: 'delta', text: '好' })
+      onEvent({
+        type: 'message',
+        reply: '你好',
+        message: {
+          role: 'assistant' as const,
+          content: '你好',
+          parts: [{ type: 'text' as const, text: '你好' }],
+        },
+      })
+      return {
+        reply: '你好',
+        message: {
+          role: 'assistant' as const,
+          content: '你好',
+          parts: [{ type: 'text' as const, text: '你好' }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('在吗')
+    const submitPromise = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(sendMessageStream).toHaveBeenCalledWith(
+      { message: '在吗', attachments: [], intent: 'auto' },
+      expect.any(Function),
+    )
+    expect(wrapper.text()).toContain('你')
+    expect(wrapper.text()).not.toContain('你好')
+
+    continueStream()
+    await submitPromise
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('你好')
+  })
+
+  it('lets the page paint between streamed text events from one response chunk', async () => {
+    const frames: FrameRequestCallback[] = []
+    const encoder = new TextEncoder()
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode([
+          'data: {"type":"delta","text":"你"}',
+          'data: {"type":"delta","text":"好"}',
+          'data: {"type":"message","reply":"你好","message":{"role":"assistant","content":"你好","parts":[{"type":"text","text":"你好"}]}}',
+          'data: [DONE]',
+          '',
+        ].join('\n\n')))
+        controller.close()
+      },
+    })
+
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    }))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    })))
+
     const wrapper = mountStarChat()
+
+    await wrapper.find('textarea').setValue('在吗')
+    const submitPromise = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('你')
+    expect(wrapper.text()).not.toContain('你好')
+
+    frames.shift()?.(performance.now())
+    await submitPromise
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('你好')
+  })
+
+  it('renders a streamed text chunk one visible character per frame', async () => {
+    const frames: FrameRequestCallback[] = []
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await onEvent({ type: 'delta', text: '你好呀' })
+      await onEvent({
+        type: 'message',
+        reply: '你好呀',
+        message: {
+          role: 'assistant' as const,
+          content: '你好呀',
+          parts: [{ type: 'text' as const, text: '你好呀' }],
+        },
+      })
+      return {
+        reply: '你好呀',
+        message: {
+          role: 'assistant' as const,
+          content: '你好呀',
+          parts: [{ type: 'text' as const, text: '你好呀' }],
+        },
+      }
+    })
+
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    }))
+
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('在吗')
+    const submitPromise = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('你')
+    expect(wrapper.text()).not.toContain('你好')
+
+    frames.shift()?.(performance.now())
+    await flushPromises()
+    expect(wrapper.text()).toContain('你好')
+    expect(wrapper.text()).not.toContain('你好呀')
+
+    frames.shift()?.(performance.now())
+    await flushPromises()
+    expect(wrapper.text()).toContain('你好呀')
+
+    frames.shift()?.(performance.now())
+    await submitPromise
+  })
+
+  it('renders stream status events before final media message', async () => {
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      onEvent({ type: 'status', text: '正在画一张。' })
+      await flushPromises()
+      onEvent({
+        type: 'message',
+        reply: '画好了。',
+        message: {
+          role: 'assistant' as const,
+          content: '画好了。',
+          parts: [
+            { type: 'text' as const, text: '画好了。' },
+            { type: 'image' as const, url: 'https://example.com/star.png' },
+          ],
+        },
+      })
+      return {
+        reply: '画好了。',
+        message: {
+          role: 'assistant' as const,
+          content: '画好了。',
+          parts: [
+            { type: 'text' as const, text: '画好了。' },
+            { type: 'image' as const, url: 'https://example.com/star.png' },
+          ],
+        },
+      }
+    })
+    const wrapper = mountStarChat({ props: { sendMessageStream } })
+
+    await wrapper.get('button[aria-label="画一张"]').trigger('click')
+    await wrapper.find('textarea').setValue('月光星空')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('画好了。')
+    expect(wrapper.get('img[alt="生成的图片"]').attributes('src')).toBe('https://example.com/star.png')
+  })
+
+  it('marks thread active after user interaction', async () => {
+    const sendMessageStream = createStreamReply('这封信是真的。')
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
 
     expect(wrapper.attributes('data-thread-active')).toBe('false')
 
+    await wrapper.find('textarea').setValue('这封信是真的吗？')
+    await wrapper.find('form').trigger('submit.prevent')
     await wrapper.get('.star-chat__thread').trigger('click')
 
     expect(wrapper.attributes('data-thread-active')).toBe('true')
+  })
+
+  it('keeps the message thread on the latest message', async () => {
+    const scrollTo = vi.fn()
+    const originalScrollTo = HTMLElement.prototype.scrollTo
+    const originalScrollHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight')
+    const sendMessageStream = createStreamReply('第二条回复。')
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => 360,
+    })
+    HTMLElement.prototype.scrollTo = scrollTo
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    try {
+      await wrapper.find('textarea').setValue('第一条消息')
+      await wrapper.find('form').trigger('submit.prevent')
+      await flushPromises()
+
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 360, behavior: 'smooth' })
+      expect(wrapper.get('.star-chat__thread').classes()).toContain('star-chat__thread--transparent')
+    }
+    finally {
+      HTMLElement.prototype.scrollTo = originalScrollTo
+
+      if (originalScrollHeight) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollHeight', originalScrollHeight)
+      }
+    }
   })
 
   it('fills the input from browser speech recognition', async () => {

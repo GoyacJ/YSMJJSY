@@ -8,6 +8,7 @@ export type ConversationRecord = {
   keyId?: string | null
   role: 'user' | 'assistant' | 'system'
   content: string
+  messageJson?: string | null
   createdAt: string
 }
 
@@ -95,6 +96,7 @@ function openDatabase(path: string) {
   }
 
   ensureColumn(db, 'conversations', 'key_id', 'TEXT')
+  ensureColumn(db, 'conversations', 'message_json', 'TEXT')
   ensureColumn(db, 'memories', 'key_id', 'TEXT')
   ensureColumn(db, 'media_tasks', 'key_id', 'TEXT')
 
@@ -107,14 +109,14 @@ export function createConversationRepository(path: string) {
   return {
     addConversation(record: ConversationRecord) {
       db.prepare(`
-        INSERT INTO conversations (id, key_id, role, content, created_at)
-        VALUES (@id, @keyId, @role, @content, @createdAt)
-      `).run({ ...record, keyId: record.keyId ?? null })
+        INSERT INTO conversations (id, key_id, role, content, message_json, created_at)
+        VALUES (@id, @keyId, @role, @content, @messageJson, @createdAt)
+      `).run({ ...record, keyId: record.keyId ?? null, messageJson: record.messageJson ?? null })
     },
 
     listRecentConversations(limit = 12): ConversationRecord[] {
       return db.prepare(`
-        SELECT id, key_id AS keyId, role, content, created_at AS createdAt
+        SELECT id, key_id AS keyId, role, content, message_json AS messageJson, created_at AS createdAt
         FROM conversations
         ORDER BY created_at DESC
         LIMIT ?
@@ -123,7 +125,7 @@ export function createConversationRepository(path: string) {
 
     listRecentConversationsByKey(keyId: string, limit = 12): ConversationRecord[] {
       return db.prepare(`
-        SELECT id, key_id AS keyId, role, content, created_at AS createdAt
+        SELECT id, key_id AS keyId, role, content, message_json AS messageJson, created_at AS createdAt
         FROM conversations
         WHERE key_id = ?
         ORDER BY created_at DESC

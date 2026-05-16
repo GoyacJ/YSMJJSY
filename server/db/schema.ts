@@ -4,6 +4,7 @@ export const schemaStatements = [
     key_id TEXT,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    message_json TEXT,
     created_at TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS memories (

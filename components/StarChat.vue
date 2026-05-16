@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   useStarChat,
   type AttachmentKind,
   type StarChatAttachment,
+  type StarChatIntent,
   type StarChatMessage,
+  type StarChatPart,
   type StarChatReply,
   type StarChatSendPayload,
+  type StarChatStreamEvent,
+  type StarChatStreamHandler,
 } from '../composables/useStarChat'
 
+type MediaIntent = Exclude<StarChatIntent, 'auto' | 'chat'>
+
 const props = defineProps<{
-  sendMessage?: (payload: StarChatSendPayload) => Promise<StarChatReply>
+  sendMessageStream?: (payload: StarChatSendPayload, onEvent: StarChatStreamHandler) => Promise<StarChatReply>
+  initialMessages?: StarChatMessage[]
 }>()
 
 const emit = defineEmits<{
@@ -22,9 +29,14 @@ const pending = ref(false)
 const error = ref('')
 const localMessages = ref<StarChatMessage[]>([])
 const attachments = ref<StarChatAttachment[]>([])
+const selectedMediaKinds = ref<MediaIntent[]>([])
 const listening = ref(false)
 const mode = ref<'chat' | 'design'>('chat')
 const threadActive = ref(false)
+const activeMessageIndex = ref<number | null>(null)
+const attachmentMenuOpen = ref(false)
+const attachmentMenuRef = ref<HTMLElement | null>(null)
+const messagesThreadRef = ref<HTMLElement | null>(null)
 const chat = useStarChat()
 let recognition: { start: () => void; stop?: () => void; abort?: () => void; lang: string; interimResults: boolean; onresult: ((event: any) => void) | null; onerror: (() => void) | null; onend: (() => void) | null } | null = null
 
@@ -46,6 +58,13 @@ const attachmentRules: Record<AttachmentKind, { mimeTypes: string[], maxSize: nu
   },
 }
 
+const mediaActions: Array<{ kind: MediaIntent, label: string, icon: string }> = [
+  { kind: 'audio', label: '听一听', icon: 'M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4' },
+  { kind: 'image', label: '画一张', icon: 'M4 5h16v14H4zM8 14l2.5-3 2 2.5L15 10l5 6M8 9h.01' },
+  { kind: 'video', label: '做一段', icon: 'M4 6h11v12H4zM15 10l5-3v10l-5-3z' },
+  { kind: 'music', label: '写一首', icon: 'M9 18V5l10-2v13M9 9l10-2M7 18a2 2 0 1 0 4 0 2 2 0 0 0-4 0M17 16a2 2 0 1 0 4 0 2 2 0 0 0-4 0' },
+]
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -61,7 +80,7 @@ function getAttachmentKind(file: File): AttachmentKind | undefined {
   if (file.type.startsWith('video/')) return 'video'
 }
 
-async function handleAttachmentChange(event: Event) {
+async function handleAttachmentChange(event: Event, expectedKind: AttachmentKind) {
   const files = Array.from((event.target as HTMLInputElement).files ?? []).slice(0, 3)
 
   if (files.length === 0) {
@@ -74,8 +93,13 @@ async function handleAttachmentChange(event: Event) {
     for (const file of files) {
       const kind = getAttachmentKind(file)
 
-      if (!kind) {
-        error.value = '只能添加图片、音频或视频。'
+      if (kind !== expectedKind) {
+        const kindLabel: Record<AttachmentKind, string> = {
+          image: '图片',
+          audio: '音频',
+          video: '视频',
+        }
+        error.value = `请选择${kindLabel[expectedKind]}文件。`
         return
       }
 
@@ -95,6 +119,7 @@ async function handleAttachmentChange(event: Event) {
     }
 
     attachments.value = nextAttachments
+    attachmentMenuOpen.value = false
     error.value = ''
   }
   catch {
@@ -102,8 +127,54 @@ async function handleAttachmentChange(event: Event) {
   }
 }
 
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!attachmentMenuOpen.value) {
+    return
+  }
+
+  const target = event.target
+
+  if (target instanceof Node && attachmentMenuRef.value?.contains(target)) {
+    return
+  }
+
+  attachmentMenuOpen.value = false
+}
+
+function handleInputEnter(event: KeyboardEvent) {
+  if (event.shiftKey || event.isComposing) {
+    return
+  }
+
+  event.preventDefault()
+  void submit()
+}
+
+async function scrollMessagesToLatest() {
+  await nextTick()
+  const thread = messagesThreadRef.value
+
+  if (!thread) {
+    return
+  }
+
+  if (typeof thread.scrollTo === 'function') {
+    thread.scrollTo({
+      top: thread.scrollHeight,
+      behavior: 'smooth',
+    })
+    return
+  }
+
+  thread.scrollTop = thread.scrollHeight
+}
+
 function removeAttachment(index: number) {
   attachments.value.splice(index, 1)
+}
+
+function toggleMediaKind(kind: MediaIntent) {
+  selectedMediaKinds.value = selectedMediaKinds.value[0] === kind ? [] : [kind]
 }
 
 function startVoiceInput() {
@@ -136,9 +207,161 @@ function startVoiceInput() {
   recognition.start()
 }
 
+function getMediaSource(part: StarChatPart) {
+  if (!['audio', 'image', 'music', 'video'].includes(part.type)) {
+    return undefined
+  }
+
+  if ('url' in part && part.url) {
+    return part.url
+  }
+
+  if (!('base64' in part) || !part.base64) {
+    return undefined
+  }
+
+  return part.type === 'image'
+    ? `data:image/png;base64,${part.base64}`
+    : `data:audio/mpeg;base64,${part.base64}`
+}
+
+function getMediaDownloadName(part: StarChatPart) {
+  const names: Partial<Record<StarChatPart['type'], string>> = {
+    image: 'star-image.png',
+    audio: 'star-audio.mp3',
+    music: 'star-music.mp3',
+    video: 'star-video.mp4',
+  }
+
+  return names[part.type]
+}
+
+function buildAttachmentParts(text: string, selectedAttachments: StarChatAttachment[]) {
+  const parts: StarChatPart[] = text ? [{ type: 'text', text }] : []
+
+  for (const attachment of selectedAttachments) {
+    if (attachment.kind === 'image') {
+      parts.push({ type: 'image', url: attachment.dataUrl })
+    }
+
+    if (attachment.kind === 'audio') {
+      parts.push({ type: 'audio', url: attachment.dataUrl })
+    }
+
+    if (attachment.kind === 'video') {
+      parts.push({ type: 'video', url: attachment.dataUrl })
+    }
+  }
+
+  return parts
+}
+
+async function copyMessage(message: StarChatMessage) {
+  const text = message.content.trim()
+
+  if (!text || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    return
+  }
+
+  await navigator.clipboard.writeText(text)
+}
+
+function createStreamingAssistantMessage() {
+  return {
+    role: 'assistant' as const,
+    content: '',
+    parts: [{ type: 'text' as const, text: '' }],
+  }
+}
+
+function waitForVisibleStreamPaint() {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve())
+      return
+    }
+
+    setTimeout(resolve, 0)
+  })
+}
+
+function applyStreamDelta(index: number, text: string) {
+  const message = localMessages.value[index]
+
+  if (!message) {
+    return
+  }
+
+  let hasTextPart = false
+  const parts = (message.parts ?? []).map((part) => {
+    if (part.type !== 'text') {
+      return part
+    }
+
+    hasTextPart = true
+    return {
+      ...part,
+      text: part.text + text,
+    }
+  })
+
+  if (!hasTextPart) {
+    parts.push({ type: 'text', text })
+  }
+
+  applyStreamMessage(index, {
+    ...message,
+    content: message.content + text,
+    parts,
+  })
+}
+
+async function applyStreamDeltaByCharacter(index: number, text: string) {
+  for (const character of Array.from(text)) {
+    applyStreamDelta(index, character)
+    await scrollMessagesToLatest()
+    await waitForVisibleStreamPaint()
+  }
+}
+
+function applyStreamMessage(index: number, message: StarChatMessage) {
+  localMessages.value.splice(index, 1, message)
+}
+
+function handleStreamEvent(index: number) {
+  return async (event: StarChatStreamEvent) => {
+    if (event.type === 'delta') {
+      await applyStreamDeltaByCharacter(index, event.text)
+      return
+    }
+
+    if (event.type === 'status') {
+      applyStreamMessage(index, {
+        role: 'assistant',
+        content: event.text,
+        parts: [{ type: 'status', text: event.text }],
+      })
+      await scrollMessagesToLatest()
+      await waitForVisibleStreamPaint()
+      return
+    }
+
+    if (event.type === 'message') {
+      applyStreamMessage(index, event.message)
+      await scrollMessagesToLatest()
+    }
+  }
+}
+
 async function submit() {
   const text = input.value.trim()
   const selectedAttachments = [...attachments.value]
+  const selectedIntent: StarChatIntent = selectedMediaKinds.value[0] ?? 'auto'
+
+  if (!text && selectedIntent !== 'auto') {
+    error.value = '先写下想生成什么。'
+    return
+  }
 
   if ((!text && selectedAttachments.length === 0) || pending.value) {
     return
@@ -147,6 +370,8 @@ async function submit() {
   if (mode.value === 'design') {
     emit('designRequested', text)
     input.value = ''
+    attachmentMenuOpen.value = false
+    selectedMediaKinds.value = []
     return
   }
 
@@ -155,19 +380,27 @@ async function submit() {
   localMessages.value.push({
     role: 'user',
     content: text || '发送了一个附件',
-    imageDataUrl: selectedAttachments.find(attachment => attachment.kind === 'image')?.dataUrl,
+    parts: buildAttachmentParts(text || '发送了一个附件', selectedAttachments),
   })
   input.value = ''
   attachments.value = []
+  attachmentMenuOpen.value = false
+  selectedMediaKinds.value = []
 
   try {
-    const payload = { message: text, attachments: selectedAttachments }
-    const result = props.sendMessage
-      ? await props.sendMessage(payload)
-      : await chat.sendMessage(payload)
+    const payload = { message: text, attachments: selectedAttachments, intent: selectedIntent }
+    const streamMessage = props.sendMessageStream ?? chat.sendMessageStream
+    const assistantMessage = createStreamingAssistantMessage()
+    const assistantIndex = localMessages.value.length
+    localMessages.value.push(assistantMessage)
+    const result = await streamMessage(payload, handleStreamEvent(assistantIndex))
 
-    if (result.reply) {
-      localMessages.value.push({ role: 'assistant', content: result.reply })
+    if (!result.message && result.reply) {
+      applyStreamMessage(assistantIndex, {
+        role: 'assistant',
+        content: result.reply,
+        parts: [{ type: 'text', text: result.reply }],
+      })
     }
   }
   catch {
@@ -178,7 +411,30 @@ async function submit() {
   }
 }
 
+onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+})
+
+watch(
+  () => props.initialMessages,
+  (messages) => {
+    if (localMessages.value.length === 0 && messages?.length) {
+      localMessages.value = [...messages]
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => localMessages.value.length,
+  () => {
+    void scrollMessagesToLatest()
+  },
+  { flush: 'post' },
+)
+
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
   recognition?.abort?.()
 })
 </script>
@@ -190,24 +446,20 @@ onBeforeUnmount(() => {
     :data-thread-active="String(threadActive)"
   >
     <div class="star-chat__note">
-      <header class="star-chat__header">
-        <p>星信</p>
-        <span>这封信里的星光</span>
-      </header>
-
       <div
-        class="star-chat__thread star-chat__messages"
+        v-if="localMessages.length > 0"
+        ref="messagesThreadRef"
+        class="star-chat__thread star-chat__thread--transparent star-chat__messages"
         aria-live="polite"
         @click="threadActive = true"
         @touchstart.passive="threadActive = true"
       >
-        <p v-if="localMessages.length === 0" class="star-chat__empty">
-          你可以问这封信里的任何一句话。
-        </p>
         <article
           v-for="(message, index) in localMessages"
           :key="`${message.role}-${index}`"
           :data-role="message.role"
+          :data-active="String(activeMessageIndex === index)"
+          @click="activeMessageIndex = index"
         >
           <img
             v-if="message.imageDataUrl"
@@ -215,7 +467,56 @@ onBeforeUnmount(() => {
             :src="message.imageDataUrl"
             alt=""
           >
-          <span>{{ message.content }}</span>
+          <a
+            v-if="message.imageDataUrl"
+            class="star-chat__media-download"
+            :href="message.imageDataUrl"
+            download="star-attachment.png"
+            aria-label="下载图片"
+            @click.stop
+          >
+            下载
+          </a>
+          <template v-if="message.parts?.length">
+            <template v-for="(part, partIndex) in message.parts" :key="`${index}-${partIndex}`">
+              <span v-if="part.type === 'text'">{{ part.text }}</span>
+              <span v-else-if="part.type === 'status'" class="star-chat__message-status">{{ part.text }}</span>
+              <audio
+                v-else-if="part.type === 'audio' || part.type === 'music'"
+                controls
+                :data-kind="part.type"
+                :src="getMediaSource(part)"
+              />
+              <img
+                v-else-if="part.type === 'image'"
+                class="star-chat__message-image"
+                :src="getMediaSource(part)"
+                alt="生成的图片"
+              >
+              <video v-else controls :src="getMediaSource(part)" />
+              <a
+                v-if="getMediaSource(part)"
+                class="star-chat__media-download"
+                :href="getMediaSource(part)"
+                :download="getMediaDownloadName(part)"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="下载资源"
+                @click.stop
+              >
+                下载
+              </a>
+            </template>
+          </template>
+          <span v-else>{{ message.content }}</span>
+          <button
+            type="button"
+            class="star-chat__copy-button"
+            aria-label="复制消息"
+            @click.stop="copyMessage(message)"
+          >
+            复制
+          </button>
         </article>
       </div>
 
@@ -234,65 +535,120 @@ onBeforeUnmount(() => {
         {{ error }}
       </p>
 
-      <MediaCreationPanel :source-text="localMessages.at(-1)?.content || '这封信里的星光'" />
-
       <form class="star-chat__composer star-chat__dock" @submit.prevent="submit">
         <label class="sr-only" for="star-chat-input">和星信说话</label>
+        <div class="star-chat__tools">
+          <div ref="attachmentMenuRef" class="star-chat__attachment-menu">
+            <button
+              type="button"
+              class="star-chat__attachment-button star-chat__icon-button"
+              :aria-expanded="attachmentMenuOpen"
+              aria-controls="star-chat-attachment-options"
+              aria-label="添加附件"
+              @click="attachmentMenuOpen = !attachmentMenuOpen"
+            >
+              +
+            </button>
+            <div
+              v-if="attachmentMenuOpen"
+              id="star-chat-attachment-options"
+              class="star-chat__attachment-popover"
+              role="menu"
+            >
+              <label role="menuitem" aria-label="上传图片">
+                <span>上传图片</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/png,image/jpeg,image/webp"
+                  @change="handleAttachmentChange($event, 'image')"
+                >
+              </label>
+              <label role="menuitem" aria-label="上传音频">
+                <span>上传音频</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/wav,audio/webm"
+                  @change="handleAttachmentChange($event, 'audio')"
+                >
+              </label>
+              <label role="menuitem" aria-label="上传视频">
+                <span>上传视频</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="video/mp4,video/webm,video/quicktime"
+                  @change="handleAttachmentChange($event, 'video')"
+                >
+              </label>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="star-chat__icon-button"
+            :disabled="pending || listening"
+            aria-label="语音输入"
+            @click="startVoiceInput"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v10" />
+              <path d="M8 11a4 4 0 0 0 8 0V7a4 4 0 0 0-8 0v4Z" />
+              <path d="M5 11a7 7 0 0 0 14 0" />
+              <path d="M12 18v3" />
+            </svg>
+            <span class="sr-only">{{ listening ? '正在听' : '语音输入' }}</span>
+          </button>
+          <button
+            type="button"
+            class="star-chat__icon-button"
+            :data-active="mode === 'design'"
+            aria-label="设计模式"
+            @click="mode = mode === 'design' ? 'chat' : 'design'"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+              <path d="M4 12l8 4 8-4" />
+              <path d="M4 17l8 4 8-4" />
+            </svg>
+            <span class="sr-only">设计模式</span>
+          </button>
+          <button
+            v-for="action in mediaActions"
+            :key="action.kind"
+            type="button"
+            class="star-chat__icon-button"
+            :data-active="selectedMediaKinds.includes(action.kind)"
+            :disabled="pending"
+            :aria-label="action.label"
+            @click="toggleMediaKind(action.kind)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path :d="action.icon" />
+            </svg>
+            <span class="sr-only">{{ action.label }}</span>
+          </button>
+        </div>
         <textarea
           id="star-chat-input"
           v-model="input"
-          rows="2"
+          rows="1"
           :placeholder="mode === 'design' ? '请输入你的创意想法' : '要求后续变更'"
           @focus="threadActive = true"
+          @keydown.enter="handleInputEnter"
         />
-        <div class="star-chat__dock-bar">
-          <div class="star-chat__tools">
-            <label class="star-chat__attachment-button star-chat__icon-button" aria-label="添加附件">
-              +
-              <input
-                type="file"
-                multiple
-                accept="image/png,image/jpeg,image/webp,audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"
-                @change="handleAttachmentChange"
-              >
-            </label>
-            <button
-              type="button"
-              class="star-chat__icon-button"
-              :disabled="pending || listening"
-              aria-label="语音输入"
-              @click="startVoiceInput"
-            >
-              {{ listening ? '听' : '声' }}
-            </button>
-            <button
-              type="button"
-              class="star-chat__permission"
-              aria-label="完全访问权限"
-            >
-              完全访问权限
-            </button>
-            <button
-              type="button"
-              class="star-chat__icon-button"
-              :data-active="mode === 'design'"
-              aria-label="设计模式"
-              @click="mode = mode === 'design' ? 'chat' : 'design'"
-            >
-              设
-            </button>
-          </div>
-          <div class="star-chat__tools star-chat__tools--send">
-            <button
-              class="star-chat__icon-button star-chat__icon-button--send"
-              type="submit"
-              :disabled="pending"
-              aria-label="发送"
-            >
-              {{ pending ? '等' : '寄' }}
-            </button>
-          </div>
-        </div>
+        <button
+          class="star-chat__icon-button star-chat__icon-button--send"
+          type="submit"
+          :disabled="pending"
+          aria-label="发送"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h13" />
+            <path d="m13 6 6 6-6 6" />
+          </svg>
+          <span class="sr-only">{{ pending ? '等待发送' : '发送' }}</span>
+        </button>
       </form>
     </div>
   </aside>

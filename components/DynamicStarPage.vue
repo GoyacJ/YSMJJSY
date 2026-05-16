@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { StarPageDesignSchema } from '../types/design-schema'
 
-defineProps<{
+const props = defineProps<{
   schema: StarPageDesignSchema
 }>()
+
+const visibleSections = computed(() => props.schema.sections.filter((section) => {
+  return section.type !== 'star-scene' || !section.caption.includes('每一颗星都可以被重新设计')
+}))
 
 function paragraphFor(section: Extract<StarPageDesignSchema['sections'][number], { type: 'letter' }>, index: number) {
   return {
@@ -29,7 +34,7 @@ function paragraphFor(section: Extract<StarPageDesignSchema['sections'][number],
       </header>
 
       <div class="dynamic-star-page__sections">
-        <template v-for="(section, index) in schema.sections" :key="`${section.type}-${index}`">
+        <template v-for="(section, index) in visibleSections" :key="`${section.type}-${index}`">
           <article v-if="section.type === 'letter'" class="dynamic-star-page__letter">
             <ClientOnly>
               <PretextParagraph :paragraph="paragraphFor(section, index)" />

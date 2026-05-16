@@ -45,6 +45,58 @@ describe('minimax client', () => {
     })
   })
 
+  it('streams chat deltas from MiniMax SSE responses', async () => {
+    let requestBody: any
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"你"}}]}\n\n'))
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"好"}}]}\n\n'))
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    })
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body))
+        return new Response(stream, { status: 200 })
+      },
+    })
+
+    const chunks: string[] = []
+
+    for await (const chunk of client.chatStream([])) {
+      chunks.push(chunk)
+    }
+
+    expect(requestBody.stream).toBe(true)
+    expect(chunks).toEqual(['你', '好'])
+  })
+
+  it('filters thinking tags while streaming chat deltas', async () => {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"<think>隐藏"}}]}\n\n'))
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"</think>正文"}}]}\n\n'))
+        controller.close()
+      },
+    })
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async () => new Response(stream, { status: 200 }),
+    })
+
+    const chunks: string[] = []
+
+    for await (const chunk of client.chatStream([])) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks).toEqual(['正文'])
+  })
+
   it('normalizes hex audio responses to base64', async () => {
     const client = createMiniMaxClient({
       apiKey: 'key',
@@ -77,6 +129,64 @@ describe('minimax client', () => {
     await client.textToSpeech('测试')
 
     expect(requestBody.model).toBe('speech-2.8-hd')
+  })
+
+  it('streams speech hex chunks with stream enabled', async () => {
+    let requestBody: any
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"data":{"audio":"4944"}}\n\n'))
+        controller.enqueue(encoder.encode('data: {"data":{"audio":"33"}}\n\n'))
+        controller.close()
+      },
+    })
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body))
+        return new Response(stream, { status: 200 })
+      },
+    })
+
+    const chunks: string[] = []
+
+    for await (const chunk of client.textToSpeechStream('测试')) {
+      chunks.push(chunk)
+    }
+
+    expect(requestBody.stream).toBe(true)
+    expect(requestBody.output_format).toBe('hex')
+    expect(chunks).toEqual(['4944', '33'])
+  })
+
+  it('streams music hex chunks with stream enabled', async () => {
+    let requestBody: any
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"data":{"audio":"4944"}}\n'))
+        controller.enqueue(encoder.encode('{"data":{"audio":"33"}}\n'))
+        controller.close()
+      },
+    })
+    const client = createMiniMaxClient({
+      apiKey: 'key',
+      fetcher: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body))
+        return new Response(stream, { status: 200 })
+      },
+    })
+
+    const chunks: string[] = []
+
+    for await (const chunk of client.generateMusicStream('星空')) {
+      chunks.push(chunk)
+    }
+
+    expect(requestBody.stream).toBe(true)
+    expect(requestBody.output_format).toBe('hex')
+    expect(chunks).toEqual(['4944', '33'])
   })
 
   it('treats non-zero provider status codes as upstream failures', async () => {

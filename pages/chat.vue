@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { StarChatMessage } from '../composables/useStarChat'
+
 const {
   currentSchema,
   previewSchema,
@@ -7,13 +9,18 @@ const {
   commitDesign,
   discardPreview,
 } = useKeyDesign()
+const { loadMessages } = useStarChat()
+const chatMessages = ref<StarChatMessage[]>([])
 
 onMounted(async () => {
   const schema = await loadDesign()
 
   if (!schema) {
     await navigateTo('/')
+    return
   }
+
+  chatMessages.value = await loadMessages()
 })
 </script>
 
@@ -22,7 +29,10 @@ onMounted(async () => {
     <ClientOnly>
       <DynamicStarPage v-if="currentSchema" :schema="currentSchema" />
       <StarScene v-else />
-      <StarChat @design-requested="previewDesign" />
+      <aside class="star-quota" aria-label="星能量">
+        <MiniMaxQuotaPanel />
+      </aside>
+      <StarChat :initial-messages="chatMessages" @design-requested="previewDesign" />
       <ProfileSettingsSheet />
       <DesignPreviewSheet
         v-if="previewSchema"

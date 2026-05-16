@@ -7,12 +7,32 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': forwardedIp })
 
-  await page.route('**/api/chat', async (route) => {
+  await page.route('**/api/chat/stream', async (route) => {
+    const body = route.request().postDataJSON()
+
+    if (body.intent === 'image') {
+      await route.fulfill({
+        contentType: 'text/event-stream',
+        body: [
+          'data: {"type":"message","reply":"画好了。","message":{"role":"assistant","content":"画好了。","parts":[{"type":"text","text":"画好了。"},{"type":"image","url":"https://example.com/star.png"}]}}',
+          'data: [DONE]',
+          '',
+        ].join('\n\n'),
+      })
+      return
+    }
+
     await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ reply: '这句我会记得。' }),
+      contentType: 'text/event-stream',
+      body: [
+        'data: {"type":"delta","text":"这句我会记得。"}',
+        'data: {"type":"message","reply":"这句我会记得。","message":{"role":"assistant","content":"这句我会记得。","parts":[{"type":"text","text":"这句我会记得。"}]}}',
+        'data: [DONE]',
+        '',
+      ].join('\n\n'),
     })
   })
+
   await page.route('**/api/design/preview', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -54,11 +74,26 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.getByLabel('钥匙页面')).toBeVisible()
   await expect(page.getByRole('complementary', { name: '星信' })).toBeVisible()
   await expect(page.getByPlaceholder('要求后续变更')).toBeVisible()
-  await expect(page.getByText('完全访问权限')).toBeVisible()
+  await expect(page.getByText('完全访问权限')).toHaveCount(0)
+  await page.getByRole('button', { name: '添加附件' }).click()
+  await expect(page.getByRole('menuitem', { name: '上传图片' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: '上传音频' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: '上传视频' })).toBeVisible()
+  await page.mouse.click(20, 20)
+  await expect(page.getByRole('menuitem', { name: '上传视频' })).toHaveCount(0)
 
   await page.getByLabel('和星信说话').fill('这封信是真的吗？')
-  await page.getByRole('button', { name: '发送' }).click()
+  await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('这句我会记得。')).toBeVisible()
+  await expect(page.getByText('这封信里的星光')).toHaveCount(0)
+  await expect(page.locator('.star-chat__thread')).toHaveCSS('border-top-width', '0px')
+
+  await page.getByRole('button', { name: '画一张' }).click()
+  await page.getByLabel('和星信说话').fill('画一张月光星空')
+  await page.getByLabel('和星信说话').press('Enter')
+  await expect(page.getByText('画好了。')).toBeVisible()
+  await expect(page.locator('.star-chat__messages img[alt="生成的图片"]')).toBeVisible()
+  await expect(page.locator('.generated-asset')).toHaveCount(0)
 
   await page.getByRole('button', { name: '设计模式' }).click()
   await page.getByPlaceholder('请输入你的创意想法').fill('把页面改成银河和月光')
