@@ -2087,8 +2087,25 @@ body {
 }
 
 .star-chat-message__status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
   color: var(--chat-thread-ink-soft);
   font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.star-chat-message__status::before {
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: rgb(229 239 255 / 0.86);
+  box-shadow:
+    0 0 0.7rem rgb(160 198 255 / 0.72),
+    0 0 1.2rem rgb(255 231 185 / 0.26);
+  content: "";
+  animation: star-status-pulse 1.2s ease-in-out infinite alternate;
 }
 
 .star-chat-message__copy,
@@ -2170,6 +2187,18 @@ body {
 
   to {
     transform: translateY(-0.22rem) scale(1.08);
+  }
+}
+
+@keyframes star-status-pulse {
+  from {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.18);
   }
 }
 
@@ -2594,6 +2623,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .star-glyph-text__glyph,
   .star-chat-message__orb,
+  .star-chat-message__status::before,
   .star-magic-stage__constellation span {
     animation: none;
   }

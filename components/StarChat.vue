@@ -216,6 +216,41 @@ function buildAttachmentParts(text: string, selectedAttachments: StarChatAttachm
   return parts
 }
 
+function buildThinkingStatusParts(intent: StarChatIntent, selectedAttachments: StarChatAttachment[]) {
+  const statuses: string[] = []
+
+  if (selectedAttachments.some(attachment => attachment.kind === 'image')) {
+    statuses.push('正在看你发来的图片')
+  }
+  else if (selectedAttachments.some(attachment => attachment.kind === 'audio')) {
+    statuses.push('正在听你的声音')
+  }
+  else if (selectedAttachments.some(attachment => attachment.kind === 'video')) {
+    statuses.push('正在看这段影像里的光')
+  }
+  else {
+    statuses.push('正在读你的话')
+  }
+
+  if (intent === 'audio') {
+    statuses.push('先写好回复，再把它变成声音')
+  }
+  else if (intent === 'image') {
+    statuses.push('正在把你的想法交给星图')
+  }
+  else if (intent === 'music') {
+    statuses.push('正在酝酿一段旋律')
+  }
+  else if (intent === 'video') {
+    statuses.push('正在整理成一段画面')
+  }
+  else {
+    statuses.push('在星光里组织一句回复')
+  }
+
+  return statuses.slice(0, 2).map(text => ({ type: 'status' as const, text }))
+}
+
 async function copyMessage(message: StarChatMessage) {
   const text = message.content.trim()
 
@@ -226,11 +261,11 @@ async function copyMessage(message: StarChatMessage) {
   await navigator.clipboard.writeText(text)
 }
 
-function createStreamingAssistantMessage() {
+function createStreamingAssistantMessage(parts: StarChatPart[]) {
   return {
     role: 'assistant' as const,
     content: '',
-    parts: [{ type: 'text' as const, text: '' }],
+    parts,
   }
 }
 
@@ -253,17 +288,19 @@ function applyStreamDelta(index: number, text: string) {
   }
 
   let hasTextPart = false
-  const parts = (message.parts ?? []).map((part) => {
-    if (part.type !== 'text') {
-      return part
-    }
+  const parts = (message.parts ?? [])
+    .filter(part => part.type !== 'status')
+    .map((part) => {
+      if (part.type !== 'text') {
+        return part
+      }
 
-    hasTextPart = true
-    return {
-      ...part,
-      text: part.text + text,
-    }
-  })
+      hasTextPart = true
+      return {
+        ...part,
+        text: part.text + text,
+      }
+    })
 
   if (!hasTextPart) {
     parts.push({ type: 'text', text })
@@ -350,7 +387,7 @@ async function submit() {
   try {
     const payload = { message: text, attachments: selectedAttachments, intent: selectedIntent }
     const streamMessage = props.sendMessageStream ?? chat.sendMessageStream
-    const assistantMessage = createStreamingAssistantMessage()
+    const assistantMessage = createStreamingAssistantMessage(buildThinkingStatusParts(selectedIntent, selectedAttachments))
     const assistantIndex = localMessages.value.length
     localMessages.value.push(assistantMessage)
     const result = await streamMessage(payload, handleStreamEvent(assistantIndex))

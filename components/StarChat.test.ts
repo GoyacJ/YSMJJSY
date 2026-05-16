@@ -363,6 +363,120 @@ describe('StarChat', () => {
     expect(wrapper.text()).toContain('你好')
   })
 
+  it('shows contextual thinking status before the assistant reply starts', async () => {
+    let continueStream!: () => void
+    const streamGate = new Promise<void>((resolve) => {
+      continueStream = resolve
+    })
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await streamGate
+      onEvent({
+        type: 'message',
+        reply: '我在。',
+        message: {
+          role: 'assistant' as const,
+          content: '我在。',
+          parts: [{ type: 'text' as const, text: '我在。' }],
+        },
+      })
+      return {
+        reply: '我在。',
+        message: {
+          role: 'assistant' as const,
+          content: '我在。',
+          parts: [{ type: 'text' as const, text: '我在。' }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('今晚想听你说话')
+    const submitPromise = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('正在读你的话')
+    expect(wrapper.text()).toContain('在星光里组织一句回复')
+    expect(wrapper.text()).not.toContain('我在。')
+
+    continueStream()
+    await submitPromise
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('我在。')
+    expect(wrapper.text()).not.toContain('正在读你的话')
+  })
+
+  it('adapts thinking status for image attachments and audio intent', async () => {
+    let continueStream!: () => void
+    const streamGate = new Promise<void>((resolve) => {
+      continueStream = resolve
+    })
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await streamGate
+      onEvent({
+        type: 'message',
+        reply: '我看见了。',
+        message: {
+          role: 'assistant' as const,
+          content: '我看见了。',
+          parts: [{ type: 'text' as const, text: '我看见了。' }],
+        },
+      })
+      return {
+        reply: '我看见了。',
+        message: {
+          role: 'assistant' as const,
+          content: '我看见了。',
+          parts: [{ type: 'text' as const, text: '我看见了。' }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    class MockFileReader {
+      result = 'data:image/png;base64,abc'
+      onload: null | (() => void) = null
+      onerror: null | (() => void) = null
+
+      readAsDataURL() {
+        this.onload?.()
+      }
+    }
+
+    vi.stubGlobal('FileReader', MockFileReader)
+
+    await wrapper.get('button[aria-label="添加附件"]').trigger('click')
+    const input = wrapper.get('input[accept="image/png,image/jpeg,image/webp"]')
+    Object.defineProperty(input.element, 'files', {
+      value: [new File(['abc'], 'star.png', { type: 'image/png' })],
+      configurable: true,
+    })
+    await input.trigger('change')
+    await flushPromises()
+    await wrapper.get('button[aria-label="听一听"]').trigger('click')
+    await wrapper.find('textarea').setValue('看看这张图，再读给我听')
+    const submitPromise = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('正在看你发来的图片')
+    expect(wrapper.text()).toContain('先写好回复，再把它变成声音')
+
+    continueStream()
+    await submitPromise
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('我看见了。')
+    expect(wrapper.text()).not.toContain('正在看你发来的图片')
+  })
+
   it('lets the page paint between streamed text events from one response chunk', async () => {
     const frames: FrameRequestCallback[] = []
     const encoder = new TextEncoder()
