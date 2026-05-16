@@ -219,56 +219,6 @@ onBeforeUnmount(() => {
         </article>
       </div>
 
-      <form class="star-chat__composer" @submit.prevent="submit">
-        <label class="sr-only" for="star-chat-input">和星信说话</label>
-        <div class="star-chat__tools">
-          <label class="star-chat__attachment-button star-chat__icon-button" aria-label="添加附件">
-            +
-            <input
-              type="file"
-              multiple
-              accept="image/png,image/jpeg,image/webp,audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"
-              @change="handleAttachmentChange"
-            >
-          </label>
-          <button
-            type="button"
-            class="star-chat__icon-button"
-            :disabled="pending || listening"
-            aria-label="语音输入"
-            @click="startVoiceInput"
-          >
-            {{ listening ? '听' : '声' }}
-          </button>
-          <button
-            type="button"
-            class="star-chat__icon-button"
-            :data-active="mode === 'design'"
-            aria-label="设计模式"
-            @click="mode = mode === 'design' ? 'chat' : 'design'"
-          >
-            设
-          </button>
-        </div>
-        <textarea
-          id="star-chat-input"
-          v-model="input"
-          rows="2"
-          :placeholder="mode === 'design' ? '请输入你的创意想法' : '写一张星信'"
-          @focus="threadActive = true"
-        />
-        <div class="star-chat__tools">
-          <button
-            class="star-chat__icon-button star-chat__icon-button--send"
-            type="submit"
-            :disabled="pending"
-            aria-label="发送"
-          >
-            {{ pending ? '等' : '寄' }}
-          </button>
-        </div>
-      </form>
-
       <div v-if="attachments.length" class="star-chat__attachment-preview">
         <article v-for="(attachment, index) in attachments" :key="`${attachment.name}-${index}`">
           <img v-if="attachment.kind === 'image'" :src="attachment.dataUrl" alt="">
@@ -285,6 +235,65 @@ onBeforeUnmount(() => {
       </p>
 
       <MediaCreationPanel :source-text="localMessages.at(-1)?.content || '这封信里的星光'" />
+
+      <form class="star-chat__composer star-chat__dock" @submit.prevent="submit">
+        <label class="sr-only" for="star-chat-input">和星信说话</label>
+        <textarea
+          id="star-chat-input"
+          v-model="input"
+          rows="2"
+          :placeholder="mode === 'design' ? '请输入你的创意想法' : '要求后续变更'"
+          @focus="threadActive = true"
+        />
+        <div class="star-chat__dock-bar">
+          <div class="star-chat__tools">
+            <label class="star-chat__attachment-button star-chat__icon-button" aria-label="添加附件">
+              +
+              <input
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp,audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/wav,audio/webm,video/mp4,video/webm,video/quicktime"
+                @change="handleAttachmentChange"
+              >
+            </label>
+            <button
+              type="button"
+              class="star-chat__icon-button"
+              :disabled="pending || listening"
+              aria-label="语音输入"
+              @click="startVoiceInput"
+            >
+              {{ listening ? '听' : '声' }}
+            </button>
+            <button
+              type="button"
+              class="star-chat__permission"
+              aria-label="完全访问权限"
+            >
+              完全访问权限
+            </button>
+            <button
+              type="button"
+              class="star-chat__icon-button"
+              :data-active="mode === 'design'"
+              aria-label="设计模式"
+              @click="mode = mode === 'design' ? 'chat' : 'design'"
+            >
+              设
+            </button>
+          </div>
+          <div class="star-chat__tools star-chat__tools--send">
+            <button
+              class="star-chat__icon-button star-chat__icon-button--send"
+              type="submit"
+              :disabled="pending"
+              aria-label="发送"
+            >
+              {{ pending ? '等' : '寄' }}
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
   </aside>
 </template>

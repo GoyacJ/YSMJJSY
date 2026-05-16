@@ -43,16 +43,18 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.getByRole('button', { name: '保存钥匙' }).click()
   expect((await createResponse).ok()).toBe(true)
 
+  await expect(page).toHaveURL('/setup')
   await expect(page.getByLabel('星信设定')).toBeVisible()
   await page.getByRole('textbox', { name: '称呼' }).fill('月光')
   await page.getByRole('combobox', { name: 'MBTI' }).selectOption('INFJ')
   await page.getByRole('button', { name: '保存设定' }).click()
 
-  await expect(page.getByLabel('信件正文')).toBeVisible()
-  await expect(page.getByText('写给你', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: '去看星空' }).click()
+  await expect(page).toHaveURL('/chat')
+  await expect(page.getByLabel('信件正文')).toHaveCount(0)
   await expect(page.getByLabel('钥匙页面')).toBeVisible()
   await expect(page.getByRole('complementary', { name: '星信' })).toBeVisible()
+  await expect(page.getByPlaceholder('要求后续变更')).toBeVisible()
+  await expect(page.getByText('完全访问权限')).toBeVisible()
 
   await page.getByLabel('和星信说话').fill('这封信是真的吗？')
   await page.getByRole('button', { name: '发送' }).click()
@@ -73,6 +75,8 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
 
   await page.reload()
   await page.waitForLoadState('networkidle')
+  await page.goto('/')
+  await page.waitForLoadState('networkidle')
   await page.getByPlaceholder('输入钥匙').fill(key)
   await expect(page.getByPlaceholder('输入钥匙')).toHaveValue(key)
   const unlockResponse = page.waitForResponse(response =>
@@ -80,6 +84,11 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   )
   await page.getByRole('button', { name: '打开这封信' }).click()
   expect((await unlockResponse).ok()).toBe(true)
+  await expect(page).toHaveURL('/chat')
   await expect(page.getByLabel('星信设定')).toHaveCount(0)
-  await expect(page.getByLabel('信件正文')).toBeVisible()
+  await expect(page.getByLabel('信件正文')).toHaveCount(0)
+  await expect(page.getByRole('complementary', { name: '星信' })).toBeVisible()
+
+  await page.goBack()
+  await expect(page).toHaveURL('/')
 })

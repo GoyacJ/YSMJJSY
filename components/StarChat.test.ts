@@ -43,10 +43,13 @@ describe('StarChat', () => {
     const wrapper = mountStarChat()
 
     expect(wrapper.classes()).toContain('star-chat--bottom')
+    expect(wrapper.get('.star-chat__dock').exists()).toBe(true)
     expect(wrapper.get('label[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="设计模式"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="发送"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('完全访问权限')
+    expect(wrapper.get('textarea').attributes('placeholder')).toBe('要求后续变更')
   })
 
   it('sends selected image attachment with the message', async () => {
