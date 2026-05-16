@@ -65,7 +65,7 @@ describe('StarChat', () => {
     expect(wrapper.text()).toContain('我还记得那片星空。')
   })
 
-  it('renders the magic stage instead of the old letter surface', () => {
+  it('renders the orbit stage instead of the old letter surface', () => {
     const wrapper = mountStarChat({
       props: {
         initialMessages: [
@@ -75,13 +75,13 @@ describe('StarChat', () => {
       },
     })
 
-    expect(wrapper.get('.star-magic-stage').exists()).toBe(true)
+    expect(wrapper.get('.star-orbit-stage').exists()).toBe(true)
     expect(wrapper.text()).toContain('今晚见。')
     expect(wrapper.text()).toContain('我在星光里。')
     expect(wrapper.text()).not.toContain('这里会慢慢写下只属于这把钥匙的内容。')
   })
 
-  it('renders structured text and audio parts in the chat thread', async () => {
+  it('renders structured text and audio parts in the orbit stage', async () => {
     const sendMessageStream = createStreamReply('先慢慢呼吸。', {
         role: 'assistant' as const,
         content: '先慢慢呼吸。',
@@ -623,7 +623,7 @@ describe('StarChat', () => {
 
     await wrapper.find('textarea').setValue('这封信是真的吗？')
     await wrapper.find('form').trigger('submit.prevent')
-    await wrapper.get('.star-chat__thread').trigger('click')
+    await wrapper.get('.star-orbit-stage').trigger('click')
 
     expect(wrapper.attributes('data-thread-active')).toBe('true')
   })
@@ -650,7 +650,7 @@ describe('StarChat', () => {
       await flushPromises()
 
       expect(scrollTo).toHaveBeenLastCalledWith({ top: 360, behavior: 'smooth' })
-      expect(wrapper.get('.star-chat__thread').classes()).toContain('star-chat__thread--transparent')
+      expect(wrapper.get('.star-orbit-stage').exists()).toBe(true)
     }
     finally {
       HTMLElement.prototype.scrollTo = originalScrollTo

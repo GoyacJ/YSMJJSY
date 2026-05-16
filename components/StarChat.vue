@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import StarComposer from './StarComposer.vue'
-import StarMagicStage from './StarMagicStage.vue'
+import StarOrbitStage from './StarOrbitStage.vue'
 import {
   useStarChat,
   type AttachmentKind,
@@ -443,7 +443,7 @@ onBeforeUnmount(() => {
     :data-thread-active="String(threadActive)"
   >
     <div class="star-chat__note">
-      <StarMagicStage
+      <StarOrbitStage
         ref="messagesThreadRef"
         :messages="localMessages"
         :active-message-index="activeMessageIndex"
