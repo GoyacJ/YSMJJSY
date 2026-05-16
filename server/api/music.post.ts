@@ -1,6 +1,7 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
 import { withMiniMaxErrorBoundary } from '../services/api-errors'
+import { markKeyActivity } from '../services/key-activity'
 import { getDefaultMusicPrompt } from '../services/media'
 import { createMiniMaxClient } from '../services/minimax'
 
@@ -9,6 +10,7 @@ const musicBodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+  const keyId = event.context.keyId
   const body = musicBodySchema.safeParse(await readBody(event))
 
   if (!body.success) {
@@ -21,5 +23,11 @@ export default defineEventHandler(async (event) => {
     groupId: config.minimaxGroupId,
   })
 
-  return withMiniMaxErrorBoundary(() => client.generateMusic(body.data.prompt || getDefaultMusicPrompt()), 'Music generation failed')
+  const result = await withMiniMaxErrorBoundary(() => client.generateMusic(body.data.prompt || getDefaultMusicPrompt()), 'Music generation failed')
+
+  if (keyId) {
+    markKeyActivity(config.sqlitePath, keyId, 'media')
+  }
+
+  return result
 })

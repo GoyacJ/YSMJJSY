@@ -4,6 +4,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   const runId = Date.now()
   const key = `e2e-${testInfo.project.name}-${runId}`
   const forwardedIp = `e2e-${testInfo.project.name}-${runId}`
+  const generatedImageUrl = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': forwardedIp })
 
@@ -14,7 +15,18 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
       await route.fulfill({
         contentType: 'text/event-stream',
         body: [
-          'data: {"type":"message","reply":"画好了。","message":{"role":"assistant","content":"画好了。","parts":[{"type":"text","text":"画好了。"},{"type":"image","url":"https://example.com/star.png"}]}}',
+          `data: ${JSON.stringify({
+            type: 'message',
+            reply: '画好了。',
+            message: {
+              role: 'assistant',
+              content: '画好了。',
+              parts: [
+                { type: 'text', text: '画好了。' },
+                { type: 'image', url: generatedImageUrl },
+              ],
+            },
+          })}`,
           'data: [DONE]',
           '',
         ].join('\n\n'),
@@ -55,12 +67,11 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
-  await page.getByRole('button', { name: '创建钥匙' }).click()
-  await page.getByPlaceholder('写下新钥匙').fill(key)
+  await page.getByPlaceholder('输入钥匙').fill(key)
   const createResponse = page.waitForResponse(response =>
     response.url().includes('/api/keys') && response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: '保存钥匙' }).click()
+  await page.getByRole('button', { name: '创建钥匙' }).click()
   expect((await createResponse).ok()).toBe(true)
 
   await expect(page).toHaveURL('/setup')
@@ -117,7 +128,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   const unlockResponse = page.waitForResponse(response =>
     response.url().includes('/api/unlock') && response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: '打开这封信' }).click()
+  await page.getByRole('button', { name: '进入' }).click()
   expect((await unlockResponse).ok()).toBe(true)
   await expect(page).toHaveURL('/chat')
   await expect(page.getByLabel('星信设定')).toHaveCount(0)

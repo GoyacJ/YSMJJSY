@@ -35,7 +35,9 @@ export const schemaStatements = [
     configured_at TEXT,
     created_ip_hash TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    activity_at TEXT,
+    activity_kind TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS key_designs (
     key_id TEXT NOT NULL,

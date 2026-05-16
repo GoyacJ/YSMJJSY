@@ -14,8 +14,18 @@ import { createDefaultDesignSchema } from '../services/design-schema'
 const PUBLIC_CREATE_KEY_ID = '__public_create__'
 
 const createKeyBodySchema = z.object({
-  key: z.string().min(1).max(80),
+  key: z.string().trim().min(6).max(64),
 })
+
+export function parseCreateKeyBody(input: unknown) {
+  const body = createKeyBodySchema.safeParse(input)
+
+  if (!body.success) {
+    throw new Error('Invalid key')
+  }
+
+  return body.data
+}
 
 export function buildCreatedKeyResponse(keyId: string) {
   return {
@@ -46,9 +56,12 @@ function getMinuteKey(date = new Date()) {
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
-  const body = createKeyBodySchema.safeParse(await readBody(event))
+  let body: z.infer<typeof createKeyBodySchema>
 
-  if (!body.success) {
+  try {
+    body = parseCreateKeyBody(await readBody(event))
+  }
+  catch {
     throw createError({
       statusCode: 400,
       statusMessage: 'Invalid key',
@@ -58,7 +71,7 @@ export default defineEventHandler(async (event) => {
   let normalizedKey: string
 
   try {
-    normalizedKey = normalizeKey(body.data.key)
+    normalizedKey = normalizeKey(body.key)
   }
   catch {
     throw createError({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseProfileUpdate } from './profile.put'
+import { parseProfileUpdate, resolveProfileActivityKind } from './profile.put'
 
 describe('key profile api helpers', () => {
   it('accepts a valid assistant profile update', () => {
@@ -17,5 +17,13 @@ describe('key profile api helpers', () => {
       assistantName: '星信',
       mbti: 'ABCD',
     })).toThrow()
+  })
+
+  it('marks first profile save as created activity', () => {
+    expect(resolveProfileActivityKind(null)).toBe('created')
+  })
+
+  it('marks later profile save as profile activity', () => {
+    expect(resolveProfileActivityKind('2026-05-16T00:00:00.000Z')).toBe('profile')
   })
 })

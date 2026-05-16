@@ -2,6 +2,7 @@ import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
 import { createKeyDesignRepository, type KeyDesignRecord } from '../../db/sqlite'
 import { parseDesignSchema } from '../../services/design-schema'
+import { markKeyActivity } from '../../services/key-activity'
 
 const commitBodySchema = z.object({
   schema: z.unknown(),
@@ -49,6 +50,7 @@ export default defineEventHandler(async (event) => {
     prompt: body.data.prompt,
     createdAt: new Date().toISOString(),
   })
+  markKeyActivity(config.sqlitePath, keyId, 'design')
 
   return buildDesignCommitResponse(version)
 })

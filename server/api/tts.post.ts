@@ -1,6 +1,7 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
 import { withMiniMaxErrorBoundary } from '../services/api-errors'
+import { markKeyActivity } from '../services/key-activity'
 import { createMiniMaxClient } from '../services/minimax'
 
 const ttsBodySchema = z.object({
@@ -8,6 +9,7 @@ const ttsBodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+  const keyId = event.context.keyId
   const body = ttsBodySchema.safeParse(await readBody(event))
 
   if (!body.success) {
@@ -20,5 +22,11 @@ export default defineEventHandler(async (event) => {
     groupId: config.minimaxGroupId,
   })
 
-  return withMiniMaxErrorBoundary(() => client.textToSpeech(body.data.text), 'TTS generation failed')
+  const result = await withMiniMaxErrorBoundary(() => client.textToSpeech(body.data.text), 'TTS generation failed')
+
+  if (keyId) {
+    markKeyActivity(config.sqlitePath, keyId, 'media')
+  }
+
+  return result
 })

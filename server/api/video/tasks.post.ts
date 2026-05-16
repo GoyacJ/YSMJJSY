@@ -3,6 +3,7 @@ import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
 import { createMediaTaskRepository } from '../../db/sqlite'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
+import { markKeyActivity } from '../../services/key-activity'
 import { normalizeMediaPrompt } from '../../services/media'
 import { createMiniMaxClient } from '../../services/minimax'
 
@@ -57,6 +58,7 @@ export default defineEventHandler(async (event) => {
       status: 'processing',
       updatedAt: new Date().toISOString(),
     })
+    markKeyActivity(config.sqlitePath, keyId, 'media')
 
     return { taskId: id }
   }

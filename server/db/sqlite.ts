@@ -34,6 +34,17 @@ export type MediaTaskRecord = {
   updatedAt: string
 }
 
+export type KeyActivityKind = 'created' | 'profile' | 'chat' | 'design' | 'media'
+
+export type PublicStarRecord = {
+  id: string
+  name: string
+  mbti: string
+  createdAt: string
+  activityAt?: string | null
+  activityKind?: KeyActivityKind | null
+}
+
 export type KeyProfileRecord = {
   id: string
   keyLookupHash: string
@@ -43,6 +54,8 @@ export type KeyProfileRecord = {
   createdIpHash: string
   createdAt: string
   updatedAt: string
+  activityAt?: string | null
+  activityKind?: KeyActivityKind | null
 }
 
 export type KeyDesignRecord = {
@@ -99,6 +112,8 @@ function openDatabase(path: string) {
   ensureColumn(db, 'conversations', 'message_json', 'TEXT')
   ensureColumn(db, 'memories', 'key_id', 'TEXT')
   ensureColumn(db, 'media_tasks', 'key_id', 'TEXT')
+  ensureColumn(db, 'key_profiles', 'activity_at', 'TEXT')
+  ensureColumn(db, 'key_profiles', 'activity_kind', 'TEXT')
 
   return db
 }
@@ -251,12 +266,35 @@ export function createKeyProfileRepository(path: string) {
     addKeyProfile(record: KeyProfileRecord) {
       db.prepare(`
         INSERT INTO key_profiles (
-          id, key_lookup_hash, assistant_name, mbti, configured_at, created_ip_hash, created_at, updated_at
+          id,
+          key_lookup_hash,
+          assistant_name,
+          mbti,
+          configured_at,
+          created_ip_hash,
+          created_at,
+          updated_at,
+          activity_at,
+          activity_kind
         )
         VALUES (
-          @id, @keyLookupHash, @assistantName, @mbti, @configuredAt, @createdIpHash, @createdAt, @updatedAt
+          @id,
+          @keyLookupHash,
+          @assistantName,
+          @mbti,
+          @configuredAt,
+          @createdIpHash,
+          @createdAt,
+          @updatedAt,
+          @activityAt,
+          @activityKind
         )
-      `).run({ ...record, configuredAt: record.configuredAt ?? null })
+      `).run({
+        ...record,
+        configuredAt: record.configuredAt ?? null,
+        activityAt: record.activityAt ?? null,
+        activityKind: record.activityKind ?? null,
+      })
     },
 
     findByLookupHash(keyLookupHash: string): KeyProfileRecord | undefined {
@@ -269,7 +307,9 @@ export function createKeyProfileRepository(path: string) {
           configured_at AS configuredAt,
           created_ip_hash AS createdIpHash,
           created_at AS createdAt,
-          updated_at AS updatedAt
+          updated_at AS updatedAt,
+          activity_at AS activityAt,
+          activity_kind AS activityKind
         FROM key_profiles
         WHERE key_lookup_hash = ?
       `).get(keyLookupHash) as KeyProfileRecord | undefined
@@ -285,7 +325,9 @@ export function createKeyProfileRepository(path: string) {
           configured_at AS configuredAt,
           created_ip_hash AS createdIpHash,
           created_at AS createdAt,
-          updated_at AS updatedAt
+          updated_at AS updatedAt,
+          activity_at AS activityAt,
+          activity_kind AS activityKind
         FROM key_profiles
         WHERE id = ?
       `).get(id) as KeyProfileRecord | undefined
@@ -300,6 +342,33 @@ export function createKeyProfileRepository(path: string) {
             updated_at = @updatedAt
         WHERE id = @id
       `).run({ id, ...updates, configuredAt: updates.configuredAt ?? null })
+    },
+
+    listPublicStars(limit = 80): PublicStarRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          assistant_name AS name,
+          mbti,
+          created_at AS createdAt,
+          activity_at AS activityAt,
+          activity_kind AS activityKind
+        FROM key_profiles
+        WHERE configured_at IS NOT NULL
+          AND assistant_name <> ''
+        ORDER BY COALESCE(activity_at, configured_at, created_at) DESC
+        LIMIT ?
+      `).all(limit) as PublicStarRecord[]
+    },
+
+    markKeyActivity(id: string, updates: { activityAt: string, activityKind: KeyActivityKind }) {
+      db.prepare(`
+        UPDATE key_profiles
+        SET activity_at = @activityAt,
+            activity_kind = @activityKind,
+            updated_at = @activityAt
+        WHERE id = @id
+      `).run({ id, ...updates })
     },
   }
 }

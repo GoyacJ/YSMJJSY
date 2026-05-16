@@ -19,95 +19,87 @@ const emit = defineEmits<{
 }>()
 
 const code = ref('')
-const mode = ref<'enter' | 'create'>('enter')
 const pending = ref(false)
 const error = ref('')
 
-async function submit() {
+async function submitUnlock() {
   pending.value = true
   error.value = ''
 
   try {
-    const result = mode.value === 'create'
-      ? await props.createKey(code.value)
-      : await props.unlock(code.value)
+    const result = await props.unlock(code.value)
 
     if (result.ok) {
-      emit(mode.value === 'create' ? 'created' : 'unlocked', result)
+      emit('unlocked', result)
       return
     }
 
-    error.value = mode.value === 'create'
-      ? '这把钥匙暂时不能保存。'
-      : '这不是这封信的钥匙。'
+    error.value = '这不是这封信的钥匙。'
   }
   finally {
     pending.value = false
   }
 }
 
-function switchMode(nextMode: 'enter' | 'create') {
-  mode.value = nextMode
-  code.value = ''
+async function submitCreate() {
+  pending.value = true
   error.value = ''
+
+  if (code.value.trim().length < 6) {
+    error.value = '钥匙至少需要 6 位。'
+    pending.value = false
+    return
+  }
+
+  try {
+    const result = await props.createKey(code.value)
+
+    if (result.ok) {
+      emit('created', result)
+      return
+    }
+
+    error.value = '这把钥匙暂时不能保存。'
+  }
+  finally {
+    pending.value = false
+  }
 }
 </script>
 
 <template>
-  <section class="unlock-gate" aria-label="打开这封信">
-    <div class="unlock-gate__envelope">
-      <div class="unlock-gate__flap" aria-hidden="true" />
-      <div class="unlock-gate__stamp" aria-hidden="true">
-        5.20
-      </div>
-      <div class="unlock-gate__letter-head">
-        <p class="unlock-gate__date">
-          只给你
-        </p>
-        <h1>给你的信</h1>
-        <p class="unlock-gate__copy">
-          有些话放在心里很久，今天想认真写给你。
-        </p>
-      </div>
-
-      <form class="unlock-gate__form" @submit.prevent="submit">
+  <section class="unlock-gate" aria-label="钥匙入口">
+    <div class="unlock-gate__panel">
+      <form class="unlock-gate__form" @submit.prevent="submitUnlock">
         <label class="sr-only" for="unlock-code">密码</label>
         <input
           id="unlock-code"
           v-model="code"
           autocomplete="off"
           maxlength="64"
-          :placeholder="mode === 'create' ? '写下新钥匙' : '输入钥匙'"
+          minlength="6"
+          placeholder="输入钥匙"
           class="unlock-gate__code-line"
         >
         <button
+          class="unlock-gate__enter"
+          type="button"
+          :disabled="pending || !code.trim()"
+          aria-label="进入"
+          @click="submitUnlock"
+        >
+          {{ pending ? '请稍等' : '进入' }}
+        </button>
+        <button
+          class="unlock-gate__create"
           type="button"
           :disabled="pending"
-          :aria-label="mode === 'create' ? '保存钥匙' : '打开这封信'"
-          @click="submit"
-        >
-          {{ pending ? '请稍等' : mode === 'create' ? '保存钥匙' : '打开这封信' }}
-        </button>
-      </form>
-
-      <div class="unlock-gate__mode-actions">
-        <button
-          v-if="mode === 'enter'"
-          type="button"
           aria-label="创建钥匙"
-          @click="switchMode('create')"
+          @click="submitCreate"
         >
           创建钥匙
         </button>
-        <button
-          v-else
-          type="button"
-          aria-label="返回输入"
-          @click="switchMode('enter')"
-        >
-          返回输入
-        </button>
-      </div>
+      </form>
 
       <p v-if="error" class="unlock-gate__error" role="alert">
         {{ error }}

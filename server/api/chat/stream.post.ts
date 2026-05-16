@@ -10,6 +10,7 @@ import { createAttachmentRepository, createConversationRepository, createKeyProf
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
 import { resolveChatIntent } from '../../services/chat-intent'
 import { createIpHash } from '../../services/key-access'
+import { markKeyActivity } from '../../services/key-activity'
 import { normalizeMemoryType, shouldPersistMemory } from '../../services/memory'
 import { createMiniMaxClient } from '../../services/minimax'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
@@ -189,6 +190,13 @@ export default defineEventHandler(async (event) => {
           messageJson: JSON.stringify(result.message),
           createdAt: new Date().toISOString(),
         })
+
+        try {
+          markKeyActivity(config.sqlitePath, keyId, 'chat')
+        }
+        catch {
+          // Public activity is secondary. A failed flash update should not hide the reply.
+        }
 
         try {
           if (['chat', 'audio'].includes(intent) && body.data.message) {

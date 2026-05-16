@@ -42,6 +42,74 @@ describe('sqlite repositories', () => {
     expect(repo.findByLookupHash('lookup')?.id).toBe('key_1')
   })
 
+  it('lists configured public stars without private key fields', () => {
+    const repo = createKeyProfileRepository(':memory:')
+
+    repo.addKeyProfile({
+      id: 'key_1',
+      keyLookupHash: 'lookup_1',
+      assistantName: '阿月',
+      mbti: 'INTJ',
+      configuredAt: '2026-05-16T00:00:00.000Z',
+      createdIpHash: 'ip_hash_1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+      activityAt: '2026-05-16T00:01:00.000Z',
+      activityKind: 'created',
+    })
+    repo.addKeyProfile({
+      id: 'key_2',
+      keyLookupHash: 'lookup_2',
+      assistantName: '',
+      mbti: '',
+      configuredAt: null,
+      createdIpHash: 'ip_hash_2',
+      createdAt: '2026-05-16T00:02:00.000Z',
+      updatedAt: '2026-05-16T00:02:00.000Z',
+      activityAt: null,
+      activityKind: null,
+    })
+
+    expect(repo.listPublicStars()).toEqual([
+      {
+        id: 'key_1',
+        name: '阿月',
+        mbti: 'INTJ',
+        createdAt: '2026-05-16T00:00:00.000Z',
+        activityAt: '2026-05-16T00:01:00.000Z',
+        activityKind: 'created',
+      },
+    ])
+  })
+
+  it('marks key activity for public star flashes', () => {
+    const repo = createKeyProfileRepository(':memory:')
+
+    repo.addKeyProfile({
+      id: 'key_1',
+      keyLookupHash: 'lookup_1',
+      assistantName: '阿月',
+      mbti: 'INTJ',
+      configuredAt: '2026-05-16T00:00:00.000Z',
+      createdIpHash: 'ip_hash_1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+      activityAt: null,
+      activityKind: null,
+    })
+
+    repo.markKeyActivity('key_1', {
+      activityAt: '2026-05-16T00:03:00.000Z',
+      activityKind: 'chat',
+    })
+
+    expect(repo.listPublicStars()[0]).toMatchObject({
+      id: 'key_1',
+      activityAt: '2026-05-16T00:03:00.000Z',
+      activityKind: 'chat',
+    })
+  })
+
   it('stores usage limits by key and date', () => {
     const repo = createUsageLimitRepository(':memory:')
 

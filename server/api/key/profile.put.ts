@@ -38,6 +38,10 @@ export function parseProfileUpdate(input: unknown): ProfileUpdateInput {
   return result.data
 }
 
+export function resolveProfileActivityKind(configuredAt?: string | null) {
+  return configuredAt ? 'profile' : 'created'
+}
+
 export default defineEventHandler(async (event) => {
   const keyId = event.context.keyId
 
@@ -63,12 +67,18 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const repo = createKeyProfileRepository(config.sqlitePath)
   const now = new Date().toISOString()
+  const current = repo.getKeyProfile(keyId)
+  const activityKind = resolveProfileActivityKind(current?.configuredAt)
 
   repo.updateKeyProfile(keyId, {
     assistantName: body.assistantName,
     mbti: body.mbti,
     configuredAt: now,
     updatedAt: now,
+  })
+  repo.markKeyActivity(keyId, {
+    activityAt: now,
+    activityKind,
   })
 
   return {

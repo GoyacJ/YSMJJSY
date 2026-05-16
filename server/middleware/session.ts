@@ -3,7 +3,12 @@ import { getSessionCookieName, readKeySessionToken } from '../services/session'
 export default defineEventHandler((event) => {
   const path = event.path.split('?')[0]
 
-  if (!path.startsWith('/api/') || path === '/api/unlock' || path === '/api/keys') {
+  if (
+    !path.startsWith('/api/')
+    || path === '/api/unlock'
+    || path === '/api/keys'
+    || path === '/api/public-stars'
+  ) {
     return
   }
 

@@ -14,7 +14,8 @@ describe('UnlockGate', () => {
     await wrapper.find('input').setValue('100522')
     await wrapper.find('form').trigger('submit.prevent')
 
-    expect(wrapper.find('.unlock-gate__envelope').exists()).toBe(true)
+    expect(wrapper.find('.unlock-gate__panel').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('给你的信')
     expect(wrapper.emitted('unlocked')?.[0]?.[0]).toEqual({ ok: true })
   })
 
@@ -42,11 +43,26 @@ describe('UnlockGate', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="创建钥匙"]').trigger('click')
     await wrapper.find('input').setValue('my-key')
-    await wrapper.get('button[aria-label="保存钥匙"]').trigger('click')
+    await wrapper.get('button[aria-label="创建钥匙"]').trigger('click')
 
     expect(createKey).toHaveBeenCalledWith('my-key')
     expect(wrapper.emitted('created')?.[0]?.[0]).toEqual({ ok: true, keyId: 'key_1', needsConfig: true })
+  })
+
+  it('requires new keys to be at least six characters', async () => {
+    const createKey = vi.fn(async () => ({ ok: true, keyId: 'key_1', needsConfig: true }))
+    const wrapper = mount(UnlockGate, {
+      props: {
+        unlock: async () => ({ ok: false }),
+        createKey,
+      },
+    })
+
+    await wrapper.find('input').setValue('12345')
+    await wrapper.get('button[aria-label="创建钥匙"]').trigger('click')
+
+    expect(createKey).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('钥匙至少需要 6 位。')
   })
 })

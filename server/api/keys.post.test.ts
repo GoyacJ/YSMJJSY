@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCreatedKeyResponse,
   createDefaultDesignSchemaJson,
+  parseCreateKeyBody,
 } from './keys.post'
 
 describe('keys api helpers', () => {
@@ -18,5 +19,10 @@ describe('keys api helpers', () => {
 
     expect(schema.version).toBe(1)
     expect(schema.sections.length).toBeGreaterThan(0)
+  })
+
+  it('requires new keys to be at least 6 characters', () => {
+    expect(() => parseCreateKeyBody({ key: '12345' })).toThrow('Invalid key')
+    expect(parseCreateKeyBody({ key: '123456' })).toEqual({ key: '123456' })
   })
 })
