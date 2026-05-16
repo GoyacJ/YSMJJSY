@@ -56,4 +56,15 @@ describe('StarComposer', () => {
     await wrapper.get('button[aria-label="画一张"]').trigger('click')
     expect(wrapper.emitted('toggle-media-kind')).toEqual([['image']])
   })
+
+  it('marks design mode on the composer shell', () => {
+    const wrapper = mountComposer({
+      mode: 'design',
+      selectedMediaKinds: ['image'],
+    })
+
+    expect(wrapper.get('form').attributes('data-mode')).toBe('design')
+    expect(wrapper.get('textarea').attributes('placeholder')).toBe('请输入你的创意想法')
+    expect(wrapper.get('button[aria-label="画一张"]').attributes('data-active')).toBe('true')
+  })
 })

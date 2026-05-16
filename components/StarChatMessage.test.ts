@@ -52,4 +52,18 @@ describe('StarChatMessage', () => {
     expect(wrapper.get('a[download="star-music.mp3"]').attributes('href')).toBe('data:audio/mpeg;base64,song')
     expect(wrapper.get('a[download="star-video.mp4"]').attributes('href')).toBe('https://example.com/star.mp4')
   })
+
+  it('uses theater message classes for visual states', () => {
+    const wrapper = mount(StarChatMessage, {
+      props: {
+        message: { role: 'user', content: '这是一封短笺。' },
+        active: true,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('star-chat-message')
+    expect(wrapper.attributes('data-active')).toBe('true')
+    expect(wrapper.attributes('data-role')).toBe('user')
+    expect(wrapper.get('.star-chat-message__copy').exists()).toBe(true)
+  })
 })
