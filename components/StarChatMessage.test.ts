@@ -66,4 +66,37 @@ describe('StarChatMessage', () => {
     expect(wrapper.attributes('data-role')).toBe('user')
     expect(wrapper.get('.star-chat-message__copy').exists()).toBe(true)
   })
+
+  it('renders user text as floating glyphs', () => {
+    const wrapper = mount(StarChatMessage, {
+      props: {
+        message: {
+          role: 'user',
+          content: '今晚见',
+          parts: [{ type: 'text', text: '今晚见' }],
+        },
+        active: false,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('star-chat-message--spell')
+    expect(wrapper.get('.star-glyph-text[data-role="user"]').text()).toContain('今晚见')
+  })
+
+  it('renders assistant text with a magic orb', () => {
+    const wrapper = mount(StarChatMessage, {
+      props: {
+        message: {
+          role: 'assistant',
+          content: '我在。',
+          parts: [{ type: 'text', text: '我在。' }],
+        },
+        active: false,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('star-chat-message--magic')
+    expect(wrapper.get('.star-chat-message__orb').exists()).toBe(true)
+    expect(wrapper.get('.star-glyph-text[data-role="assistant"]').text()).toContain('我在。')
+  })
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import StarChatThread from './StarChatThread.vue'
 import StarComposer from './StarComposer.vue'
+import StarMagicStage from './StarMagicStage.vue'
 import {
   useStarChat,
   type AttachmentKind,
@@ -138,21 +138,24 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
 async function scrollMessagesToLatest() {
   await nextTick()
-  const thread = messagesThreadRef.value?.$el
+  const root = messagesThreadRef.value?.$el
+  const thread = root?.querySelector('.star-chat__messages') as HTMLElement | null
 
-  if (!thread) {
+  if (!thread && !root) {
     return
   }
 
-  if (typeof thread.scrollTo === 'function') {
-    thread.scrollTo({
-      top: thread.scrollHeight,
+  const target = thread ?? root
+
+  if (typeof target.scrollTo === 'function') {
+    target.scrollTo({
+      top: target.scrollHeight,
       behavior: 'smooth',
     })
     return
   }
 
-  thread.scrollTop = thread.scrollHeight
+  target.scrollTop = target.scrollHeight
 }
 
 function removeAttachment(index: number) {
@@ -403,7 +406,7 @@ onBeforeUnmount(() => {
     :data-thread-active="String(threadActive)"
   >
     <div class="star-chat__note">
-      <StarChatThread
+      <StarMagicStage
         ref="messagesThreadRef"
         :messages="localMessages"
         :active-message-index="activeMessageIndex"

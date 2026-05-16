@@ -2,7 +2,6 @@
 import type { StarChatMessage } from '../composables/useStarChat'
 
 const {
-  currentSchema,
   previewSchema,
   loadDesign,
   previewDesign,
@@ -34,8 +33,6 @@ onMounted(async () => {
         <span class="chat-theater__star chat-theater__star--three" />
         <span class="chat-theater__meteor" />
       </div>
-      <DynamicStarPage v-if="currentSchema" :schema="currentSchema" />
-      <StarScene v-else />
       <aside class="star-quota" aria-label="星能量">
         <MiniMaxQuotaPanel />
       </aside>

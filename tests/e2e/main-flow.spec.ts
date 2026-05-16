@@ -82,10 +82,12 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
 
   await expect(page).toHaveURL('/chat')
   await expect(page.getByLabel('信件正文')).toHaveCount(0)
-  await expect(page.getByLabel('钥匙页面')).toBeVisible()
+  await expect(page.getByLabel('钥匙页面')).toHaveCount(0)
   await expect(page.getByRole('complementary', { name: '星信' })).toBeVisible()
   await expect(page.locator('.chat-theater')).toBeVisible()
   await expect(page.locator('.chat-theater__atmosphere')).toBeVisible()
+  await expect(page.locator('.star-magic-stage')).toBeVisible()
+  await expect(page.getByText('这里会慢慢写下只属于这把钥匙的内容。')).toHaveCount(0)
   await expect(page.locator('.star-chat__dock')).toHaveAttribute('data-mode', 'chat')
   await expect(page.getByPlaceholder('把想说的话交给这片星空')).toBeVisible()
   await expect(page.getByText('完全访问权限')).toHaveCount(0)

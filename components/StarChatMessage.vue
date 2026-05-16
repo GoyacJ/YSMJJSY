@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import StarGlyphText from './StarGlyphText.vue'
 import StarMediaCard from './StarMediaCard.vue'
 import type { StarChatMessage, StarChatPart } from '../composables/useStarChat'
 
@@ -12,6 +14,11 @@ const emit = defineEmits<{
   activate: []
 }>()
 
+const messageClass = computed(() => ({
+  'star-chat-message--spell': props.message.role === 'user',
+  'star-chat-message--magic': props.message.role === 'assistant',
+}))
+
 function isMediaPart(part: StarChatPart) {
   return ['audio', 'image', 'music', 'video'].includes(part.type)
 }
@@ -20,10 +27,13 @@ function isMediaPart(part: StarChatPart) {
 <template>
   <article
     class="star-chat-message"
+    :class="messageClass"
     :data-role="message.role"
     :data-active="String(active)"
     @click="emit('activate')"
   >
+    <span v-if="message.role === 'assistant'" class="star-chat-message__orb" aria-hidden="true" />
+
     <img
       v-if="message.imageDataUrl"
       class="star-chat-message__legacy-image"
@@ -43,12 +53,17 @@ function isMediaPart(part: StarChatPart) {
 
     <template v-if="message.parts?.length">
       <template v-for="(part, partIndex) in message.parts" :key="partIndex">
-        <span v-if="part.type === 'text'" class="star-chat-message__text">{{ part.text }}</span>
+        <StarGlyphText
+          v-if="part.type === 'text'"
+          class="star-chat-message__text"
+          :text="part.text"
+          :role="message.role"
+        />
         <span v-else-if="part.type === 'status'" class="star-chat-message__status">{{ part.text }}</span>
         <StarMediaCard v-else-if="isMediaPart(part)" :part="part" />
       </template>
     </template>
-    <span v-else class="star-chat-message__text">{{ message.content }}</span>
+    <StarGlyphText v-else class="star-chat-message__text" :text="message.content" :role="message.role" />
 
     <button
       type="button"

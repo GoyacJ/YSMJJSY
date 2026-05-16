@@ -65,6 +65,22 @@ describe('StarChat', () => {
     expect(wrapper.text()).toContain('我还记得那片星空。')
   })
 
+  it('renders the magic stage instead of the old letter surface', () => {
+    const wrapper = mountStarChat({
+      props: {
+        initialMessages: [
+          { role: 'user', content: '今晚见。', parts: [{ type: 'text' as const, text: '今晚见。' }] },
+          { role: 'assistant', content: '我在星光里。', parts: [{ type: 'text' as const, text: '我在星光里。' }] },
+        ],
+      },
+    })
+
+    expect(wrapper.get('.star-magic-stage').exists()).toBe(true)
+    expect(wrapper.text()).toContain('今晚见。')
+    expect(wrapper.text()).toContain('我在星光里。')
+    expect(wrapper.text()).not.toContain('这里会慢慢写下只属于这把钥匙的内容。')
+  })
+
   it('renders structured text and audio parts in the chat thread', async () => {
     const sendMessageStream = createStreamReply('先慢慢呼吸。', {
         role: 'assistant' as const,

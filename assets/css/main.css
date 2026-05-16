@@ -1898,6 +1898,105 @@ body {
   mask-image: linear-gradient(180deg, transparent 0, black 2rem, black calc(100% - 0.4rem));
 }
 
+.star-magic-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 6.8rem 1.25rem 7.4rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.star-magic-stage__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 52% 44%, rgb(255 236 194 / 0.2), transparent 18rem),
+    radial-gradient(circle at 28% 70%, rgb(160 198 255 / 0.14), transparent 20rem),
+    radial-gradient(circle at 72% 22%, rgb(255 210 232 / 0.1), transparent 16rem);
+  pointer-events: none;
+}
+
+.star-magic-stage__constellation {
+  position: absolute;
+  inset: 4rem 8vw 7rem;
+  pointer-events: none;
+}
+
+.star-magic-stage__constellation span {
+  position: absolute;
+  width: 0.18rem;
+  height: 0.18rem;
+  border-radius: 999px;
+  background: rgb(255 246 221 / 0.78);
+  box-shadow:
+    0 0 0.7rem rgb(255 231 185 / 0.55),
+    0 0 1.6rem rgb(160 198 255 / 0.25);
+  animation: star-stage-pulse 2.8s ease-in-out infinite alternate;
+}
+
+.star-magic-stage__constellation span:nth-child(3n) {
+  background: rgb(198 220 255 / 0.78);
+  animation-duration: 3.4s;
+}
+
+.star-magic-stage__constellation span:nth-child(1) { top: 12%; left: 14%; }
+.star-magic-stage__constellation span:nth-child(2) { top: 26%; left: 31%; }
+.star-magic-stage__constellation span:nth-child(3) { top: 10%; left: 62%; }
+.star-magic-stage__constellation span:nth-child(4) { top: 36%; left: 78%; }
+.star-magic-stage__constellation span:nth-child(5) { top: 54%; left: 18%; }
+.star-magic-stage__constellation span:nth-child(6) { top: 66%; left: 36%; }
+.star-magic-stage__constellation span:nth-child(7) { top: 46%; left: 54%; }
+.star-magic-stage__constellation span:nth-child(8) { top: 72%; left: 70%; }
+.star-magic-stage__constellation span:nth-child(9) { top: 21%; left: 88%; }
+.star-magic-stage__constellation span:nth-child(10) { top: 84%; left: 12%; }
+.star-magic-stage__constellation span:nth-child(11) { top: 82%; left: 48%; }
+.star-magic-stage__constellation span:nth-child(12) { top: 58%; left: 88%; }
+.star-magic-stage__constellation span:nth-child(13) { top: 38%; left: 8%; }
+.star-magic-stage__constellation span:nth-child(14) { top: 7%; left: 42%; }
+.star-magic-stage__constellation span:nth-child(15) { top: 30%; left: 52%; }
+.star-magic-stage__constellation span:nth-child(16) { top: 69%; left: 58%; }
+.star-magic-stage__constellation span:nth-child(17) { top: 18%; left: 5%; }
+.star-magic-stage__constellation span:nth-child(18) { top: 88%; left: 82%; }
+
+.star-magic-stage .star-chat__thread {
+  opacity: 1;
+  transform: none;
+}
+
+.star-magic-stage .star-chat__messages {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 52rem);
+  max-height: min(58vh, 36rem);
+  padding: 1.4rem 0.9rem 0.55rem;
+  pointer-events: auto;
+}
+
+.star-glyph-text {
+  display: inline;
+}
+
+.star-glyph-text__glyph {
+  display: inline-block;
+  animation-delay: var(--glyph-delay);
+  animation-fill-mode: both;
+}
+
+.star-glyph-text[data-role="user"] .star-glyph-text__glyph {
+  animation-name: star-user-glyph-float;
+  animation-duration: 720ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.star-glyph-text[data-role="assistant"] .star-glyph-text__glyph {
+  animation-name: star-ai-glyph-pop;
+  animation-duration: 540ms;
+  animation-timing-function: cubic-bezier(0.18, 0.92, 0.24, 1);
+}
+
 .star-chat-message {
   position: relative;
   width: fit-content;
@@ -1911,6 +2010,7 @@ body {
   line-height: 1.72;
   white-space: pre-wrap;
   backdrop-filter: blur(12px);
+  pointer-events: auto;
   transition:
     transform 180ms ease,
     background 180ms ease,
@@ -1924,9 +2024,42 @@ body {
   background: var(--chat-user-bubble);
 }
 
+.star-chat__messages .star-chat-message.star-chat-message--spell {
+  justify-self: end;
+  max-width: min(78%, 34rem);
+  color: rgb(255 244 231 / 0.95);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 .star-chat-message[data-role="assistant"] {
   justify-self: start;
   background: var(--chat-assistant-bubble);
+}
+
+.star-chat__messages .star-chat-message.star-chat-message--magic {
+  justify-self: start;
+  max-width: min(82%, 38rem);
+  border-color: rgb(160 198 255 / 0.16);
+  background:
+    radial-gradient(circle at 1.2rem 1.2rem, rgb(160 198 255 / 0.2), transparent 6rem),
+    rgb(16 20 33 / 0.58);
+}
+
+.star-chat-message__orb {
+  position: absolute;
+  top: 0.85rem;
+  left: -0.45rem;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 999px;
+  background: rgb(229 239 255 / 0.96);
+  box-shadow:
+    0 0 0.9rem rgb(160 198 255 / 0.84),
+    0 0 2rem rgb(255 231 185 / 0.32);
+  animation: star-magic-orb 1.8s ease-in-out infinite alternate;
 }
 
 .star-chat-message:has(.star-media-card) {
@@ -1984,6 +2117,60 @@ body {
 .star-media-card:is(:hover, :focus-within) .star-media-card__actions a {
   opacity: 1;
   transform: translateY(-1px);
+}
+
+@keyframes star-stage-pulse {
+  from {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes star-user-glyph-float {
+  from {
+    opacity: 0;
+    transform: translate3d(1.5rem, 4rem, 0) rotate(3deg);
+    filter: blur(0.35rem);
+    text-shadow: 0 0 1.4rem rgb(255 231 185 / 0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+    text-shadow: 0 0 0.45rem rgb(255 231 185 / 0.24);
+  }
+}
+
+@keyframes star-ai-glyph-pop {
+  from {
+    opacity: 0;
+    transform: translateY(0.7rem) scale(0.72);
+    filter: blur(0.28rem);
+    text-shadow: 0 0 1.2rem rgb(160 198 255 / 0.86);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+    text-shadow: 0 0 0.5rem rgb(160 198 255 / 0.26);
+  }
+}
+
+@keyframes star-magic-orb {
+  from {
+    transform: translateY(0) scale(0.92);
+  }
+
+  to {
+    transform: translateY(-0.22rem) scale(1.08);
+  }
 }
 
 .star-media-card {
@@ -2293,6 +2480,20 @@ body {
 }
 
 @media (max-width: 640px) {
+  .star-magic-stage {
+    padding: 8.5rem 1rem 6.6rem;
+    place-items: end center;
+  }
+
+  .star-magic-stage .star-chat__messages {
+    max-height: 52vh;
+  }
+
+  .star-chat-message--spell,
+  .star-chat-message--magic {
+    max-width: 90%;
+  }
+
   .star-chat-message:has(.star-media-card) {
     max-width: min(88%, 17rem);
     padding: 0.68rem 0.72rem;
@@ -2387,5 +2588,13 @@ body {
       0 1.4rem 3.6rem rgb(0 0 0 / 0.3),
       0 0 0 0.22rem rgb(255 244 231 / 0.1),
       inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-glyph-text__glyph,
+  .star-chat-message__orb,
+  .star-magic-stage__constellation span {
+    animation: none;
   }
 }
