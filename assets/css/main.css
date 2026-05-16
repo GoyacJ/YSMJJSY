@@ -204,7 +204,7 @@ body {
   }
 }
 
-.chat-theater > :not(.chat-theater__atmosphere) {
+.chat-theater > :not(.chat-theater__atmosphere, .star-quota, .star-chat, .profile-settings, .star-memory-map, .design-preview-sheet) {
   position: relative;
   z-index: 1;
 }
@@ -1764,7 +1764,7 @@ body {
   }
 
   .star-memory-map {
-    top: 5.1rem;
+    top: 7.35rem;
     right: 0.85rem;
     bottom: auto;
   }
