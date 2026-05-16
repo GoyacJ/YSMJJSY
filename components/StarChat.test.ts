@@ -162,7 +162,7 @@ describe('StarChat', () => {
     expect(wrapper.get('button[aria-label="写一首"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="发送"]').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('完全访问权限')
-    expect(wrapper.get('textarea').attributes('placeholder')).toBe('要求后续变更')
+    expect(wrapper.get('textarea').attributes('placeholder')).toBe('把想说的话交给这片星空')
   })
 
   it('opens attachment options from the plus button', async () => {
