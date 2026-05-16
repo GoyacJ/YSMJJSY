@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import StarChatMessageView from './StarChatMessage.vue'
 import {
   useStarChat,
   type AttachmentKind,
@@ -205,35 +206,6 @@ function startVoiceInput() {
 
   listening.value = true
   recognition.start()
-}
-
-function getMediaSource(part: StarChatPart) {
-  if (!['audio', 'image', 'music', 'video'].includes(part.type)) {
-    return undefined
-  }
-
-  if ('url' in part && part.url) {
-    return part.url
-  }
-
-  if (!('base64' in part) || !part.base64) {
-    return undefined
-  }
-
-  return part.type === 'image'
-    ? `data:image/png;base64,${part.base64}`
-    : `data:audio/mpeg;base64,${part.base64}`
-}
-
-function getMediaDownloadName(part: StarChatPart) {
-  const names: Partial<Record<StarChatPart['type'], string>> = {
-    image: 'star-image.png',
-    audio: 'star-audio.mp3',
-    music: 'star-music.mp3',
-    video: 'star-video.mp4',
-  }
-
-  return names[part.type]
 }
 
 function buildAttachmentParts(text: string, selectedAttachments: StarChatAttachment[]) {
@@ -454,70 +426,14 @@ onBeforeUnmount(() => {
         @click="threadActive = true"
         @touchstart.passive="threadActive = true"
       >
-        <article
+        <StarChatMessageView
           v-for="(message, index) in localMessages"
           :key="`${message.role}-${index}`"
-          :data-role="message.role"
-          :data-active="String(activeMessageIndex === index)"
-          @click="activeMessageIndex = index"
-        >
-          <img
-            v-if="message.imageDataUrl"
-            class="star-chat__message-image"
-            :src="message.imageDataUrl"
-            alt=""
-          >
-          <a
-            v-if="message.imageDataUrl"
-            class="star-chat__media-download"
-            :href="message.imageDataUrl"
-            download="star-attachment.png"
-            aria-label="下载图片"
-            @click.stop
-          >
-            下载
-          </a>
-          <template v-if="message.parts?.length">
-            <template v-for="(part, partIndex) in message.parts" :key="`${index}-${partIndex}`">
-              <span v-if="part.type === 'text'">{{ part.text }}</span>
-              <span v-else-if="part.type === 'status'" class="star-chat__message-status">{{ part.text }}</span>
-              <audio
-                v-else-if="part.type === 'audio' || part.type === 'music'"
-                controls
-                :data-kind="part.type"
-                :src="getMediaSource(part)"
-              />
-              <img
-                v-else-if="part.type === 'image'"
-                class="star-chat__message-image"
-                :src="getMediaSource(part)"
-                alt="生成的图片"
-              >
-              <video v-else controls :src="getMediaSource(part)" />
-              <a
-                v-if="getMediaSource(part)"
-                class="star-chat__media-download"
-                :href="getMediaSource(part)"
-                :download="getMediaDownloadName(part)"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="下载资源"
-                @click.stop
-              >
-                下载
-              </a>
-            </template>
-          </template>
-          <span v-else>{{ message.content }}</span>
-          <button
-            type="button"
-            class="star-chat__copy-button"
-            aria-label="复制消息"
-            @click.stop="copyMessage(message)"
-          >
-            复制
-          </button>
-        </article>
+          :message="message"
+          :active="activeMessageIndex === index"
+          @activate="activeMessageIndex = index"
+          @copy="copyMessage"
+        />
       </div>
 
       <div v-if="attachments.length" class="star-chat__attachment-preview">
