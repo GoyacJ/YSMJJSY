@@ -30,7 +30,7 @@ describe('public star scene utilities', () => {
     expect(resolveSceneMode(true)).toBe('galaxy')
   })
 
-  it('spreads entities across the visible screen bands', () => {
+  it('spreads entities across the visible sky bands', () => {
     const entities = createPublicStarEntities(Array.from({ length: 24 }, (_, index) => ({
       id: `key_${index}`,
       name: `称呼${index}`,
@@ -39,11 +39,12 @@ describe('public star scene utilities', () => {
     })), { width: 1000, height: 700 })
 
     expect(entities.some(entity => entity.y < 120)).toBe(true)
-    expect(entities.some(entity => entity.y > 560)).toBe(true)
+    expect(entities.some(entity => entity.y > 360 && entity.y < 448)).toBe(true)
     expect(entities.some(entity => entity.x < 160)).toBe(true)
     expect(entities.some(entity => entity.x > 840)).toBe(true)
+    expect(entities.every(entity => entity.y <= 448)).toBe(true)
     expect(entities.some(entity =>
-      entity.x > 350 && entity.x < 650 && entity.y > 240 && entity.y < 460,
+      entity.x > 350 && entity.x < 650 && entity.y > 170 && entity.y < 390,
     )).toBe(true)
   })
 

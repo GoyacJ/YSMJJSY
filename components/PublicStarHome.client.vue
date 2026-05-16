@@ -38,10 +38,12 @@ const flashes = new Map<string, number>()
 const labelCache = new Map<string, CachedLabel>()
 const sceneMode = computed(() => mode.value)
 const entryEventKey = 'ysmjjsy:new-public-star'
+const galaxyBackgroundSrc = '/images/starry-sky-bg.jpg'
 
 let animationFrame = 0
 let darkQuery: MediaQueryList | null = null
 let reducedMotionQuery: MediaQueryList | null = null
+let galaxyBackgroundImage: HTMLImageElement | null = null
 
 function getCanvasContext() {
   const element = canvas.value
@@ -78,34 +80,66 @@ function resizeCanvas(element: HTMLCanvasElement, context: CanvasRenderingContex
   return { width, height }
 }
 
+function loadGalaxyBackground() {
+  const image = new Image()
+  image.decoding = 'async'
+  image.src = galaxyBackgroundSrc
+  galaxyBackgroundImage = image
+
+  image.addEventListener('load', () => {
+    startLoop()
+  }, { once: true })
+}
+
+function drawCoverImage(context: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number) {
+  const imageWidth = image.naturalWidth || width
+  const imageHeight = image.naturalHeight || height
+  const scale = Math.max(width / imageWidth, height / imageHeight)
+  const drawWidth = imageWidth * scale
+  const drawHeight = imageHeight * scale
+  const x = (width - drawWidth) / 2
+  const y = (height - drawHeight) / 2
+
+  context.drawImage(image, x, y, drawWidth, drawHeight)
+}
+
 function drawGalaxyBackground(context: CanvasRenderingContext2D, width: number, height: number, time: number) {
-  const gradient = context.createLinearGradient(0, 0, 0, height)
-  gradient.addColorStop(0, '#07111f')
-  gradient.addColorStop(0.48, '#11183a')
-  gradient.addColorStop(1, '#24172d')
-  context.fillStyle = gradient
+  if (galaxyBackgroundImage?.complete && galaxyBackgroundImage.naturalWidth > 0) {
+    drawCoverImage(context, galaxyBackgroundImage, width, height)
+  }
+  else {
+    const gradient = context.createLinearGradient(0, 0, 0, height)
+    gradient.addColorStop(0, '#050b18')
+    gradient.addColorStop(0.52, '#0b1231')
+    gradient.addColorStop(1, '#160d22')
+    context.fillStyle = gradient
+    context.fillRect(0, 0, width, height)
+  }
+
+  context.fillStyle = 'rgb(2 5 16 / 0.42)'
   context.fillRect(0, 0, width, height)
 
-  context.save()
-  context.translate(width * 0.5, height * 0.48)
-  context.rotate(-0.18)
-  const band = context.createLinearGradient(-width * 0.48, 0, width * 0.48, 0)
-  band.addColorStop(0, 'rgb(255 255 255 / 0)')
-  band.addColorStop(0.5, 'rgb(173 202 255 / 0.16)')
-  band.addColorStop(1, 'rgb(255 255 255 / 0)')
-  context.fillStyle = band
-  context.fillRect(-width * 0.62, -height * 0.13, width * 1.24, height * 0.26)
-  context.restore()
+  const veil = context.createRadialGradient(
+    width * 0.5,
+    height * 0.48,
+    Math.min(width, height) * 0.08,
+    width * 0.5,
+    height * 0.48,
+    Math.max(width, height) * 0.58,
+  )
+  veil.addColorStop(0, 'rgb(3 6 18 / 0.46)')
+  veil.addColorStop(0.46, 'rgb(3 6 18 / 0.22)')
+  veil.addColorStop(1, 'rgb(0 0 0 / 0.42)')
+  context.fillStyle = veil
+  context.fillRect(0, 0, width, height)
 
-  for (let index = 0; index < 110; index += 1) {
-    const x = (index * 89) % width
-    const y = (index * 157) % height
-    const pulse = isReducedMotion.value ? 0.65 : 0.48 + Math.sin(time / 900 + index) * 0.24
-    context.fillStyle = `rgb(255 248 222 / ${pulse})`
-    context.beginPath()
-    context.arc(x, y, index % 9 === 0 ? 1.7 : 0.9, 0, Math.PI * 2)
-    context.fill()
-  }
+  const glow = context.createLinearGradient(0, height * 0.18, width, height * 0.72)
+  const glowAlpha = isReducedMotion.value ? 0.1 : 0.1 + Math.sin(time / 2600) * 0.025
+  glow.addColorStop(0, 'rgb(120 156 255 / 0)')
+  glow.addColorStop(0.54, `rgb(146 176 255 / ${glowAlpha})`)
+  glow.addColorStop(1, 'rgb(255 208 170 / 0)')
+  context.fillStyle = glow
+  context.fillRect(0, 0, width, height)
 }
 
 function drawSkyBackground(context: CanvasRenderingContext2D, width: number, height: number, time: number) {
@@ -182,20 +216,65 @@ function getFlashAlpha(entity: PublicStarEntity, time: number) {
 function drawGalaxyStar(context: CanvasRenderingContext2D, entity: PublicStarEntity, time: number) {
   const pulse = isReducedMotion.value ? 0.55 : 0.55 + Math.sin(time / 520 + entity.seed) * 0.22
   const flash = getFlashAlpha(entity, time)
+  const coreRadius = 1.15 + pulse * 0.35 + flash * 1.3
+  const primaryRay = 7 + entity.orbit * 7 + flash * 10
+  const secondaryRay = primaryRay * 0.32
+  const tint = entity.seed % 3 === 0
+    ? '255 226 180'
+    : entity.seed % 3 === 1 ? '218 232 255' : '255 248 221'
 
   context.save()
-  context.shadowColor = `rgb(255 230 165 / ${0.38 + flash * 0.55})`
-  context.shadowBlur = 14 + flash * 28
-  context.fillStyle = `rgb(255 247 219 / ${0.82 + pulse * 0.16})`
+  context.translate(entity.x, entity.y)
+  context.rotate((entity.seed % 360) * Math.PI / 180)
+
+  const halo = context.createRadialGradient(0, 0, 0, 0, 0, 11 + flash * 14)
+  halo.addColorStop(0, `rgb(${tint} / ${0.34 + flash * 0.25})`)
+  halo.addColorStop(0.36, `rgb(${tint} / ${0.08 + flash * 0.2})`)
+  halo.addColorStop(1, `rgb(${tint} / 0)`)
+  context.fillStyle = halo
   context.beginPath()
-  context.arc(entity.x, entity.y, 2.2 + flash * 2.4, 0, Math.PI * 2)
+  context.arc(0, 0, 11 + flash * 14, 0, Math.PI * 2)
   context.fill()
 
-  context.globalAlpha = 0.24 + flash * 0.45
-  context.strokeStyle = '#ffe9ad'
+  context.globalAlpha = 0.48 + flash * 0.26
+  context.strokeStyle = `rgb(${tint} / 0.82)`
+  context.lineWidth = 0.72
+  context.lineCap = 'round'
   context.beginPath()
-  context.arc(entity.x, entity.y, 13 + flash * 16, 0, Math.PI * 2)
+  context.moveTo(-primaryRay, 0)
+  context.lineTo(primaryRay, 0)
+  context.moveTo(0, -primaryRay * 0.78)
+  context.lineTo(0, primaryRay * 0.78)
   context.stroke()
+
+  context.rotate(Math.PI / 4)
+  context.globalAlpha = 0.18 + flash * 0.2
+  context.lineWidth = 0.52
+  context.beginPath()
+  context.moveTo(-secondaryRay, 0)
+  context.lineTo(secondaryRay, 0)
+  context.moveTo(0, -secondaryRay)
+  context.lineTo(0, secondaryRay)
+  context.stroke()
+
+  context.rotate(-Math.PI / 4)
+  context.globalAlpha = 1
+  context.shadowColor = `rgb(${tint} / ${0.62 + flash * 0.35})`
+  context.shadowBlur = 4 + flash * 9
+  context.fillStyle = `rgb(255 252 238 / ${0.94 + pulse * 0.04})`
+  context.beginPath()
+  context.arc(0, 0, coreRadius, 0, Math.PI * 2)
+  context.fill()
+
+  if (flash > 0) {
+    context.globalAlpha = flash * 0.32
+    context.strokeStyle = `rgb(${tint} / 0.86)`
+    context.lineWidth = 0.8
+    context.beginPath()
+    context.arc(0, 0, 9 + flash * 12, 0, Math.PI * 2)
+    context.stroke()
+  }
+
   context.restore()
 }
 
@@ -533,6 +612,7 @@ watch(() => props.flashIds, (ids) => {
 
 onMounted(() => {
   consumeEntryEvent()
+  loadGalaxyBackground()
 
   if (typeof window.matchMedia === 'function') {
     darkQuery = window.matchMedia('(prefers-color-scheme: dark)')

@@ -1551,3 +1551,40 @@ Modified:
 - Verified Browser screenshot:
   - `/tmp/home-dark-stars-center-spread.png`
 - Verification: `npm run test -- utils/public-star-scene.test.ts components/PublicStarHome.test.ts` passed, `npm run check` passed.
+
+### Checkpoint Post-QA High Fidelity Galaxy Background - 2026-05-16
+
+- Replaced the upscaled generated background with a real 3840x2160 ESO Paranal night-sky image.
+- Added the sharp source-derived asset at `public/images/starry-sky-bg.jpg`.
+- Replaced the procedural dark-mode galaxy background with cover-drawn image rendering plus dark overlay, vignette, and center readability mask.
+- Reworked dark-mode public stars into sharper telescope-like star points with small cores and fine diffraction rays.
+- Restricted dark-mode public star placement to the sky area so labels and star points do not sit on the mountain/ground.
+- Verified Playwright screenshots:
+  - `/tmp/home-generated-galaxy-bg.png`
+  - `/tmp/home-hubble-sharp-stars-v2.png`
+  - `/tmp/home-paranal-stars-in-sky.png`
+- Verification: `npm run test -- components/PublicStarHome.test.ts utils/public-star-scene.test.ts` passed, `npm run check` passed, `git diff --check` passed, `npm run test:e2e -- tests/e2e/main-flow.spec.ts` passed.
+
+### Checkpoint Post-QA Minimal Entry Polish - 2026-05-16
+
+- Restyled the home key input and `进入` / `创建钥匙` actions into a lighter glass entrance with low-saturation borders, softer shadows, and restrained hover/focus states.
+- Added sky-mode color overrides so the same controls stay pale and readable on the blue-sky background.
+- Fixed mobile stacking by replacing the pill container radius with a smaller rounded panel radius below 520px.
+- Verified Browser and Chrome screenshots:
+  - `/tmp/unlock-fixed-dark-desktop.png`
+  - `/tmp/unlock-fixed-light-desktop.png`
+  - `/tmp/unlock-fixed-dark-mobile.png`
+  - `/tmp/unlock-fixed-light-mobile.png`
+- Verification: Browser page identity, console health, and input interaction passed; Chrome desktop/mobile visual metrics passed with no horizontal overflow.
+
+### Checkpoint Post-QA Entry Border Simplification - 2026-05-16
+
+- Removed the visible borders from the input and both home entry buttons.
+- Replaced the form border with a very light inset shadow so the entrance reads as one soft surface instead of stacked outlines.
+- Simplified sky-mode overrides to keep the light design pale without repeated button/input strokes.
+- Verified Chrome screenshots:
+  - `/tmp/unlock-simplified-dark-desktop.png`
+  - `/tmp/unlock-simplified-light-desktop.png`
+  - `/tmp/unlock-simplified-dark-mobile.png`
+  - `/tmp/unlock-simplified-light-mobile.png`
+- Verification: Browser page identity and console health passed; Chrome desktop/mobile visual metrics passed with no horizontal overflow; typed input enabled `进入`.

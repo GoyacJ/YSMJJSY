@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import StarAudioPlayer from './StarAudioPlayer.vue'
 import type { StarChatPart } from '../composables/useStarChat'
 
 const props = defineProps<{
@@ -47,11 +48,10 @@ const downloadName = computed(() => getMediaDownloadName(props.part))
       :src="source"
       alt="生成的图片"
     >
-    <audio
+    <StarAudioPlayer
       v-else-if="part.type === 'audio' || part.type === 'music'"
-      controls
-      :data-kind="part.type"
       :src="source"
+      :kind="part.type"
     />
     <video
       v-else-if="part.type === 'video'"

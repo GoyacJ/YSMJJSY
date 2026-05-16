@@ -61,18 +61,19 @@ function interpolate(min: number, max: number, amount: number) {
 export function createPublicStarEntities(stars: PublicStar[], bounds: SceneBounds): PublicStarEntity[] {
   const width = Math.max(320, bounds.width)
   const height = Math.max(420, bounds.height)
+  const skyBottom = height * 0.64
   const centerX = width / 2
-  const centerY = height / 2
+  const centerY = skyBottom * 0.52
   const margin = Math.min(58, Math.max(24, width * 0.035))
   const maxX = width - margin - 70
   const safeHalfWidth = Math.min(310, width * 0.24)
-  const safeHalfHeight = Math.min(215, height * 0.25)
+  const safeHalfHeight = Math.min(145, skyBottom * 0.24)
   const top = resolveRange(margin, centerY - safeHalfHeight - 34)
-  const bottom = resolveRange(centerY + safeHalfHeight + 34, height - margin - 34)
+  const bottom = resolveRange(centerY + safeHalfHeight + 34, skyBottom - margin)
   const left = resolveRange(margin, centerX - safeHalfWidth - 34)
   const right = resolveRange(centerX + safeHalfWidth + 34, maxX)
   const centerRadiusX = Math.min(320, width * 0.28)
-  const centerRadiusY = Math.min(220, height * 0.24)
+  const centerRadiusY = Math.min(140, skyBottom * 0.22)
 
   return stars.map((star, index) => {
     const seed = hashSeed(star.id)
@@ -89,7 +90,7 @@ export function createPublicStarEntities(stars: PublicStar[], bounds: SceneBound
     }
     else if (lane === 1 || lane === 5) {
       x = interpolate(right.min, right.max, secondary)
-      y = interpolate(margin, height - margin - 62, primary)
+      y = interpolate(margin, skyBottom - margin, primary)
     }
     else if (lane === 2 || lane === 6) {
       x = interpolate(margin, maxX, secondary)
@@ -97,7 +98,7 @@ export function createPublicStarEntities(stars: PublicStar[], bounds: SceneBound
     }
     else if (lane === 3 || lane === 7) {
       x = interpolate(left.min, left.max, primary)
-      y = interpolate(margin, height - margin - 62, secondary)
+      y = interpolate(margin, skyBottom - margin, secondary)
     }
     else {
       const angle = seededUnit(seed, index + 71) * Math.PI * 2

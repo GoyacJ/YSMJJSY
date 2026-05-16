@@ -1,9 +1,25 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import StarAudioPlayer from './StarAudioPlayer.vue'
 import type { GeneratedAssetItem } from '../composables/useMediaTasks'
 
-defineProps<{
+const props = defineProps<{
   asset: GeneratedAssetItem
 }>()
+
+const source = computed(() => {
+  if (props.asset.url) {
+    return props.asset.url
+  }
+
+  if (!props.asset.base64) {
+    return undefined
+  }
+
+  return props.asset.kind === 'image'
+    ? `data:image/png;base64,${props.asset.base64}`
+    : `data:audio/mpeg;base64,${props.asset.base64}`
+})
 </script>
 
 <template>
@@ -17,21 +33,21 @@ defineProps<{
     <p v-else-if="asset.status === 'failed'">
       {{ asset.error || '没有生成好。' }}
     </p>
-    <p v-else-if="!asset.url && !asset.base64">
+    <p v-else-if="!source">
       没有拿到可播放文件。
     </p>
     <template v-else>
-      <audio
+      <StarAudioPlayer
         v-if="asset.kind === 'audio' || asset.kind === 'music'"
-        controls
-        :src="asset.url || (asset.base64 ? `data:audio/mpeg;base64,${asset.base64}` : undefined)"
+        :src="source"
+        :kind="asset.kind"
       />
       <img
         v-else-if="asset.kind === 'image'"
-        :src="asset.url || (asset.base64 ? `data:image/png;base64,${asset.base64}` : undefined)"
+        :src="source"
         alt="生成的纪念图"
       >
-      <video v-else controls :src="asset.url" />
+      <video v-else controls :src="source" />
     </template>
   </article>
 </template>
