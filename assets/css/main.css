@@ -114,6 +114,118 @@ body {
   background: var(--page-bg);
 }
 
+.chat-theater {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 16%, rgb(255 214 188 / 0.28), transparent 22rem),
+    radial-gradient(circle at 78% 12%, rgb(157 192 255 / 0.18), transparent 24rem),
+    radial-gradient(circle at 48% 88%, rgb(255 240 194 / 0.16), transparent 20rem),
+    linear-gradient(145deg, #0d1324 0%, #171425 52%, #231724 100%);
+}
+
+.chat-theater__atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.chat-theater__star {
+  position: absolute;
+  width: 0.18rem;
+  height: 0.18rem;
+  border-radius: 999px;
+  background: rgb(255 247 216 / 0.92);
+  box-shadow:
+    0 0 1.8rem rgb(255 232 180 / 0.7),
+    5rem 3rem 0 rgb(255 255 255 / 0.5),
+    12rem 9rem 0 rgb(210 226 255 / 0.42),
+    20rem 2rem 0 rgb(255 227 198 / 0.38);
+  animation: theater-star-drift 16s ease-in-out infinite alternate;
+}
+
+.chat-theater__star--one {
+  top: 16%;
+  left: 12%;
+}
+
+.chat-theater__star--two {
+  top: 24%;
+  right: 18%;
+  animation-duration: 19s;
+}
+
+.chat-theater__star--three {
+  bottom: 26%;
+  left: 28%;
+  animation-duration: 23s;
+}
+
+.chat-theater__meteor {
+  position: absolute;
+  top: 18%;
+  left: 72%;
+  width: 9rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 245 213 / 0.86), transparent);
+  transform: rotate(-24deg);
+  animation: theater-meteor 9s ease-in-out infinite;
+}
+
+@keyframes theater-star-drift {
+  from {
+    opacity: 0.72;
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(1.2rem, -0.8rem, 0);
+  }
+}
+
+@keyframes theater-meteor {
+  0%,
+  72% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(-24deg);
+  }
+
+  78% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(-24rem, 10rem, 0) rotate(-24deg);
+  }
+}
+
+.chat-theater > :not(.chat-theater__atmosphere) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-color-scheme: light) {
+  .chat-theater {
+    background:
+      radial-gradient(circle at 20% 16%, rgb(255 222 204 / 0.74), transparent 22rem),
+      radial-gradient(circle at 76% 14%, rgb(185 210 255 / 0.42), transparent 24rem),
+      radial-gradient(circle at 48% 88%, rgb(255 244 201 / 0.34), transparent 20rem),
+      linear-gradient(145deg, #fff8f1 0%, #f8edf3 56%, #edf4ff 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-theater__star,
+  .chat-theater__meteor {
+    animation: none;
+  }
+}
+
 .public-star-home {
   position: relative;
   min-height: 100vh;

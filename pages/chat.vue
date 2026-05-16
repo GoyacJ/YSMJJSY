@@ -25,8 +25,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="app-page">
+  <main class="app-page chat-theater">
     <ClientOnly>
+      <div class="chat-theater__atmosphere" aria-hidden="true">
+        <span class="chat-theater__star chat-theater__star--one" />
+        <span class="chat-theater__star chat-theater__star--two" />
+        <span class="chat-theater__star chat-theater__star--three" />
+        <span class="chat-theater__meteor" />
+      </div>
       <DynamicStarPage v-if="currentSchema" :schema="currentSchema" />
       <StarScene v-else />
       <aside class="star-quota" aria-label="星能量">
