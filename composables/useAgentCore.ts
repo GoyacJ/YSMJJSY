@@ -2,12 +2,26 @@ import { readonly, ref } from 'vue'
 
 export type AgentCoreProposalAction = 'accept' | 'reject'
 
+export type AgentCoreProposal = {
+  id: string
+  type: string
+  title: string
+  summary: string
+  payload: Record<string, unknown>
+  status: 'pending' | 'accepted' | 'rejected' | 'applied'
+  createdAt: string
+  updatedAt: string
+}
+
 export type AgentCore = {
   profile: {
     keyId: string
     assistantName: string
     mbti: string
     configured: boolean
+    tone: string
+    relationshipRole: string
+    learningMode: string
   }
   memoryCounts: {
     total: number
@@ -15,19 +29,23 @@ export type AgentCore = {
     archived: number
     rejected: number
   }
+  memories: Array<{
+    id: string
+    type: string
+    content: string
+    importance: number
+    confidence: number
+    createdAt: string
+  }>
   latestReflections: Array<{
     id: string
     summary: string
     createdAt: string
   }>
-  pendingProposals: Array<{
-    id: string
-    type: string
-    title: string
-    summary: string
-    payload: Record<string, unknown>
-    createdAt: string
-  }>
+  proposals: {
+    pending: AgentCoreProposal[]
+    history: AgentCoreProposal[]
+  }
 }
 
 export function useAgentCore() {

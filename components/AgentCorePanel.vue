@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useAgentCore, type AgentCore, type AgentCoreProposalAction } from '../composables/useAgentCore'
+import { computed, onMounted, ref } from 'vue'
+import { useAgentCore, type AgentCore, type AgentCoreProposal, type AgentCoreProposalAction } from '../composables/useAgentCore'
 
 const props = defineProps<{
+  embedded?: boolean
   loadCore?: () => Promise<AgentCore | null>
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
 }>()
@@ -14,6 +15,9 @@ const pending = ref(false)
 const error = ref('')
 
 const core = computed(() => loadedCore.value)
+const panelOpen = computed(() => props.embedded || open.value)
+const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
+const proposalHistory = computed(() => core.value?.proposals.history ?? [])
 
 async function loadPanel() {
   pending.value = true
@@ -58,27 +62,61 @@ async function updateProposal(id: string, action: AgentCoreProposalAction) {
     pending.value = false
   }
 }
+
+function describeProposalEffect(proposal: AgentCoreProposal) {
+  const tone = proposal.payload.tone
+  const relationshipRole = proposal.payload.relationshipRole
+  const strategy = proposal.payload.strategy ?? proposal.payload.contentStrategy
+
+  if (proposal.type === 'tone' && typeof tone === 'string' && tone) {
+    return `语气会调整为${tone}`
+  }
+
+  if (proposal.type === 'relationship_role' && typeof relationshipRole === 'string' && relationshipRole) {
+    return `关系会调整为${relationshipRole}`
+  }
+
+  if (proposal.type === 'content_strategy' && typeof strategy === 'string' && strategy) {
+    return `回应策略会调整为${strategy}`
+  }
+
+  return proposal.summary
+}
+
+function getProposalStatusLabel(status: AgentCoreProposal['status']) {
+  if (status === 'accepted') return '已接受'
+  if (status === 'applied') return '已应用'
+  if (status === 'rejected') return '已拒绝'
+  return '待确认'
+}
+
+onMounted(() => {
+  if (props.embedded) {
+    void loadPanel()
+  }
+})
 </script>
 
 <template>
-  <aside class="agent-core-panel" aria-label="Agent Core">
+  <aside class="agent-core-panel" :class="{ 'agent-core-panel--embedded': embedded }" aria-label="星AI">
     <button
+      v-if="!embedded"
       type="button"
       class="agent-core-panel__trigger"
-      aria-label="打开 Agent Core"
+      aria-label="打开星AI"
       :aria-expanded="open"
       @click="openPanel"
     >
-      Core
+      星AI
     </button>
 
-    <section v-if="open" class="agent-core-panel__sheet">
+    <section v-if="panelOpen" class="agent-core-panel__sheet">
       <header>
         <div>
-          <p>Agent Core</p>
+          <p>星AI</p>
           <span v-if="core">{{ core.profile.assistantName }} · {{ core.profile.mbti }}</span>
         </div>
-        <button type="button" aria-label="关闭 Agent Core" @click="open = false">
+        <button v-if="!embedded" type="button" aria-label="关闭星AI" @click="open = false">
           ×
         </button>
       </header>
@@ -98,7 +136,27 @@ async function updateProposal(id: string, action: AgentCoreProposalAction) {
 
         <section>
           <p class="agent-core-panel__label">
-            反思
+            当前状态
+          </p>
+          <dl class="agent-core-panel__status">
+            <div>
+              <dt>语气</dt>
+              <dd>{{ core.profile.tone }}</dd>
+            </div>
+            <div>
+              <dt>关系</dt>
+              <dd>{{ core.profile.relationshipRole }}</dd>
+            </div>
+            <div>
+              <dt>学习</dt>
+              <dd>{{ core.profile.learningMode }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section>
+          <p class="agent-core-panel__label">
+            最近反思
           </p>
           <ul v-if="core.latestReflections.length">
             <li v-for="reflection in core.latestReflections" :key="reflection.id">
@@ -112,12 +170,13 @@ async function updateProposal(id: string, action: AgentCoreProposalAction) {
 
         <section>
           <p class="agent-core-panel__label">
-            提案
+            待确认进化
           </p>
-          <ul v-if="core.pendingProposals.length" class="agent-core-panel__proposals">
-            <li v-for="proposal in core.pendingProposals" :key="proposal.id">
+          <ul v-if="pendingProposals.length" class="agent-core-panel__proposals">
+            <li v-for="proposal in pendingProposals" :key="proposal.id">
               <strong>{{ proposal.title }}</strong>
               <span>{{ proposal.summary }}</span>
+              <span>接受后：{{ describeProposalEffect(proposal) }}</span>
               <div>
                 <button
                   type="button"
@@ -140,6 +199,22 @@ async function updateProposal(id: string, action: AgentCoreProposalAction) {
           </ul>
           <p v-else class="agent-core-panel__muted">
             没有待确认提案
+          </p>
+        </section>
+
+        <section>
+          <p class="agent-core-panel__label">
+            进化历史
+          </p>
+          <ul v-if="proposalHistory.length" class="agent-core-panel__proposals">
+            <li v-for="proposal in proposalHistory" :key="proposal.id">
+              <strong>{{ proposal.title }}</strong>
+              <span>{{ proposal.summary }}</span>
+              <span>{{ getProposalStatusLabel(proposal.status) }}</span>
+            </li>
+          </ul>
+          <p v-else class="agent-core-panel__muted">
+            还没有进化历史
           </p>
         </section>
       </template>

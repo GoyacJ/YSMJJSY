@@ -7,7 +7,7 @@ describe('agent core api helpers', () => {
     expect(() => requireAgentKey({ context: {} } as any)).toThrow()
   })
 
-  it('builds core response with profile, memory counts, reflections, and pending proposals', () => {
+  it('builds core response with profile state, active memories, reflections, and proposal groups', () => {
     expect(buildAgentCoreResponse({
       profile: {
         id: 'key_1',
@@ -38,6 +38,16 @@ describe('agent core api helpers', () => {
           importance: 0.5,
           confidence: 0.8,
           status: 'archived',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+        {
+          id: 'm3',
+          keyId: 'key_1',
+          type: 'emotion',
+          content: '不应展示。',
+          importance: 0.6,
+          confidence: 0.9,
+          status: 'rejected',
           createdAt: '2026-05-17T00:00:00.000Z',
         },
       ],
@@ -76,6 +86,30 @@ describe('agent core api helpers', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
           updatedAt: '2026-05-17T00:00:00.000Z',
         },
+        {
+          id: 'p3',
+          keyId: 'key_1',
+          reflectionId: 'r1',
+          type: 'relationship_role',
+          title: '守护者',
+          summary: '关系定位为守护者。',
+          payloadJson: '{"relationshipRole":"守护者"}',
+          status: 'accepted',
+          createdAt: '2026-05-17T00:01:00.000Z',
+          updatedAt: '2026-05-17T00:02:00.000Z',
+        },
+        {
+          id: 'p4',
+          keyId: 'key_1',
+          reflectionId: 'r1',
+          type: 'content_strategy',
+          title: '少解释',
+          summary: '减少解释。',
+          payloadJson: '{"strategy":"brief"}',
+          status: 'applied',
+          createdAt: '2026-05-17T00:03:00.000Z',
+          updatedAt: '2026-05-17T00:04:00.000Z',
+        },
       ],
     })).toEqual({
       profile: {
@@ -83,13 +117,26 @@ describe('agent core api helpers', () => {
         assistantName: '阿月',
         mbti: 'INTJ',
         configured: true,
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: '辅助学习',
       },
       memoryCounts: {
-        total: 2,
+        total: 3,
         active: 1,
         archived: 1,
-        rejected: 0,
+        rejected: 1,
       },
+      memories: [
+        {
+          id: 'm1',
+          type: 'preference',
+          content: '用户喜欢短句。',
+          importance: 0.8,
+          confidence: 0.9,
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
       latestReflections: [
         {
           id: 'r1',
@@ -97,16 +144,52 @@ describe('agent core api helpers', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         },
       ],
-      pendingProposals: [
-        {
-          id: 'p1',
-          type: 'tone',
-          title: '更短',
-          summary: '回复更短。',
-          payload: {},
-          createdAt: '2026-05-17T00:00:00.000Z',
-        },
-      ],
+      proposals: {
+        pending: [
+          {
+            id: 'p1',
+            type: 'tone',
+            title: '更短',
+            summary: '回复更短。',
+            payload: {},
+            status: 'pending',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            updatedAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+        history: [
+          {
+            id: 'p2',
+            type: 'tone',
+            title: '已拒绝',
+            summary: '不显示。',
+            payload: {},
+            status: 'rejected',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            updatedAt: '2026-05-17T00:00:00.000Z',
+          },
+          {
+            id: 'p3',
+            type: 'relationship_role',
+            title: '守护者',
+            summary: '关系定位为守护者。',
+            payload: { relationshipRole: '守护者' },
+            status: 'accepted',
+            createdAt: '2026-05-17T00:01:00.000Z',
+            updatedAt: '2026-05-17T00:02:00.000Z',
+          },
+          {
+            id: 'p4',
+            type: 'content_strategy',
+            title: '少解释',
+            summary: '减少解释。',
+            payload: { strategy: 'brief' },
+            status: 'applied',
+            createdAt: '2026-05-17T00:03:00.000Z',
+            updatedAt: '2026-05-17T00:04:00.000Z',
+          },
+        ],
+      },
     })
   })
 

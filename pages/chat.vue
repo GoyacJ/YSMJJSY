@@ -9,8 +9,15 @@ const {
   discardPreview,
 } = useKeyDesign()
 const { loadMessages } = useStarChat()
+const { core: agentCore, loadCore: loadAgentCore, applyProposal: applyAgentCoreProposal } = useAgentCore()
 const chatMessages = ref<StarChatMessage[]>([])
 const profileSettingsOpen = ref(false)
+const memoryPlanetOpen = ref(false)
+
+async function openMemoryPlanet() {
+  memoryPlanetOpen.value = true
+  await loadAgentCore()
+}
 
 onMounted(async () => {
   const schema = await loadDesign()
@@ -21,6 +28,7 @@ onMounted(async () => {
   }
 
   chatMessages.value = await loadMessages()
+  await loadAgentCore()
 })
 </script>
 
@@ -34,11 +42,20 @@ onMounted(async () => {
         <span class="chat-theater__meteor" />
       </div>
       <StarChat :initial-messages="chatMessages" @design-requested="previewDesign" />
-      <StarMemoryMap @open-settings="profileSettingsOpen = true" />
-      <AgentCorePanel />
+      <StarMemoryMap
+        @open-planet="openMemoryPlanet"
+        @open-settings="profileSettingsOpen = true"
+      />
+      <MemoryPlanetPanel
+        :core="agentCore"
+        :open="memoryPlanetOpen"
+        @close="memoryPlanetOpen = false"
+      />
       <ProfileSettingsSheet
         :open="profileSettingsOpen"
         hide-trigger
+        :load-agent-core="loadAgentCore"
+        :apply-agent-core-proposal="applyAgentCoreProposal"
         @close="profileSettingsOpen = false"
       />
       <DesignPreviewSheet

@@ -73,6 +73,9 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
           assistantName: '月光',
           mbti: 'INFJ',
           configured: true,
+          tone: '克制、温柔、安静',
+          relationshipRole: '记忆星球守护者',
+          learningMode: '辅助学习',
         },
         memoryCounts: {
           total: 1,
@@ -80,6 +83,16 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
           archived: 0,
           rejected: 0,
         },
+        memories: [
+          {
+            id: 'memory_1',
+            type: 'preference',
+            content: '用户喜欢短句。',
+            importance: 0.9,
+            confidence: 0.92,
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
         latestReflections: [
           {
             id: 'reflection_1',
@@ -87,16 +100,32 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             createdAt: '2026-05-17T00:00:00.000Z',
           },
         ],
-        pendingProposals: [
-          {
-            id: 'proposal_1',
-            type: 'tone',
-            title: '更短',
-            summary: '回复更短。',
-            payload: { tone: 'concise' },
-            createdAt: '2026-05-17T00:00:00.000Z',
-          },
-        ],
+        proposals: {
+          pending: [
+            {
+              id: 'proposal_1',
+              type: 'tone',
+              title: '更短',
+              summary: '回复更短。',
+              payload: { tone: '更短' },
+              status: 'pending',
+              createdAt: '2026-05-17T00:00:00.000Z',
+              updatedAt: '2026-05-17T00:00:00.000Z',
+            },
+          ],
+          history: [
+            {
+              id: 'proposal_2',
+              type: 'relationship_role',
+              title: '守护者',
+              summary: '关系定位为守护者。',
+              payload: { relationshipRole: '守护者' },
+              status: 'accepted',
+              createdAt: '2026-05-17T00:01:00.000Z',
+              updatedAt: '2026-05-17T00:01:00.000Z',
+            },
+          ],
+        },
       }),
     })
   })
@@ -143,6 +172,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.locator('.chat-theater')).toBeVisible()
   await expect(page.locator('.chat-theater__atmosphere')).toBeVisible()
   await expect(page.locator('.star-orbit-stage')).toBeVisible()
+  await expect(page.getByRole('button', { name: '打开星AI' })).toHaveCount(0)
   await expect(page.getByText('这里会慢慢写下只属于这把钥匙的内容。')).toHaveCount(0)
   await expect(page.locator('.star-chat__dock')).toHaveAttribute('data-mode', 'chat')
   await expect(page.getByPlaceholder('把想说的话交给这片星空')).toBeVisible()
@@ -157,10 +187,27 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.getByLabel('和星信说话').fill('这封信是真的吗？')
   await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('这句我会记得。')).toBeVisible()
-  await page.getByRole('button', { name: '打开 Agent Core' }).click()
-  await expect(page.getByText('用户在聊天里确认想要短句回应。')).toBeVisible()
-  await expect(page.getByText('回复更短。')).toBeVisible()
-  await page.getByRole('button', { name: '关闭 Agent Core' }).click()
+  await page.getByRole('button', { name: '打开星信设置' }).click()
+  const settingsDialog = page.getByRole('dialog', { name: '星信设置' })
+  await expect(settingsDialog).toBeVisible()
+  await expect(settingsDialog.getByText('星AI')).toHaveCount(0)
+  await expect(settingsDialog.getByText('智能体核心')).toHaveCount(0)
+  await page.getByRole('button', { name: '关闭设置' }).click()
+  await page.getByRole('button', { name: '打开记忆星球' }).click()
+  const planetDialog = page.getByRole('dialog', { name: '记忆星球' })
+  await expect(planetDialog).toBeVisible()
+  await expect(planetDialog.getByText('星AI')).toBeVisible()
+  await expect(planetDialog.getByText('智能体核心')).toHaveCount(0)
+  await expect(planetDialog.getByText('克制、温柔、安静')).toBeVisible()
+  await expect(planetDialog.getByText('用户在聊天里确认想要短句回应。')).toBeVisible()
+  await expect(planetDialog.getByText('回复更短。')).toBeVisible()
+  await expect(page.getByRole('button', { name: '查看记忆：用户喜欢短句。' })).toBeVisible()
+  const planetBox = await page.locator('.memory-planet-panel').boundingBox()
+  const dockBox = await page.locator('.star-chat__dock').boundingBox()
+  expect(planetBox).not.toBeNull()
+  expect(dockBox).not.toBeNull()
+  expect(planetBox!.y + planetBox!.height).toBeLessThan(dockBox!.y)
+  await page.getByRole('button', { name: '关闭记忆星球' }).click()
   await expect(page.getByText('这封信里的星光')).toHaveCount(0)
   await expect(page.locator('.star-orbit-group').first()).toBeVisible()
 
@@ -178,7 +225,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.getByRole('button', { name: '保存这个设计' }).click()
   await expect(page.getByText('保存后，这片星空会留在这把钥匙里。')).toBeVisible()
 
-  await page.getByRole('button', { name: '打开记忆星图' }).click()
+  await page.getByRole('button', { name: '打开星信设置' }).click()
   await expect(page.getByRole('dialog', { name: '星信设置' })).toBeVisible()
   await expect(page.getByRole('textbox', { name: '称呼' })).toHaveValue('月光')
   await expect(page.getByRole('combobox', { name: 'MBTI' })).toHaveValue('INFJ')

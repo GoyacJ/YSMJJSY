@@ -71,6 +71,8 @@ describe('StarOrbitStage', () => {
 
     expect(wrapper.get('.star-memory-popover').text()).toContain('把这句记下来。')
     expect(wrapper.get('.star-memory-popover').text()).toContain('已经放进星图。')
+    expect(wrapper.get('.star-memory-popover').attributes('style')).toContain('--memory-popover-x: 18%')
+    expect(wrapper.get('.star-memory-popover').attributes('style')).toContain('--memory-popover-y: 18%')
   })
 
   it('closes the memory recap when the stage background is clicked', async () => {
@@ -143,7 +145,7 @@ describe('StarOrbitStage', () => {
     expect(wrapper.text()).toContain('第4句话')
   })
 
-  it('keeps the visible conversation above the composer zone', () => {
+  it('keeps the visible conversation away from screen edges and the composer zone', () => {
     const wrapper = mount(StarOrbitStage, {
       props: {
         messages: [
@@ -158,7 +160,28 @@ describe('StarOrbitStage', () => {
 
     const groups = wrapper.findAll('.star-orbit-group')
 
-    expect(groups.at(-1)?.attributes('style')).toContain('--orbit-y: 56%')
+    expect(groups[0].attributes('style')).toContain('--orbit-x: 36%')
+    expect(groups[0].attributes('style')).toContain('--orbit-y: 36%')
+    expect(groups.at(-1)?.attributes('style')).toContain('--orbit-x: 62%')
+    expect(groups.at(-1)?.attributes('style')).toContain('--orbit-y: 52%')
+  })
+
+  it('does not inherit standard chat message layout inside the orbit stage', () => {
+    const wrapper = mount(StarOrbitStage, {
+      props: {
+        messages: [
+          { role: 'user', content: '给我写一首长一点的歌', parts: [{ type: 'text', text: '给我写一首长一点的歌' }] },
+          {
+            role: 'assistant',
+            content: '可以，把它的词写给你。站在这端的我们，把远处的光一点点收回来。',
+            parts: [{ type: 'text', text: '可以，把它的词写给你。站在这端的我们，把远处的光一点点收回来。' }],
+          },
+        ],
+        activeMessageIndex: null,
+      },
+    })
+
+    expect(wrapper.get('.star-orbit-stage__field').classes()).not.toContain('star-chat__messages')
   })
 
   it('spreads memory stars across the full stage', () => {

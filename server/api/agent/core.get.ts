@@ -40,6 +40,19 @@ function parsePayload(payloadJson: string) {
   }
 }
 
+function serializeProposal(proposal: AgentEvolutionProposalRecord) {
+  return {
+    id: proposal.id,
+    type: proposal.type,
+    title: proposal.title,
+    summary: proposal.summary,
+    payload: parsePayload(proposal.payloadJson),
+    status: proposal.status,
+    createdAt: proposal.createdAt,
+    updatedAt: proposal.updatedAt,
+  }
+}
+
 export function buildAgentCoreResponse(input: AgentCoreInput) {
   const memoryCounts = input.memories.reduce((counts, memory) => {
     const status = memory.status ?? 'active'
@@ -63,23 +76,34 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
       assistantName: input.profile.assistantName,
       mbti: input.profile.mbti,
       configured: Boolean(input.profile.configuredAt),
+      tone: '克制、温柔、安静',
+      relationshipRole: '记忆星球守护者',
+      learningMode: '辅助学习',
     },
     memoryCounts,
+    memories: input.memories
+      .filter(memory => (memory.status ?? 'active') === 'active')
+      .map(memory => ({
+        id: memory.id,
+        type: memory.type,
+        content: memory.content,
+        importance: memory.importance,
+        confidence: memory.confidence ?? 1,
+        createdAt: memory.createdAt,
+      })),
     latestReflections: input.reflections.map(reflection => ({
       id: reflection.id,
       summary: reflection.summary,
       createdAt: reflection.createdAt,
     })),
-    pendingProposals: input.proposals
-      .filter(proposal => proposal.status === 'pending')
-      .map(proposal => ({
-        id: proposal.id,
-        type: proposal.type,
-        title: proposal.title,
-        summary: proposal.summary,
-        payload: parsePayload(proposal.payloadJson),
-        createdAt: proposal.createdAt,
-      })),
+    proposals: {
+      pending: input.proposals
+        .filter(proposal => proposal.status === 'pending')
+        .map(serializeProposal),
+      history: input.proposals
+        .filter(proposal => proposal.status !== 'pending')
+        .map(serializeProposal),
+    },
   }
 }
 

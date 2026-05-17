@@ -74,6 +74,17 @@ const groups = computed(() => {
 
 const visibleGroups = computed(() => groups.value.slice(-visibleGroupLimit))
 const activeMemory = computed(() => groups.value.find(group => group.id === activeMemoryId.value))
+const activeMemoryStyle = computed(() => {
+  if (!activeMemory.value) {
+    return {}
+  }
+
+  return {
+    '--memory-popover-x': `${activeMemory.value.position.x}%`,
+    '--memory-popover-y': `${activeMemory.value.position.y}%`,
+    '--memory-popover-translate-x': activeMemory.value.position.x > 68 ? 'calc(-100% - 1rem)' : '1rem',
+  }
+})
 
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
@@ -168,8 +179,8 @@ function getVisibleGroupStyle(index: number, total: number) {
   const positions = total <= 1
     ? [{ x: 58, y: 56 }]
     : [
-        { x: 31, y: 40 },
-        { x: 66, y: 56 },
+        { x: 36, y: 36 },
+        { x: 62, y: 52 },
       ]
   const position = positions[index] ?? positions.at(-1) ?? { x: 58, y: 66 }
 
@@ -221,7 +232,7 @@ function copyGroupMessage(group: OrbitGroup) {
     @click="handleStageClick"
     @touchstart.passive="emit('interact')"
   >
-    <div class="star-orbit-stage__field star-chat__messages" aria-live="polite">
+    <div class="star-orbit-stage__field" aria-live="polite">
       <svg class="star-orbit-stage__path" viewBox="0 0 100 100" aria-hidden="true">
         <path d="M48 76 C32 64 31 46 44 38 S68 41 70 59 53 78 34 58" />
       </svg>
@@ -296,7 +307,14 @@ function copyGroupMessage(group: OrbitGroup) {
       </div>
 
       <Transition name="star-memory-popover">
-        <aside v-if="activeMemory" class="star-memory-popover" role="dialog" aria-label="记忆回看" @click.stop>
+        <aside
+          v-if="activeMemory"
+          class="star-memory-popover"
+          role="dialog"
+          aria-label="记忆回看"
+          :style="activeMemoryStyle"
+          @click.stop
+        >
           <button type="button" class="star-memory-popover__close" aria-label="关闭记忆回看" @click="closeMemory">
             ×
           </button>

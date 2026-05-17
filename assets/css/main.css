@@ -204,7 +204,7 @@ body {
   }
 }
 
-.chat-theater > :not(.chat-theater__atmosphere, .star-chat, .profile-settings, .star-memory-map, .agent-core-panel, .design-preview-sheet) {
+.chat-theater > :not(.chat-theater__atmosphere, .star-chat, .profile-settings, .star-memory-map, .agent-core-panel, .memory-planet-panel, .design-preview-sheet) {
   position: relative;
   z-index: 1;
 }
@@ -841,6 +841,9 @@ body {
   right: clamp(1rem, 3vw, 2rem);
   bottom: auto;
   z-index: 3;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
 }
 
 .star-memory-map button {
@@ -856,6 +859,22 @@ body {
   box-shadow: 0 1rem 2.6rem rgb(0 0 0 / 0.22);
   cursor: pointer;
   backdrop-filter: blur(18px);
+}
+
+.star-memory-map button.star-memory-map__settings {
+  width: 2.65rem;
+  grid-template-columns: 1fr;
+  place-items: center;
+  min-height: 2.45rem;
+  padding: 0;
+  color: var(--chat-ink-soft);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.star-memory-map__settings-label {
+  display: block;
+  line-height: 1;
 }
 
 .star-memory-map strong,
@@ -923,6 +942,12 @@ body {
   color: var(--chat-ink);
 }
 
+.agent-core-panel--embedded {
+  position: static;
+  z-index: auto;
+  justify-items: stretch;
+}
+
 .agent-core-panel__trigger {
   min-height: 2.35rem;
   border: 1px solid rgb(255 244 231 / 0.16);
@@ -949,6 +974,12 @@ body {
   background: var(--chat-surface-soft);
   box-shadow: 0 1.4rem 3.4rem rgb(0 0 0 / 0.28);
   backdrop-filter: blur(18px);
+}
+
+.agent-core-panel--embedded .agent-core-panel__sheet {
+  width: 100%;
+  max-height: none;
+  box-shadow: none;
 }
 
 .agent-core-panel__sheet header {
@@ -997,6 +1028,35 @@ body {
   padding: 0.24rem 0.58rem;
   color: var(--chat-ink-soft);
   font-size: 0.75rem;
+}
+
+.agent-core-panel__status {
+  display: grid;
+  gap: 0.42rem;
+  margin: 0;
+}
+
+.agent-core-panel__status div {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.agent-core-panel__status dt,
+.agent-core-panel__status dd {
+  margin: 0;
+}
+
+.agent-core-panel__status dt {
+  color: var(--chat-ink-soft);
+  font-size: 0.75rem;
+}
+
+.agent-core-panel__status dd {
+  min-width: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
 }
 
 .agent-core-panel__sheet section {
@@ -1060,6 +1120,185 @@ body {
 .agent-core-panel__proposals button:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.memory-planet-panel {
+  position: fixed;
+  top: max(4.8rem, env(safe-area-inset-top));
+  right: clamp(1rem, 3vw, 2rem);
+  z-index: 4;
+  display: grid;
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: min(35rem, calc(100vh - 7rem));
+  gap: 0.85rem;
+  overflow: auto;
+  border: 1px solid rgb(255 244 231 / 0.14);
+  border-radius: 0.85rem;
+  padding: 0.9rem;
+  color: var(--chat-ink);
+  background: var(--chat-surface-soft);
+  box-shadow: 0 1.4rem 3.4rem rgb(0 0 0 / 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.memory-planet-panel header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.memory-planet-panel header p,
+.memory-planet-panel__detail p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.memory-planet-panel header span,
+.memory-planet-panel__detail span {
+  color: var(--chat-ink-soft);
+  font-size: 0.78rem;
+}
+
+.memory-planet-panel header button {
+  display: grid;
+  width: 2rem;
+  min-height: 2rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.7rem;
+  color: var(--chat-ink);
+  background: rgb(255 255 255 / 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.05rem;
+}
+
+.memory-planet-panel__layout {
+  display: grid;
+  grid-template-columns: minmax(17rem, 1.05fr) minmax(15rem, 0.95fr);
+  gap: 0.85rem;
+  align-items: stretch;
+  min-height: min(25rem, calc(100dvh - 15rem));
+}
+
+.memory-planet-panel__ai {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.memory-planet-panel__ai .agent-core-panel,
+.memory-planet-panel__ai .agent-core-panel__sheet {
+  height: 100%;
+  min-height: 0;
+}
+
+.memory-planet-stage {
+  position: relative;
+  min-height: 17rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 244 231 / 0.12);
+  border-radius: 0.8rem;
+  background:
+    radial-gradient(circle at 50% 50%, rgb(255 231 185 / 0.18), transparent 5.5rem),
+    radial-gradient(circle at 34% 28%, rgb(160 198 255 / 0.12), transparent 6.5rem),
+    rgb(255 255 255 / 0.05);
+}
+
+.memory-planet-stage__core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5.2rem;
+  height: 5.2rem;
+  border: 1px solid rgb(255 244 231 / 0.18);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 38% 32%, rgb(255 252 232 / 0.88), rgb(255 218 166 / 0.22) 42%, rgb(160 198 255 / 0.1));
+  box-shadow:
+    0 0 2rem rgb(255 231 185 / 0.18),
+    inset 0 0 1.4rem rgb(255 255 255 / 0.18);
+  transform: translate(-50%, -50%);
+}
+
+.memory-planet-stage__orbit-ring {
+  position: absolute;
+  inset: 19%;
+  border: 1px solid rgb(255 244 231 / 0.16);
+  border-radius: 50%;
+  transform: rotate(-12deg);
+}
+
+.memory-planet-stage__orbit-ring[data-status="applied"] {
+  inset: 13%;
+  border-color: rgb(160 198 255 / 0.18);
+  transform: rotate(16deg);
+}
+
+.memory-planet-stage__nebula {
+  position: absolute;
+  top: var(--planet-y);
+  left: var(--planet-x);
+  width: 4.4rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(160 198 255 / 0.24), transparent 72%);
+  filter: blur(0.2rem);
+  transform: translate(-50%, -50%) rotate(-12deg);
+}
+
+.memory-planet-stage__memory,
+.memory-planet-stage__proposal {
+  position: absolute;
+  top: var(--planet-y);
+  left: var(--planet-x);
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+
+.memory-planet-stage__memory span,
+.memory-planet-stage__proposal span {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: rgb(255 246 221 / 0.9);
+  box-shadow: 0 0 0.8rem rgb(255 231 185 / 0.68);
+}
+
+.memory-planet-stage__memory--bright span {
+  width: 0.58rem;
+  height: 0.58rem;
+  background: rgb(255 251 226 / 0.98);
+  box-shadow:
+    0 0 0.9rem rgb(255 231 185 / 0.78),
+    0 0 1.8rem rgb(160 198 255 / 0.28);
+}
+
+.memory-planet-stage__proposal span {
+  background: rgb(160 198 255 / 0.96);
+  box-shadow: 0 0 0.9rem rgb(160 198 255 / 0.76);
+}
+
+.memory-planet-panel__detail {
+  display: grid;
+  gap: 0.38rem;
+  min-height: 4.5rem;
+  border-top: 1px solid rgb(255 244 231 / 0.1);
+  padding-top: 0.75rem;
+  line-height: 1.55;
+}
+
+.memory-planet-panel__detail strong {
+  font-size: 0.88rem;
 }
 
 .letter-scene {
@@ -2140,6 +2379,28 @@ body {
     padding: 0.42rem 0.68rem 0.42rem 0.46rem;
   }
 
+  .star-memory-map button.star-memory-map__settings {
+    width: 2.45rem;
+    padding: 0;
+  }
+
+  .memory-planet-panel {
+    top: 4.25rem;
+    right: 0.85rem;
+    width: calc(100vw - 1.7rem);
+    max-height: calc(100dvh - 8.25rem);
+  }
+
+  .memory-planet-panel__layout {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .memory-planet-panel__ai .agent-core-panel__sheet {
+    height: auto;
+    max-height: min(24rem, calc(100dvh - 18rem));
+  }
+
   .star-memory-map__constellation {
     width: 1.9rem;
     height: 1.9rem;
@@ -2303,16 +2564,6 @@ body {
   pointer-events: auto;
 }
 
-.star-orbit-stage .star-chat__messages {
-  display: block;
-  max-height: none;
-  padding: 0;
-  overflow: visible;
-  opacity: 1;
-  mask-image: none;
-  transform: none;
-}
-
 .star-orbit-stage__field::before {
   position: absolute;
   inset: 4% 3% 14%;
@@ -2352,7 +2603,8 @@ body {
   top: var(--orbit-y);
   z-index: 1;
   display: grid;
-  width: min(28rem, 34vw);
+  box-sizing: border-box;
+  width: min(24rem, 30vw);
   gap: 0.6rem;
   color: var(--chat-thread-ink);
   line-height: 1.78;
@@ -2432,6 +2684,8 @@ body {
 
 .star-orbit-group__assistant {
   justify-self: start;
+  box-sizing: border-box;
+  max-width: min(100%, calc(100vw - 3rem));
   max-height: min(12rem, 25vh);
   overflow: auto;
   padding: 0.58rem 0.72rem 0.62rem 0.86rem;
@@ -2509,7 +2763,9 @@ body {
 .star-orbit-group__media {
   display: grid;
   gap: 0.48rem;
-  width: min(100%, 24rem);
+  width: min(100%, 20rem);
+  max-width: 100%;
+  overflow: hidden;
   margin-top: 0.55rem;
 }
 
@@ -2592,8 +2848,8 @@ body {
 
 .star-memory-popover {
   position: absolute;
-  right: clamp(1rem, 6vw, 5rem);
-  bottom: clamp(1rem, 8vh, 5rem);
+  top: var(--memory-popover-y);
+  left: var(--memory-popover-x);
   z-index: 3;
   display: grid;
   overflow: hidden;
@@ -2610,6 +2866,7 @@ body {
     inset 0 1px 0 rgb(255 255 255 / 0.12),
     0 1.2rem 3rem rgb(0 0 0 / 0.22);
   backdrop-filter: blur(18px);
+  transform: translate(var(--memory-popover-translate-x, 1rem), -50%);
 }
 
 .star-memory-popover::before {
@@ -2675,7 +2932,8 @@ body {
   position: relative;
   display: grid;
   gap: 0.45rem;
-  width: min(100%, 23rem);
+  width: min(100%, 20rem);
+  max-width: 100%;
   margin: 0;
 }
 
@@ -3028,11 +3286,13 @@ body {
 }
 
 .star-audio-player {
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: 2.45rem minmax(0, 1fr) 2.25rem;
   align-items: center;
   gap: 0.7rem;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   border: 1px solid rgb(255 244 231 / 0.2);
   border-radius: 1rem;
@@ -3632,7 +3892,9 @@ body {
   .star-orbit-group__core,
   .star-orbit-group__status::before,
   .star-memory-popover::before,
-  .star-magic-stage__constellation span {
+  .star-magic-stage__constellation span,
+  .memory-planet-stage__memory span,
+  .memory-planet-stage__proposal span {
     animation: none;
   }
 
