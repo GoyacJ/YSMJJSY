@@ -933,7 +933,7 @@ body {
 
 .agent-core-panel {
   position: fixed;
-  top: max(4.4rem, env(safe-area-inset-top));
+  top: max(4.55rem, calc(env(safe-area-inset-top) + 3.7rem));
   right: clamp(1rem, 3vw, 2rem);
   z-index: 3;
   display: grid;
@@ -2462,6 +2462,17 @@ body {
   .star-memory-map button.star-memory-map__settings {
     width: 2.45rem;
     padding: 0;
+  }
+
+  .agent-core-panel {
+    top: max(4.35rem, calc(env(safe-area-inset-top) + 3.35rem));
+    right: 0.85rem;
+  }
+
+  .agent-core-panel__trigger {
+    min-height: 2.15rem;
+    padding: 0 0.68rem;
+    font-size: 0.74rem;
   }
 
   .memory-planet-panel {

@@ -131,11 +131,10 @@ onMounted(() => {
       v-if="!embedded"
       type="button"
       class="agent-core-panel__trigger"
-      aria-label="打开 Agent Core"
       :aria-expanded="open"
       @click="openPanel"
     >
-      星AI
+      打开星AI
     </button>
 
     <section v-if="panelOpen" class="agent-core-panel__sheet">
@@ -144,7 +143,7 @@ onMounted(() => {
           <p>星AI</p>
           <span v-if="core">{{ core.profile.assistantName }} · {{ core.profile.mbti }}</span>
         </div>
-        <button v-if="!embedded" type="button" aria-label="关闭星AI" @click="open = false">
+        <button v-if="!embedded" type="button" aria-label="关闭面板" @click="open = false">
           ×
         </button>
       </header>

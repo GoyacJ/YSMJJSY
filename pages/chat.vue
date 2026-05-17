@@ -57,6 +57,11 @@ onMounted(async () => {
         @open-planet="openMemoryPlanet"
         @open-settings="profileSettingsOpen = true"
       />
+      <AgentCorePanel
+        :load-core="loadAgentCore"
+        :apply-proposal="applyAgentCoreProposal"
+        :run-sleep="runSleep"
+      />
       <MemoryPlanetPanel
         :core="agentCore"
         :open="memoryPlanetOpen"

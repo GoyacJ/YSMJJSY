@@ -73,9 +73,9 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    expect(wrapper.get('button[aria-label="打开 Agent Core"]').text()).toBe('星AI')
+    expect(wrapper.get('button.agent-core-panel__trigger').text()).toBe('打开星AI')
 
-    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('星AI')
@@ -105,7 +105,7 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
     await wrapper.get('button[aria-label="接受提案"]').trigger('click')
 
@@ -121,7 +121,7 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
     await wrapper.get('button[aria-label="拒绝提案"]').trigger('click')
 
@@ -164,7 +164,7 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('还没有反思')
@@ -183,7 +183,7 @@ describe('AgentCorePanel', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('button[aria-label="打开 Agent Core"]').exists()).toBe(false)
+    expect(wrapper.find('button.agent-core-panel__trigger').exists()).toBe(false)
     expect(wrapper.text()).toContain('星AI')
     expect(wrapper.text()).not.toContain('智能体核心')
     expect(wrapper.text()).toContain('回复更短。')
@@ -203,7 +203,7 @@ describe('AgentCorePanel', () => {
       props: { loadCore, runSleep, applyProposal: vi.fn() },
     })
 
-    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('睡眠周期')
