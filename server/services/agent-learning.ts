@@ -1,7 +1,7 @@
 import type { MiniMaxMessage } from './minimax'
 import { normalizeMemory, shouldPersistMemory, type NormalizedMemory } from './memory'
 
-export type AgentEvolutionProposalType = 'tone' | 'relationship_role' | 'content_strategy'
+export type AgentEvolutionProposalType = 'tone' | 'relationship_role' | 'content_strategy' | 'memory_weight' | 'page_design'
 
 export type ParsedAgentEvolutionProposal = {
   type: AgentEvolutionProposalType
@@ -16,6 +16,22 @@ export type ParsedAgentReflection = {
   proposals: ParsedAgentEvolutionProposal[]
 }
 
+export type ParsedAgentSleepResult = {
+  dailySummary: string
+  memoryActions: Array<{
+    memoryId: string
+    action: 'confirm' | 'downgrade' | 'archive' | 'reject'
+    reason: string
+  }>
+  proposals: ParsedAgentEvolutionProposal[]
+  workIdeas: Array<{
+    type: 'letter' | 'image' | 'music' | 'video' | 'page_design'
+    title: string
+    summary: string
+  }>
+  nextConversationHints: string[]
+}
+
 type BuildAgentReflectionMessagesInput = {
   userMessage: string
   assistantReply: string
@@ -28,7 +44,28 @@ type BuildAgentReflectionMessagesInput = {
   }
 }
 
-const allowedProposalTypes = new Set<AgentEvolutionProposalType>(['tone', 'relationship_role', 'content_strategy'])
+const allowedProposalTypes = new Set<AgentEvolutionProposalType>([
+  'tone',
+  'relationship_role',
+  'content_strategy',
+  'memory_weight',
+  'page_design',
+])
+
+const allowedMemoryActions = new Set<ParsedAgentSleepResult['memoryActions'][number]['action']>([
+  'confirm',
+  'downgrade',
+  'archive',
+  'reject',
+])
+
+const allowedWorkIdeaTypes = new Set<ParsedAgentSleepResult['workIdeas'][number]['type']>([
+  'letter',
+  'image',
+  'music',
+  'video',
+  'page_design',
+])
 
 export function buildAgentReflectionMessages(input: BuildAgentReflectionMessagesInput): MiniMaxMessage[] {
   const memories = input.memories.length > 0
@@ -61,6 +98,60 @@ export function buildAgentReflectionMessages(input: BuildAgentReflectionMessages
         '',
         `用户消息：${input.userMessage}`,
         `助手回复：${input.assistantReply}`,
+      ].join('\n'),
+    },
+  ]
+}
+
+export function buildAgentSleepMessages(input: {
+  profile: { assistantName?: string, mbti?: string, tone?: string, relationshipRole?: string }
+  memories: Array<{ id: string, content: string, importance: number, confidence: number }>
+  reflections: string[]
+  recentConversation: string[]
+}): MiniMaxMessage[] {
+  const memories = input.memories.length > 0
+    ? input.memories
+        .map(memory => `- ${memory.id}: ${memory.content} importance=${memory.importance} confidence=${memory.confidence}`)
+        .join('\n')
+    : '无'
+  const reflections = input.reflections.length > 0
+    ? input.reflections.map(item => `- ${item}`).join('\n')
+    : '无'
+  const recentConversation = input.recentConversation.length > 0
+    ? input.recentConversation.map(item => `- ${item}`).join('\n')
+    : '无'
+
+  return [
+    {
+      role: 'system',
+      content: [
+        '你是这个 key 专属 AI agent 的睡眠整理模块。',
+        '只返回严格 JSON，不要 Markdown，不要解释。',
+        'JSON 格式必须是 {"dailySummary":"...","memoryActions":[],"proposals":[],"workIdeas":[],"nextConversationHints":[]}。',
+        'memoryActions action 只允许 confirm、downgrade、archive、reject。',
+        'proposal type 只允许 tone、relationship_role、content_strategy、memory_weight、page_design。',
+        'workIdeas type 只允许 letter、image、music、video、page_design。',
+        '不要决定公开任何内容。',
+        '不要输出私钥、原始会话全文、IP、session 或其他私密字段。',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        '当前 profile：',
+        `assistantName: ${input.profile.assistantName || ''}`,
+        `mbti: ${input.profile.mbti || ''}`,
+        `tone: ${input.profile.tone || ''}`,
+        `relationshipRole: ${input.profile.relationshipRole || ''}`,
+        '',
+        '已有记忆：',
+        memories,
+        '',
+        '近期反思：',
+        reflections,
+        '',
+        '近期对话摘要：',
+        recentConversation,
       ].join('\n'),
     },
   ]
@@ -132,6 +223,83 @@ export function parseAgentReflectionResult(text: string): ParsedAgentReflection 
       summary: '',
       learned: [],
       proposals: [],
+    }
+  }
+}
+
+function normalizeMemoryAction(value: unknown): ParsedAgentSleepResult['memoryActions'][number] | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+
+  const action = value as Record<string, unknown>
+  const memoryId = readString(action.memoryId)
+  const actionName = readString(action.action)
+  const reason = readString(action.reason)
+
+  if (!memoryId || !allowedMemoryActions.has(actionName as ParsedAgentSleepResult['memoryActions'][number]['action'])) {
+    return undefined
+  }
+
+  return {
+    memoryId,
+    action: actionName as ParsedAgentSleepResult['memoryActions'][number]['action'],
+    reason,
+  }
+}
+
+function normalizeWorkIdea(value: unknown): ParsedAgentSleepResult['workIdeas'][number] | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+
+  const workIdea = value as Record<string, unknown>
+  const type = readString(workIdea.type)
+  const title = readString(workIdea.title)
+  const summary = readString(workIdea.summary)
+
+  if (!allowedWorkIdeaTypes.has(type as ParsedAgentSleepResult['workIdeas'][number]['type']) || !title || !summary) {
+    return undefined
+  }
+
+  return {
+    type: type as ParsedAgentSleepResult['workIdeas'][number]['type'],
+    title,
+    summary,
+  }
+}
+
+export function parseAgentSleepResult(text: string): ParsedAgentSleepResult {
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>
+    const memoryActions = Array.isArray(parsed.memoryActions)
+      ? parsed.memoryActions.map(normalizeMemoryAction).filter(item => item !== undefined)
+      : []
+    const proposals = Array.isArray(parsed.proposals)
+      ? parsed.proposals.map(normalizeEvolutionProposal).filter(item => item !== undefined)
+      : []
+    const workIdeas = Array.isArray(parsed.workIdeas)
+      ? parsed.workIdeas.map(normalizeWorkIdea).filter(item => item !== undefined)
+      : []
+    const nextConversationHints = Array.isArray(parsed.nextConversationHints)
+      ? parsed.nextConversationHints.map(readString).filter(Boolean)
+      : []
+
+    return {
+      dailySummary: readString(parsed.dailySummary),
+      memoryActions,
+      proposals,
+      workIdeas,
+      nextConversationHints,
+    }
+  }
+  catch {
+    return {
+      dailySummary: '',
+      memoryActions: [],
+      proposals: [],
+      workIdeas: [],
+      nextConversationHints: [],
     }
   }
 }

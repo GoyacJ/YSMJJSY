@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAgentReflectionMessages,
+  parseAgentSleepResult,
   parseAgentReflectionResult,
 } from './agent-learning'
 
@@ -100,5 +101,30 @@ describe('agent learning service', () => {
     }))
 
     expect(result.learned).toEqual([])
+  })
+
+  it('parses a sleep run result', () => {
+    const result = parseAgentSleepResult(JSON.stringify({
+      dailySummary: '今天用户确认了短句偏好。',
+      memoryActions: [
+        { memoryId: 'm1', action: 'confirm', reason: '用户明确表达。' },
+      ],
+      proposals: [
+        {
+          type: 'tone',
+          title: '更短',
+          summary: '后续回复更短。',
+          payload: { tone: '更短' },
+        },
+      ],
+      workIdeas: [
+        { type: 'letter', title: '短句回信', summary: '写一封短回信。' },
+      ],
+      nextConversationHints: ['可以承接短句偏好。'],
+    }))
+
+    expect(result.dailySummary).toBe('今天用户确认了短句偏好。')
+    expect(result.memoryActions[0]).toMatchObject({ memoryId: 'm1', action: 'confirm' })
+    expect(result.proposals[0]).toMatchObject({ type: 'tone' })
   })
 })
