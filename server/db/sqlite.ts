@@ -73,6 +73,17 @@ export type AgentStateRecord = {
   updatedAt: string
 }
 
+export type AgentSleepRunRecord = {
+  id: string
+  keyId: string
+  status: 'running' | 'completed' | 'failed'
+  summary: string
+  rawJson: string
+  startedAt: string
+  completedAt?: string | null
+  error?: string | null
+}
+
 export type MediaTaskRecord = {
   id: string
   keyId?: string | null
@@ -629,6 +640,109 @@ export function createAgentStateRepository(path: string) {
         lastSleepAt: next.lastSleepAt ?? null,
         nextSleepAt: next.nextSleepAt ?? null,
       })
+    },
+  }
+}
+
+export function createAgentSleepRepository(path: string) {
+  const db = openDatabase(path)
+
+  function mapRow(row: AgentSleepRunRecord | undefined) {
+    return row
+  }
+
+  return {
+    addSleepRun(record: AgentSleepRunRecord) {
+      db.prepare(`
+        INSERT INTO agent_sleep_runs (
+          id,
+          key_id,
+          status,
+          summary,
+          raw_json,
+          started_at,
+          completed_at,
+          error
+        )
+        VALUES (
+          @id,
+          @keyId,
+          @status,
+          @summary,
+          @rawJson,
+          @startedAt,
+          @completedAt,
+          @error
+        )
+      `).run({
+        ...record,
+        completedAt: record.completedAt ?? null,
+        error: record.error ?? null,
+      })
+    },
+
+    updateSleepRun(id: string, updates: Partial<Pick<AgentSleepRunRecord, 'status' | 'summary' | 'rawJson' | 'completedAt' | 'error'>>) {
+      const current = this.getSleepRun(id)
+
+      if (!current) {
+        return
+      }
+
+      db.prepare(`
+        UPDATE agent_sleep_runs
+        SET
+          status = @status,
+          summary = @summary,
+          raw_json = @rawJson,
+          completed_at = @completedAt,
+          error = @error
+        WHERE id = @id
+      `).run({
+        id,
+        status: updates.status ?? current.status,
+        summary: updates.summary ?? current.summary,
+        rawJson: updates.rawJson ?? current.rawJson,
+        completedAt: updates.completedAt ?? current.completedAt ?? null,
+        error: updates.error ?? current.error ?? null,
+      })
+    },
+
+    getSleepRun(id: string): AgentSleepRunRecord | undefined {
+      return mapRow(db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          status,
+          summary,
+          raw_json AS rawJson,
+          started_at AS startedAt,
+          completed_at AS completedAt,
+          error
+        FROM agent_sleep_runs
+        WHERE id = ?
+      `).get(id) as AgentSleepRunRecord | undefined)
+    },
+
+    listSleepRunsByKey(keyId: string, limit = 5): AgentSleepRunRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          status,
+          summary,
+          raw_json AS rawJson,
+          started_at AS startedAt,
+          completed_at AS completedAt,
+          error
+        FROM agent_sleep_runs
+        WHERE key_id = ?
+        ORDER BY started_at DESC
+        LIMIT ?
+      `).all(keyId, limit) as AgentSleepRunRecord[]
+    },
+
+    getLatestSleepRunByKey(keyId: string): AgentSleepRunRecord | undefined {
+      return this.listSleepRunsByKey(keyId, 1)[0]
     },
   }
 }

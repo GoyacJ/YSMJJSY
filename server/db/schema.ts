@@ -57,6 +57,16 @@ export const schemaStatements = [
     next_sleep_at TEXT,
     updated_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_sleep_runs (
+    id TEXT PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    raw_json TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    error TEXT
+  )`,
   `CREATE TABLE IF NOT EXISTS media_tasks (
     id TEXT PRIMARY KEY,
     key_id TEXT,

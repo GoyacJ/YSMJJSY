@@ -5,6 +5,7 @@ import {
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
   createAgentSnapshotRepository,
+  createAgentSleepRepository,
   createAgentStateRepository,
   createAttachmentRepository,
   createConversationRepository,
@@ -46,6 +47,26 @@ describe('sqlite repositories', () => {
       keyId: 'key_1',
       tone: '更短',
       relationshipRole: '记忆星球守护者',
+    })
+  })
+
+  it('stores and lists agent sleep runs by key', () => {
+    const repo = createAgentSleepRepository(':memory:')
+
+    repo.addSleepRun({
+      id: 'sleep_1',
+      keyId: 'key_1',
+      status: 'completed',
+      summary: '整理完成。',
+      rawJson: '{}',
+      startedAt: '2026-05-17T00:00:00.000Z',
+      completedAt: '2026-05-17T00:01:00.000Z',
+      error: null,
+    })
+
+    expect(repo.listSleepRunsByKey('key_1')[0]).toMatchObject({
+      id: 'sleep_1',
+      summary: '整理完成。',
     })
   })
 
