@@ -11,6 +11,7 @@ import {
   createConversationRepository,
   createKeyProfileRepository,
   createMediaTaskRepository,
+  createMemoryEventRepository,
   createMemoryRepository,
   createUsageLimitRepository,
 } from './sqlite'
@@ -92,6 +93,26 @@ describe('sqlite repositories', () => {
       sourceAttachmentId: 'a1',
       status: 'active',
       updatedAt: '2026-05-15T00:01:00.000Z',
+    })
+  })
+
+  it('records memory governance events', () => {
+    const repo = createMemoryEventRepository(':memory:')
+
+    repo.addMemoryEvent({
+      id: 'event_1',
+      keyId: 'key_1',
+      memoryId: 'memory_1',
+      action: 'archive',
+      beforeJson: '{"status":"active"}',
+      afterJson: '{"status":"archived"}',
+      reason: '用户要求不再使用。',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    })
+
+    expect(repo.listMemoryEventsByKey('key_1')[0]).toMatchObject({
+      memoryId: 'memory_1',
+      action: 'archive',
     })
   })
 

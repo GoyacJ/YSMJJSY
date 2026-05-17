@@ -26,6 +26,19 @@ export type MemoryRecord = {
   createdAt: string
 }
 
+export type MemoryGovernanceAction = 'confirm' | 'downgrade' | 'archive' | 'reject'
+
+export type MemoryEventRecord = {
+  id: string
+  keyId: string
+  memoryId: string
+  action: MemoryGovernanceAction
+  beforeJson: string
+  afterJson: string
+  reason: string
+  createdAt: string
+}
+
 export type AgentReflectionRecord = {
   id: string
   keyId: string
@@ -300,6 +313,25 @@ export function createMemoryRepository(path: string) {
       `).all(keyId) as MemoryRecord[]
     },
 
+    getMemoryByKey(keyId: string, id: string): MemoryRecord | undefined {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          type,
+          content,
+          importance,
+          confidence,
+          source_conversation_id AS sourceConversationId,
+          source_attachment_id AS sourceAttachmentId,
+          status,
+          updated_at AS updatedAt,
+          created_at AS createdAt
+        FROM memories
+        WHERE key_id = ? AND id = ?
+      `).get(keyId, id) as MemoryRecord | undefined
+    },
+
     updateMemory(id: string, updates: {
       importance?: number
       status?: 'active' | 'archived' | 'rejected'
@@ -339,6 +371,71 @@ export function createMemoryRepository(path: string) {
         status: updates.status ?? current.status ?? 'active',
         updatedAt: updates.updatedAt,
       })
+    },
+  }
+}
+
+export function createMemoryEventRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addMemoryEvent(record: MemoryEventRecord) {
+      db.prepare(`
+        INSERT INTO memory_events (
+          id,
+          key_id,
+          memory_id,
+          action,
+          before_json,
+          after_json,
+          reason,
+          created_at
+        )
+        VALUES (
+          @id,
+          @keyId,
+          @memoryId,
+          @action,
+          @beforeJson,
+          @afterJson,
+          @reason,
+          @createdAt
+        )
+      `).run(record)
+    },
+
+    listMemoryEventsByKey(keyId: string): MemoryEventRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          memory_id AS memoryId,
+          action,
+          before_json AS beforeJson,
+          after_json AS afterJson,
+          reason,
+          created_at AS createdAt
+        FROM memory_events
+        WHERE key_id = ?
+        ORDER BY created_at DESC
+      `).all(keyId) as MemoryEventRecord[]
+    },
+
+    listMemoryEventsByMemory(memoryId: string): MemoryEventRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          memory_id AS memoryId,
+          action,
+          before_json AS beforeJson,
+          after_json AS afterJson,
+          reason,
+          created_at AS createdAt
+        FROM memory_events
+        WHERE memory_id = ?
+        ORDER BY created_at DESC
+      `).all(memoryId) as MemoryEventRecord[]
     },
   }
 }

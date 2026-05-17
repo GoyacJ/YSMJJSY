@@ -20,6 +20,16 @@ export const schemaStatements = [
     updated_at TEXT,
     created_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS memory_events (
+    id TEXT PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    before_json TEXT NOT NULL,
+    after_json TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS agent_reflections (
     id TEXT PRIMARY KEY,
     key_id TEXT NOT NULL,
