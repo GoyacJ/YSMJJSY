@@ -25,6 +25,21 @@ describe('public star scene utilities', () => {
     expect(entities[0]?.y).toBeLessThanOrEqual(700)
   })
 
+  it('marks stars that have public works', () => {
+    const entity = createPublicStarEntities([
+      {
+        id: 'key_1',
+        name: '阿月',
+        mbti: 'INTJ',
+        createdAt: '2026-05-16T00:00:00.000Z',
+        publicWorks: [{ id: 'w1', type: 'image', title: '月光图', summary: '公开作品。' }],
+      },
+    ], { width: 1000, height: 700 })[0]
+
+    expect(entity?.publicWorkCount).toBe(1)
+    expect(entity?.orbit).toBeGreaterThan(0.4)
+  })
+
   it('resolves light and dark scene modes', () => {
     expect(resolveSceneMode(false)).toBe('sky')
     expect(resolveSceneMode(true)).toBe('galaxy')

@@ -138,6 +138,7 @@ export type PublicStarRecord = {
   createdAt: string
   activityAt?: string | null
   activityKind?: KeyActivityKind | null
+  publicWorks?: Array<Pick<AgentWorkRecord, 'id' | 'type' | 'title' | 'summary'>>
 }
 
 export type KeyProfileRecord = {

@@ -5,6 +5,7 @@ export type PublicStar = {
   createdAt: string
   activityAt?: string | null
   activityKind?: 'created' | 'profile' | 'chat' | 'design' | 'media' | null
+  publicWorks?: Array<{ id: string, type: string, title: string, summary: string }>
 }
 
 export type SceneBounds = {
@@ -21,6 +22,7 @@ export type PublicStarEntity = {
   orbit: number
   activityAt?: string | null
   activityKind?: PublicStar['activityKind']
+  publicWorkCount: number
 }
 
 export type PublicStarSceneMode = 'galaxy' | 'sky'
@@ -78,7 +80,8 @@ export function createPublicStarEntities(stars: PublicStar[], bounds: SceneBound
   return stars.map((star, index) => {
     const seed = hashSeed(star.id)
     const lane = index % 10
-    const orbit = 0.28 + ((seed % 100) / 100) * 0.72
+    const publicWorkCount = star.publicWorks?.length ?? 0
+    const orbit = Math.min(1.25, 0.28 + ((seed % 100) / 100) * 0.72 + (publicWorkCount > 0 ? 0.18 : 0))
     const primary = seededUnit(seed, index + 11)
     const secondary = seededUnit(seed, index + 41)
     let x = centerX
@@ -116,6 +119,7 @@ export function createPublicStarEntities(stars: PublicStar[], bounds: SceneBound
       orbit,
       activityAt: star.activityAt ?? null,
       activityKind: star.activityKind ?? null,
+      publicWorkCount,
     }
   })
 }
@@ -146,6 +150,7 @@ export function createFlyingBirdEntities(stars: PublicStar[], bounds: SceneBound
       orbit: 0.28 + ((seed % 100) / 100) * 0.72,
       activityAt: star.activityAt ?? null,
       activityKind: star.activityKind ?? null,
+      publicWorkCount: star.publicWorks?.length ?? 0,
     }
   })
 }

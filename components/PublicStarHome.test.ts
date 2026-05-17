@@ -31,6 +31,25 @@ describe('PublicStarHome', () => {
     expect(wrapper.find('.gate-slot').exists()).toBe(true)
   })
 
+  it('renders public work counts without private payloads', () => {
+    const wrapper = mount(PublicStarHome, {
+      props: {
+        stars: [
+          {
+            id: 'key_1',
+            name: '阿月',
+            mbti: 'INTJ',
+            createdAt: '2026-05-16T00:00:00.000Z',
+            publicWorks: [{ id: 'w1', type: 'image', title: '月光图', summary: '公开作品。' }],
+          },
+        ],
+      },
+    })
+
+    expect(wrapper.text()).toContain('公开作品 1')
+    expect(wrapper.text()).not.toContain('payloadJson')
+  })
+
   it('consumes a stored new public star event', () => {
     localStorage.setItem('ysmjjsy:new-public-star', JSON.stringify({
       id: 'key_1',

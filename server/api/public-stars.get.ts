@@ -1,5 +1,5 @@
 import { defineEventHandler, getQuery } from 'h3'
-import { createKeyProfileRepository, type PublicStarRecord } from '../db/sqlite'
+import { createAgentWorkRepository, createKeyProfileRepository, type AgentWorkType, type PublicStarRecord } from '../db/sqlite'
 
 export type PublicStarResponseItem = {
   id: string
@@ -8,6 +8,12 @@ export type PublicStarResponseItem = {
   createdAt: string
   activityAt?: string | null
   activityKind?: PublicStarRecord['activityKind']
+  publicWorks: Array<{
+    id: string
+    type: AgentWorkType
+    title: string
+    summary: string
+  }>
 }
 
 export function mapPublicStar(record: PublicStarRecord): PublicStarResponseItem {
@@ -18,6 +24,12 @@ export function mapPublicStar(record: PublicStarRecord): PublicStarResponseItem 
     createdAt: record.createdAt,
     activityAt: record.activityAt ?? null,
     activityKind: record.activityKind ?? null,
+    publicWorks: (record.publicWorks ?? []).map(work => ({
+      id: work.id,
+      type: work.type,
+      title: work.title,
+      summary: work.summary,
+    })),
   }
 }
 
@@ -29,8 +41,23 @@ export default defineEventHandler((event) => {
     ? Math.min(Math.max(Math.floor(requestedLimit), 1), 120)
     : 80
   const stars = createKeyProfileRepository(config.sqlitePath).listPublicStars(limit)
+  const publicWorksByKey = new Map<string, PublicStarRecord['publicWorks']>()
+
+  for (const work of createAgentWorkRepository(config.sqlitePath).listPublicWorks(limit * 4)) {
+    const works = publicWorksByKey.get(work.keyId) ?? []
+    works.push({
+      id: work.id,
+      type: work.type,
+      title: work.title,
+      summary: work.summary,
+    })
+    publicWorksByKey.set(work.keyId, works)
+  }
 
   return {
-    stars: stars.map(mapPublicStar),
+    stars: stars.map(star => mapPublicStar({
+      ...star,
+      publicWorks: publicWorksByKey.get(star.id) ?? [],
+    })),
   }
 })

@@ -216,8 +216,9 @@ function getFlashAlpha(entity: PublicStarEntity, time: number) {
 function drawGalaxyStar(context: CanvasRenderingContext2D, entity: PublicStarEntity, time: number) {
   const pulse = isReducedMotion.value ? 0.55 : 0.55 + Math.sin(time / 520 + entity.seed) * 0.22
   const flash = getFlashAlpha(entity, time)
-  const coreRadius = 1.15 + pulse * 0.35 + flash * 1.3
-  const primaryRay = 7 + entity.orbit * 7 + flash * 10
+  const workGlow = entity.publicWorkCount > 0 ? 1 : 0
+  const coreRadius = 1.15 + pulse * 0.35 + flash * 1.3 + workGlow * 0.45
+  const primaryRay = 7 + entity.orbit * 7 + flash * 10 + workGlow * 4
   const secondaryRay = primaryRay * 0.32
   const tint = entity.seed % 3 === 0
     ? '255 226 180'
@@ -281,11 +282,12 @@ function drawGalaxyStar(context: CanvasRenderingContext2D, entity: PublicStarEnt
 function drawSkyBird(context: CanvasRenderingContext2D, entity: PublicStarEntity, time: number) {
   const flap = isReducedMotion.value ? 0.22 : Math.sin(time / 280 + entity.seed) * 0.38
   const flash = getFlashAlpha(entity, time)
+  const workGlow = entity.publicWorkCount > 0 ? 1 : 0
 
   context.save()
   context.translate(entity.x, entity.y)
-  context.strokeStyle = `rgb(24 77 117 / ${0.64 + flash * 0.3})`
-  context.lineWidth = 2
+  context.strokeStyle = `rgb(24 77 117 / ${0.64 + flash * 0.3 + workGlow * 0.12})`
+  context.lineWidth = 2 + workGlow * 0.4
   context.lineCap = 'round'
   context.shadowColor = `rgb(255 247 184 / ${flash * 0.85})`
   context.shadowBlur = flash * 24
@@ -472,6 +474,7 @@ function drawEntryEvent(context: CanvasRenderingContext2D, width: number, height
     orbit: 0,
     activityAt: null,
     activityKind: 'created',
+    publicWorkCount: 0,
   } satisfies PublicStarEntity
 
   if (currentMode === 'galaxy') {
@@ -636,6 +639,11 @@ onBeforeUnmount(() => {
 <template>
   <section class="public-star-home" :data-mode="mode" aria-label="公开星图入口">
     <canvas ref="canvas" class="public-star-home__canvas" aria-hidden="true" />
+    <div class="public-star-home__works" aria-label="公开作品">
+      <p v-for="star in stars.filter(item => item.publicWorks?.length)" :key="star.id">
+        {{ star.name }} · 公开作品 {{ star.publicWorks?.length ?? 0 }}
+      </p>
+    </div>
     <div class="public-star-home__gate">
       <slot />
     </div>
