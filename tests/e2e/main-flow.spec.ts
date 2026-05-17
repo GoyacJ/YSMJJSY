@@ -7,6 +7,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   const generatedImageUrl = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
   let sleepCompleted = false
   let workVisibility: 'private' | 'public' = 'private'
+  let rollbackRestored = false
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': forwardedIp })
 
@@ -66,6 +67,24 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
     })
   })
 
+  await page.route('**/api/agent/design-proposals/*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schema: {
+          version: 1,
+          theme: 'moon-note',
+          palette: 'midnight',
+          title: '银河信笺',
+          subtitle: '把这一页改成更像星空的样子。',
+          sections: [
+            { type: 'letter', layout: 'star-trail', text: '这是一段由设计提案生成的预览。' },
+          ],
+        },
+      }),
+    })
+  })
+
   await page.route('**/api/agent/core', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -97,6 +116,16 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             content: '用户喜欢短句。',
             importance: 0.9,
             confidence: 0.92,
+            sourceConversationId: 'conversation_1',
+            sourceExcerpt: '用户说自己喜欢短句。',
+            governanceEvents: [
+              {
+                id: 'event_1',
+                action: 'confirm',
+                reason: '用户明确表达。',
+                createdAt: '2026-05-17T00:02:00.000Z',
+              },
+            ],
             createdAt: '2026-05-17T00:00:00.000Z',
           },
         ],
@@ -111,10 +140,10 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
           pending: [
             {
               id: 'proposal_1',
-              type: 'tone',
-              title: '更短',
-              summary: '回复更短。',
-              payload: { tone: '更短' },
+              type: 'page_design',
+              title: '调整页面',
+              summary: '让页面更像星空。',
+              payload: { instruction: '更像星空' },
               status: 'pending',
               createdAt: '2026-05-17T00:00:00.000Z',
               updatedAt: '2026-05-17T00:00:00.000Z',
@@ -127,12 +156,19 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
               title: '守护者',
               summary: '关系定位为守护者。',
               payload: { relationshipRole: '守护者' },
-              status: 'accepted',
+              status: 'applied',
               createdAt: '2026-05-17T00:01:00.000Z',
               updatedAt: '2026-05-17T00:01:00.000Z',
             },
           ],
         },
+        snapshots: [
+          {
+            id: 'snapshot_1',
+            proposalId: 'proposal_2',
+            createdAt: '2026-05-17T00:01:30.000Z',
+          },
+        ],
         sleep: {
           lastSleepAt: sleepCompleted ? '2026-05-17T00:10:00.000Z' : null,
           nextSleepAt: '2026-05-17T12:00:00.000Z',
@@ -141,6 +177,9 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
                 id: 'sleep_1',
                 status: 'completed',
                 summary: '整理完成。',
+                memoryActions: [{ memoryId: 'memory_1', action: 'confirm', reason: '用户明确表达。' }],
+                workIdeas: [{ type: 'letter', title: '短句回信', summary: '写一封短回信。' }],
+                nextConversationHints: ['承接短句偏好'],
                 startedAt: '2026-05-17T00:10:00.000Z',
                 completedAt: '2026-05-17T00:10:00.000Z',
                 error: null,
@@ -179,7 +218,9 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             type: 'image',
             title: '月光图',
             summary: '一张月光星空。',
+            previewUrl: generatedImageUrl,
             visibility: workVisibility,
+            sourceConversationId: 'conversation_1',
             createdAt: '2026-05-17T00:00:00.000Z',
           },
         ],
@@ -198,6 +239,26 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             title: '形成记忆',
             summary: '用户喜欢短句。',
             createdAt: '2026-05-17T00:00:00.000Z',
+            targetId: 'memory_1',
+            targetType: 'memory',
+            importance: 'high',
+          },
+        ],
+        groups: [
+          {
+            date: '2026-05-17',
+            items: [
+              {
+                id: 't1',
+                type: 'memory',
+                title: '形成记忆',
+                summary: '用户喜欢短句。',
+                createdAt: '2026-05-17T00:00:00.000Z',
+                targetId: 'memory_1',
+                targetType: 'memory',
+                importance: 'high',
+              },
+            ],
           },
         ],
       }),
@@ -217,6 +278,14 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ id: 'proposal_1', status: 'accepted' }),
+    })
+  })
+
+  await page.route('**/api/agent/snapshots/*/restore', async (route) => {
+    rollbackRestored = true
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ restored: true, snapshotId: 'snapshot_1' }),
     })
   })
 
@@ -258,6 +327,12 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.getByRole('button', { name: '打开星AI' })).toBeVisible()
   await page.getByRole('button', { name: '打开星AI' }).click()
   await expect(page.getByLabel('星AI')).toBeVisible()
+  await page.getByRole('button', { name: '生成设计预览' }).click()
+  await expect(page.getByLabel('设计预览')).toBeVisible()
+  await expect(page.getByText('银河信笺')).toBeVisible()
+  await page.getByRole('button', { name: '放弃' }).click()
+  await page.getByRole('button', { name: '回滚提案' }).click()
+  await expect.poll(() => rollbackRestored).toBe(true)
   await page.getByRole('button', { name: '关闭面板' }).click()
   await expect(page.getByText('这里会慢慢写下只属于这把钥匙的内容。')).toHaveCount(0)
   await expect(page.locator('.star-chat__dock')).toHaveAttribute('data-mode', 'chat')
@@ -286,17 +361,25 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(planetDialog.getByText('智能体核心')).toHaveCount(0)
   await expect(planetDialog.getByText('克制、温柔、安静')).toBeVisible()
   await expect(planetDialog.getByText('用户在聊天里确认想要短句回应。')).toBeVisible()
-  await expect(planetDialog.getByText('回复更短。')).toBeVisible()
+  await expect(planetDialog.getByText('让页面更像星空。', { exact: true }).first()).toBeVisible()
   await planetDialog.getByRole('button', { name: '让智能体思考' }).click()
   await expect(planetDialog.getByText('整理完成。')).toBeVisible()
+  await expect(planetDialog.getByText('短句回信')).toBeVisible()
+  await expect(planetDialog.getByText('承接短句偏好')).toBeVisible()
   await expect(page.getByRole('button', { name: '查看记忆：用户喜欢短句。' })).toBeVisible()
   await page.getByRole('button', { name: '查看记忆：用户喜欢短句。' }).click()
   await expect(planetDialog.getByText('重要性')).toBeVisible()
+  await expect(planetDialog.getByText('来源 conversation_1')).toBeVisible()
+  await expect(planetDialog.getByText('最近治理动作 confirm · 用户明确表达。')).toBeVisible()
   await planetDialog.getByRole('button', { name: '归档记忆' }).click()
   await planetDialog.getByRole('button', { name: '查看星球时间线' }).click()
+  await expect(planetDialog.getByText('2026-05-17')).toBeVisible()
   await expect(planetDialog.getByText('形成记忆')).toBeVisible()
+  await expect(planetDialog.getByText('高信号')).toBeVisible()
   await planetDialog.getByRole('button', { name: '查看智能体作品' }).click()
   await expect(planetDialog.getByText('月光图')).toBeVisible()
+  await planetDialog.getByRole('button', { name: '查看作品：月光图' }).click()
+  await expect(planetDialog.locator('img[alt="月光图"]')).toBeVisible()
   await planetDialog.getByRole('button', { name: '公开作品' }).click()
   const planetBox = await page.locator('.memory-planet-panel').boundingBox()
   const dockBox = await page.locator('.star-chat__dock').boundingBox()
@@ -320,6 +403,13 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.getByText('银河信笺')).toBeVisible()
   await page.getByRole('button', { name: '保存这个设计' }).click()
   await expect(page.getByText('保存后，这片星空会留在这把钥匙里。')).toBeVisible()
+  const worksResponse = await page.request.get('/api/agent/works')
+  const worksBody = await worksResponse.json()
+  const committedDesignWork = worksBody.works.find((work: { type: string }) => work.type === 'page_design')
+  expect(committedDesignWork).toBeTruthy()
+  await page.request.put(`/api/agent/works/${committedDesignWork.id}`, {
+    data: { visibility: 'public' },
+  })
 
   await page.getByRole('button', { name: '打开星信设置' }).click()
   await expect(page.getByRole('dialog', { name: '星信设置' })).toBeVisible()
@@ -331,6 +421,10 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.waitForLoadState('networkidle')
   await page.goto('/')
   await page.waitForLoadState('networkidle')
+  await expect(page.getByText('公开星球')).toBeVisible()
+  await expect(page.getByText('月光 / INFJ').first()).toBeVisible()
+  await expect(page.getByText('银河信笺').first()).toBeVisible()
+  await expect(page.getByText('把页面改成银河和月光').first()).toBeVisible()
   await page.getByPlaceholder('输入钥匙').fill(key)
   await expect(page.getByPlaceholder('输入钥匙')).toHaveValue(key)
   const unlockResponse = page.waitForResponse(response =>
