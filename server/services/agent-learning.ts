@@ -1,5 +1,5 @@
 import type { MiniMaxMessage } from './minimax'
-import { isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory, type NormalizedMemory } from './memory'
+import { detectMemoryConflict, isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory, type NormalizedMemory } from './memory'
 
 export type AgentEvolutionProposalType = 'tone' | 'relationship_role' | 'content_strategy' | 'memory_weight' | 'page_design'
 
@@ -225,6 +225,10 @@ export function normalizeLearnedMemory(value: unknown): NormalizedMemory | undef
 
 export function filterRejectedLearnedMemories(memories: NormalizedMemory[], rejectedMemories: string[]) {
   return memories.filter(memory => !isSimilarRejectedMemory(memory.content, rejectedMemories))
+}
+
+export function filterConflictingLearnedMemories(memories: NormalizedMemory[], activeMemories: string[]) {
+  return memories.filter(memory => !detectMemoryConflict(memory.content, activeMemories))
 }
 
 export function parseAgentReflectionResult(text: string): ParsedAgentReflection {

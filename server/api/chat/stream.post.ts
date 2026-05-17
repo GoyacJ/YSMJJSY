@@ -33,6 +33,7 @@ import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
 import {
   buildAgentReflectionMessages,
   calculateNextSleepAt,
+  filterConflictingLearnedMemories,
   filterRejectedLearnedMemories,
   parseAgentReflectionResult,
   shouldScheduleAgentSleep,
@@ -200,7 +201,12 @@ export async function runAgentLearning(input: AgentLearningInput) {
       createdAt: now,
     })
 
-    for (const memory of filterRejectedLearnedMemories(result.learned, input.rejectedMemories ?? [])) {
+    const governedMemories = filterConflictingLearnedMemories(
+      filterRejectedLearnedMemories(result.learned, input.rejectedMemories ?? []),
+      input.existingMemories,
+    )
+
+    for (const memory of governedMemories) {
       input.memories.addMemory({
         id: nanoid(),
         keyId: input.keyId,

@@ -106,6 +106,24 @@ describe('agent learning service', () => {
     expect(result.learned).toEqual([])
   })
 
+  it('ignores learned memories below the confidence staging threshold', () => {
+    const result = parseAgentReflectionResult(JSON.stringify({
+      summary: 'summary',
+      learned: [
+        {
+          shouldRemember: true,
+          type: 'preference',
+          content: '用户喜欢长句。',
+          importance: 0.8,
+          confidence: 0.7,
+        },
+      ],
+      proposals: [],
+    }))
+
+    expect(result.learned).toEqual([])
+  })
+
   it('parses a sleep run result', () => {
     const result = parseAgentSleepResult(JSON.stringify({
       dailySummary: '今天用户确认了短句偏好。',

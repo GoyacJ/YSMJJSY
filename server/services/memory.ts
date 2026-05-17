@@ -72,6 +72,45 @@ export function isSimilarRejectedMemory(candidate: string, rejected: string[]) {
   })
 }
 
+function stripPreferenceMarkers(value: string) {
+  return normalizeComparableText(value)
+    .replace(/用户|她|他|ta|本人/g, '')
+    .replace(/不喜欢|喜欢|讨厌|偏好|不想要|想要/g, '')
+}
+
+export function detectMemoryConflict(candidate: string, activeMemories: string[]) {
+  const normalizedCandidate = normalizeComparableText(candidate)
+  const candidateSubject = stripPreferenceMarkers(candidate)
+
+  if (!normalizedCandidate || !candidateSubject) {
+    return null
+  }
+
+  const candidateNegative = normalizedCandidate.includes('不喜欢') || normalizedCandidate.includes('讨厌') || normalizedCandidate.includes('不想要')
+  const candidatePositive = !candidateNegative && (normalizedCandidate.includes('喜欢') || normalizedCandidate.includes('偏好') || normalizedCandidate.includes('想要'))
+
+  if (!candidateNegative && !candidatePositive) {
+    return null
+  }
+
+  for (const memory of activeMemories) {
+    const normalizedMemory = normalizeComparableText(memory)
+    const memorySubject = stripPreferenceMarkers(memory)
+    const memoryNegative = normalizedMemory.includes('不喜欢') || normalizedMemory.includes('讨厌') || normalizedMemory.includes('不想要')
+    const memoryPositive = !memoryNegative && (normalizedMemory.includes('喜欢') || normalizedMemory.includes('偏好') || normalizedMemory.includes('想要'))
+
+    if (!memorySubject || candidateSubject !== memorySubject) {
+      continue
+    }
+
+    if ((candidateNegative && memoryPositive) || (candidatePositive && memoryNegative)) {
+      return 'conflicting_preference'
+    }
+  }
+
+  return null
+}
+
 export function shouldPersistMemory(memory: ExtractedMemory) {
   if (!memory.shouldRemember) {
     return false
@@ -89,7 +128,7 @@ export function shouldPersistMemory(memory: ExtractedMemory) {
     return false
   }
 
-  if ((memory.confidence ?? 1) < 0.65) {
+  if ((memory.confidence ?? 1) < 0.75) {
     return false
   }
 

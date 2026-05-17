@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory } from './memory'
+import { detectMemoryConflict, isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory } from './memory'
 
 describe('memory filtering', () => {
   it('keeps explicit high-importance memories', () => {
@@ -51,6 +51,16 @@ describe('memory filtering', () => {
     })).toBe(false)
   })
 
+  it('rejects memories below the confidence staging threshold', () => {
+    expect(shouldPersistMemory({
+      shouldRemember: true,
+      type: 'event',
+      content: '用户提到一个周末安排',
+      importance: 0.8,
+      confidence: 0.7,
+    })).toBe(false)
+  })
+
   it('defaults normalized memory status to active', () => {
     expect(normalizeMemory({
       shouldRemember: true,
@@ -77,5 +87,9 @@ describe('memory filtering', () => {
 
   it('ignores unrelated rejected memory content', () => {
     expect(isSimilarRejectedMemory('用户喜欢蓝色。', ['用户喜欢短句。'])).toBe(false)
+  })
+
+  it('detects opposite preference conflicts on the same subject', () => {
+    expect(detectMemoryConflict('用户不喜欢长句。', ['用户喜欢长句。'])).toBe('conflicting_preference')
   })
 })
