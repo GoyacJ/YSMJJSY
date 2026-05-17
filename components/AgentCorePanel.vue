@@ -6,6 +6,7 @@ const props = defineProps<{
   embedded?: boolean
   loadCore?: () => Promise<AgentCore | null>
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
+  runSleep?: () => Promise<boolean>
 }>()
 
 const agentCore = useAgentCore()
@@ -18,6 +19,7 @@ const core = computed(() => loadedCore.value)
 const panelOpen = computed(() => props.embedded || open.value)
 const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
 const proposalHistory = computed(() => core.value?.proposals.history ?? [])
+const latestSleepRun = computed(() => core.value?.sleep?.latestRun ?? null)
 
 async function loadPanel() {
   pending.value = true
@@ -63,6 +65,32 @@ async function updateProposal(id: string, action: AgentCoreProposalAction) {
   }
 }
 
+async function triggerSleep() {
+  pending.value = true
+  error.value = ''
+
+  try {
+    const ok = props.runSleep
+      ? await props.runSleep()
+      : await agentCore.runSleep()
+
+    if (ok) {
+      await loadPanel()
+    }
+  }
+  catch {
+    error.value = '睡眠周期没有执行成功。'
+  }
+  finally {
+    pending.value = false
+  }
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return '未记录'
+  return value.replace('T', ' ').replace('.000Z', '')
+}
+
 function describeProposalEffect(proposal: AgentCoreProposal) {
   const tone = proposal.payload.tone
   const relationshipRole = proposal.payload.relationshipRole
@@ -103,7 +131,7 @@ onMounted(() => {
       v-if="!embedded"
       type="button"
       class="agent-core-panel__trigger"
-      aria-label="打开星AI"
+      aria-label="打开 Agent Core"
       :aria-expanded="open"
       @click="openPanel"
     >
@@ -152,6 +180,35 @@ onMounted(() => {
               <dd>{{ core.profile.learningMode }}</dd>
             </div>
           </dl>
+        </section>
+
+        <section>
+          <p class="agent-core-panel__label">
+            睡眠周期
+          </p>
+          <dl class="agent-core-panel__status">
+            <div>
+              <dt>上次思考</dt>
+              <dd>{{ formatTime(core.sleep?.lastSleepAt) }}</dd>
+            </div>
+            <div>
+              <dt>下次提醒</dt>
+              <dd>{{ formatTime(core.sleep?.nextSleepAt) }}</dd>
+            </div>
+            <div v-if="latestSleepRun">
+              <dt>最近报告</dt>
+              <dd>{{ latestSleepRun.summary || latestSleepRun.status }}</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            class="agent-core-panel__action"
+            aria-label="让智能体思考"
+            :disabled="pending"
+            @click="triggerSleep"
+          >
+            {{ pending ? '正在思考' : '让它想一会儿' }}
+          </button>
         </section>
 
         <section>

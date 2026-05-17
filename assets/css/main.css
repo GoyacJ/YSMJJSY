@@ -1122,6 +1122,24 @@ body {
   opacity: 0.65;
 }
 
+.agent-core-panel__action {
+  min-height: 2rem;
+  justify-self: start;
+  border: 1px solid rgb(255 244 231 / 0.14);
+  border-radius: 999px;
+  padding: 0 0.68rem;
+  color: #1d1b28;
+  background: #f6dfb2;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.agent-core-panel__action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .memory-planet-panel {
   position: fixed;
   top: max(4.8rem, env(safe-area-inset-top));

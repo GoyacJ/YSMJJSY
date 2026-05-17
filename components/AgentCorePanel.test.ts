@@ -15,6 +15,7 @@ const core = {
     tone: '克制、温柔、安静',
     relationshipRole: '记忆星球守护者',
     learningMode: '辅助学习',
+    contentStrategy: {},
   },
   memoryCounts: {
     total: 3,
@@ -56,6 +57,11 @@ const core = {
       },
     ],
   },
+  sleep: {
+    lastSleepAt: null,
+    nextSleepAt: '2026-05-17T12:00:00.000Z',
+    latestRun: null,
+  },
 }
 
 describe('AgentCorePanel', () => {
@@ -67,9 +73,9 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    expect(wrapper.get('button[aria-label="打开星AI"]').text()).toBe('星AI')
+    expect(wrapper.get('button[aria-label="打开 Agent Core"]').text()).toBe('星AI')
 
-    await wrapper.get('button[aria-label="打开星AI"]').trigger('click')
+    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('星AI')
@@ -99,7 +105,7 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="打开星AI"]').trigger('click')
+    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
     await flushPromises()
     await wrapper.get('button[aria-label="接受提案"]').trigger('click')
 
@@ -115,7 +121,7 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="打开星AI"]').trigger('click')
+    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
     await flushPromises()
     await wrapper.get('button[aria-label="拒绝提案"]').trigger('click')
 
@@ -134,6 +140,7 @@ describe('AgentCorePanel', () => {
             tone: '克制、温柔、安静',
             relationshipRole: '记忆星球守护者',
             learningMode: '辅助学习',
+            contentStrategy: {},
           },
           memoryCounts: {
             total: 0,
@@ -147,12 +154,17 @@ describe('AgentCorePanel', () => {
             pending: [],
             history: [],
           },
+          sleep: {
+            lastSleepAt: null,
+            nextSleepAt: null,
+            latestRun: null,
+          },
         }),
         applyProposal: vi.fn(),
       },
     })
 
-    await wrapper.get('button[aria-label="打开星AI"]').trigger('click')
+    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('还没有反思')
@@ -171,9 +183,31 @@ describe('AgentCorePanel', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('button[aria-label="打开星AI"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="打开 Agent Core"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('星AI')
     expect(wrapper.text()).not.toContain('智能体核心')
     expect(wrapper.text()).toContain('回复更短。')
+  })
+
+  it('shows sleep status and can trigger a sleep run', async () => {
+    const loadCore = vi.fn(async () => ({
+      ...core,
+      sleep: {
+        lastSleepAt: null,
+        nextSleepAt: '2026-05-17T12:00:00.000Z',
+        latestRun: null,
+      },
+    }))
+    const runSleep = vi.fn(async () => true)
+    const wrapper = mount(AgentCorePanel, {
+      props: { loadCore, runSleep, applyProposal: vi.fn() },
+    })
+
+    await wrapper.get('button[aria-label="打开 Agent Core"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('睡眠周期')
+    await wrapper.get('button[aria-label="让智能体思考"]').trigger('click')
+    expect(runSleep).toHaveBeenCalled()
   })
 })

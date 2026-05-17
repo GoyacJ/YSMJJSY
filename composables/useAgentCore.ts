@@ -53,6 +53,18 @@ export type AgentCore = {
     pending: AgentCoreProposal[]
     history: AgentCoreProposal[]
   }
+  sleep?: {
+    lastSleepAt?: string | null
+    nextSleepAt?: string | null
+    latestRun?: {
+      id: string
+      status: 'running' | 'completed' | 'failed'
+      summary: string
+      startedAt: string
+      completedAt?: string | null
+      error?: string | null
+    } | null
+  }
 }
 
 export function useAgentCore() {
@@ -99,11 +111,32 @@ export function useAgentCore() {
     }
   }
 
+  async function runSleep() {
+    pending.value = true
+    error.value = ''
+
+    try {
+      await $fetch('/api/agent/sleep', {
+        method: 'POST',
+      })
+      await loadCore()
+      return true
+    }
+    catch {
+      error.value = '睡眠周期没有执行成功。'
+      return false
+    }
+    finally {
+      pending.value = false
+    }
+  }
+
   return {
     core: readonly(core),
     pending: readonly(pending),
     error: readonly(error),
     loadCore,
     applyProposal,
+    runSleep,
   }
 }
