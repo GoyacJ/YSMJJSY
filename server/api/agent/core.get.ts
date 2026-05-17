@@ -2,16 +2,19 @@ import { createError, defineEventHandler } from 'h3'
 import {
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
+  createAgentStateRepository,
   createKeyProfileRepository,
   createMemoryRepository,
   type AgentEvolutionProposalRecord,
   type AgentReflectionRecord,
+  type AgentStateRecord,
   type KeyProfileRecord,
   type MemoryRecord,
 } from '../../db/sqlite'
 
 type AgentCoreInput = {
   profile: KeyProfileRecord
+  agentState: AgentStateRecord
   memories: MemoryRecord[]
   reflections: AgentReflectionRecord[]
   proposals: AgentEvolutionProposalRecord[]
@@ -76,9 +79,10 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
       assistantName: input.profile.assistantName,
       mbti: input.profile.mbti,
       configured: Boolean(input.profile.configuredAt),
-      tone: '克制、温柔、安静',
-      relationshipRole: '记忆星球守护者',
-      learningMode: '辅助学习',
+      tone: input.agentState.tone,
+      relationshipRole: input.agentState.relationshipRole,
+      learningMode: input.agentState.learningMode,
+      contentStrategy: input.agentState.contentStrategy,
     },
     memoryCounts,
     memories: input.memories
@@ -121,6 +125,7 @@ export default defineEventHandler((event) => {
 
   return buildAgentCoreResponse({
     profile,
+    agentState: createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, new Date().toISOString()),
     memories: createMemoryRepository(config.sqlitePath).listMemoriesByKey(keyId),
     reflections: createAgentReflectionRepository(config.sqlitePath).listReflectionsByKey(keyId, 5),
     proposals: createAgentEvolutionRepository(config.sqlitePath).listProposalsByKey(keyId),

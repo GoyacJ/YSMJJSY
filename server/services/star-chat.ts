@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { Buffer } from 'node:buffer'
 import { finalConfession, letterParagraphs, memoryMoments } from '../../content/letter'
 import { starLetterPersona } from '../../content/persona'
-import type { AgentEvolutionProposalRecord, AgentReflectionRecord, ConversationRecord, MemoryRecord } from '../db/sqlite'
+import type { AgentContentStrategy, AgentEvolutionProposalRecord, AgentReflectionRecord, ConversationRecord, MemoryRecord } from '../db/sqlite'
 import { getDefaultMusicPrompt, normalizeMediaPrompt } from './media'
 import type { MiniMaxMessage, createMiniMaxClient } from './minimax'
 import type { ResolvedChatIntent } from './chat-intent'
@@ -32,6 +32,7 @@ type BuildStarChatMessagesInput = {
   mbti?: string
   tone?: string
   relationshipRole?: string
+  contentStrategy?: AgentContentStrategy
   recentReflections?: string[]
   acceptedEvolutionNotes?: string[]
   memories: string[]
@@ -116,6 +117,15 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
     '',
     ...(input.tone ? [`语气：${input.tone}`, ''] : []),
     ...(input.relationshipRole ? [`关系角色：${input.relationshipRole}`, ''] : []),
+    ...(input.contentStrategy
+      ? [
+          '内容策略：',
+          ...(input.contentStrategy.replyLength ? [`回复长度：${input.contentStrategy.replyLength}`] : []),
+          ...(input.contentStrategy.structure ? [`结构：${input.contentStrategy.structure}`] : []),
+          ...(input.contentStrategy.initiative ? [`主动性：${input.contentStrategy.initiative}`] : []),
+          '',
+        ]
+      : []),
     ...(input.recentReflections?.length
       ? ['近期反思：', input.recentReflections.map(item => `- ${item}`).join('\n'), '']
       : []),

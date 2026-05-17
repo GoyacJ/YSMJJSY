@@ -21,6 +21,23 @@ describe('star chat prompt state', () => {
     expect(system).toContain('关系角色：长期陪伴者')
   })
 
+  it('includes agent content strategy', () => {
+    const messages = buildStarChatMessages({
+      userMessage: '今天怎么聊？',
+      assistantName: '月光',
+      mbti: 'INTJ',
+      tone: '更短',
+      relationshipRole: '长期记忆守护者',
+      contentStrategy: { replyLength: 'short', structure: 'plain', initiative: 'low' },
+      memories: [],
+      recentConversation: [],
+    })
+
+    expect(messages[0].content).toContain('语气：更短')
+    expect(messages[0].content).toContain('关系角色：长期记忆守护者')
+    expect(messages[0].content).toContain('回复长度：short')
+  })
+
   it('excludes rejected proposals from accepted evolution notes', () => {
     expect(selectAcceptedEvolutionNotes([
       {

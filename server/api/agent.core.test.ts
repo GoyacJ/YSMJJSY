@@ -19,6 +19,20 @@ describe('agent core api helpers', () => {
         createdAt: '2026-05-17T00:00:00.000Z',
         updatedAt: '2026-05-17T00:00:00.000Z',
       },
+      agentState: {
+        keyId: 'key_1',
+        tone: '更短',
+        relationshipRole: '长期记忆守护者',
+        learningMode: 'assisted',
+        contentStrategy: {
+          replyLength: 'short',
+          structure: 'plain',
+          initiative: 'low',
+        },
+        lastSleepAt: null,
+        nextSleepAt: null,
+        updatedAt: '2026-05-17T00:00:00.000Z',
+      },
       memories: [
         {
           id: 'm1',
@@ -117,9 +131,14 @@ describe('agent core api helpers', () => {
         assistantName: '阿月',
         mbti: 'INTJ',
         configured: true,
-        tone: '克制、温柔、安静',
-        relationshipRole: '记忆星球守护者',
-        learningMode: '辅助学习',
+        tone: '更短',
+        relationshipRole: '长期记忆守护者',
+        learningMode: 'assisted',
+        contentStrategy: {
+          replyLength: 'short',
+          structure: 'plain',
+          initiative: 'low',
+        },
       },
       memoryCounts: {
         total: 3,

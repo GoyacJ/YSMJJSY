@@ -11,6 +11,7 @@ import {
 import {
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
+  createAgentStateRepository,
   createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
@@ -166,6 +167,7 @@ export default defineEventHandler(async (event) => {
   const memories = createMemoryRepository(config.sqlitePath)
   const reflections = createAgentReflectionRepository(config.sqlitePath)
   const proposals = createAgentEvolutionRepository(config.sqlitePath)
+  const agentState = createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, new Date().toISOString())
   const attachmentRepo = createAttachmentRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
   const usage = createUsageLimitRepository(config.sqlitePath)
@@ -231,6 +233,9 @@ export default defineEventHandler(async (event) => {
     attachmentNotes,
     assistantName: profile?.assistantName || '星信',
     mbti: profile?.mbti || 'INTJ',
+    tone: agentState.tone,
+    relationshipRole: agentState.relationshipRole,
+    contentStrategy: agentState.contentStrategy,
     recentReflections,
     acceptedEvolutionNotes,
     memories: savedMemories,
@@ -312,6 +317,8 @@ export default defineEventHandler(async (event) => {
           profile: {
             assistantName: profile?.assistantName || '星信',
             mbti: profile?.mbti || 'INTJ',
+            tone: agentState.tone,
+            relationshipRole: agentState.relationshipRole,
           },
           client,
           reflections,

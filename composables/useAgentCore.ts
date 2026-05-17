@@ -2,6 +2,12 @@ import { readonly, ref } from 'vue'
 
 export type AgentCoreProposalAction = 'accept' | 'reject'
 
+export type AgentContentStrategy = {
+  replyLength?: 'short' | 'balanced' | 'rich'
+  structure?: 'plain' | 'letter' | 'checklist'
+  initiative?: 'low' | 'medium'
+}
+
 export type AgentCoreProposal = {
   id: string
   type: string
@@ -22,6 +28,7 @@ export type AgentCore = {
     tone: string
     relationshipRole: string
     learningMode: string
+    contentStrategy: AgentContentStrategy
   }
   memoryCounts: {
     total: number
