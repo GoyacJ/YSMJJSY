@@ -72,6 +72,14 @@ export function applyAgentProposalAction(input: ApplyAgentProposalActionInput) {
 
   const payload = parsePayload(proposal.payloadJson)
 
+  if (proposal.type === 'page_design') {
+    return {
+      id: proposal.id,
+      status: 'pending',
+      requiresPreview: true,
+    }
+  }
+
   input.snapshots.addSnapshot({
     id: nanoid(),
     keyId: input.keyId,
@@ -125,18 +133,6 @@ export function applyAgentProposalAction(input: ApplyAgentProposalActionInput) {
       })
     }
   }
-  else if (proposal.type === 'page_design') {
-    input.proposals.updateProposal(proposal.id, {
-      status: 'rejected',
-      updatedAt: input.now,
-    })
-
-    return {
-      id: proposal.id,
-      status: 'rejected',
-    }
-  }
-
   input.proposals.updateProposal(proposal.id, {
     status: 'applied',
     updatedAt: input.now,

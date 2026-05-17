@@ -10,6 +10,7 @@ const props = defineProps<{
   governMemory?: (id: string, action: MemoryGovernanceAction) => Promise<boolean>
   loadCore?: () => Promise<AgentCore | null>
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
+  previewDesignProposal?: (id: string) => Promise<boolean>
   runSleep?: () => Promise<boolean>
   timeline?: AgentTimelineItem[]
   works?: AgentWorkItem[]
@@ -118,6 +119,7 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
           embedded
           :load-core="loadCore"
           :apply-proposal="applyProposal"
+          :preview-design-proposal="previewDesignProposal"
           :run-sleep="runSleep"
         />
       </section>

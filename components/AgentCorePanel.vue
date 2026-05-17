@@ -6,6 +6,7 @@ const props = defineProps<{
   embedded?: boolean
   loadCore?: () => Promise<AgentCore | null>
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
+  previewDesignProposal?: (id: string) => Promise<boolean>
   runSleep?: () => Promise<boolean>
 }>()
 
@@ -59,6 +60,29 @@ async function updateProposal(id: string, action: AgentCoreProposalAction) {
   }
   catch {
     error.value = '提案没有更新成功。'
+  }
+  finally {
+    pending.value = false
+  }
+}
+
+async function previewProposal(id: string) {
+  if (!props.previewDesignProposal) {
+    return
+  }
+
+  pending.value = true
+  error.value = ''
+
+  try {
+    const ok = await props.previewDesignProposal(id)
+
+    if (!ok) {
+      error.value = '设计提案预览没有生成成功。'
+    }
+  }
+  catch {
+    error.value = '设计提案预览没有生成成功。'
   }
   finally {
     pending.value = false
@@ -233,7 +257,17 @@ onMounted(() => {
               <strong>{{ proposal.title }}</strong>
               <span>{{ proposal.summary }}</span>
               <span>接受后：{{ describeProposalEffect(proposal) }}</span>
-              <div>
+              <div v-if="proposal.type === 'page_design'">
+                <button
+                  type="button"
+                  aria-label="生成设计预览"
+                  :disabled="pending"
+                  @click="previewProposal(proposal.id)"
+                >
+                  生成预览
+                </button>
+              </div>
+              <div v-else>
                 <button
                   type="button"
                   aria-label="接受提案"

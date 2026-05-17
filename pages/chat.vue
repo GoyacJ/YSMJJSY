@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { StarChatMessage } from '../composables/useStarChat'
+import type { StarPageDesignSchema } from '../types/design-schema'
 
 const {
   previewSchema,
@@ -15,6 +16,7 @@ const {
   works: agentWorks,
   loadCore: loadAgentCore,
   applyProposal: applyAgentCoreProposal,
+  previewDesignProposal,
   runSleep,
   governMemory,
   loadTimeline,
@@ -24,10 +26,55 @@ const {
 const chatMessages = ref<StarChatMessage[]>([])
 const profileSettingsOpen = ref(false)
 const memoryPlanetOpen = ref(false)
+const designProposalPreview = ref<{ proposalId: string, schema: StarPageDesignSchema } | null>(null)
+const activePreviewSchema = computed(() => designProposalPreview.value?.schema ?? previewSchema.value)
 
 async function openMemoryPlanet() {
   memoryPlanetOpen.value = true
   await loadAgentCore()
+}
+
+async function previewAgentDesignProposal(id: string) {
+  const result = await previewDesignProposal(id)
+
+  if (!result) {
+    return false
+  }
+
+  designProposalPreview.value = {
+    proposalId: id,
+    schema: result.schema,
+  }
+  return true
+}
+
+async function confirmDesignPreview() {
+  if (designProposalPreview.value) {
+    const preview = designProposalPreview.value
+
+    await $fetch('/api/design/commit', {
+      method: 'POST',
+      body: {
+        schema: preview.schema,
+        proposalId: preview.proposalId,
+      },
+    })
+    designProposalPreview.value = null
+    await loadDesign()
+    await loadAgentCore()
+    return
+  }
+
+  await commitDesign()
+}
+
+function discardActivePreview() {
+  if (designProposalPreview.value) {
+    designProposalPreview.value = null
+    return
+  }
+
+  discardPreview()
 }
 
 onMounted(async () => {
@@ -60,6 +107,7 @@ onMounted(async () => {
       <AgentCorePanel
         :load-core="loadAgentCore"
         :apply-proposal="applyAgentCoreProposal"
+        :preview-design-proposal="previewAgentDesignProposal"
         :run-sleep="runSleep"
       />
       <MemoryPlanetPanel
@@ -68,6 +116,7 @@ onMounted(async () => {
         :govern-memory="governMemory"
         :load-core="loadAgentCore"
         :apply-proposal="applyAgentCoreProposal"
+        :preview-design-proposal="previewAgentDesignProposal"
         :run-sleep="runSleep"
         :timeline="agentTimeline"
         :works="agentWorks"
@@ -82,10 +131,10 @@ onMounted(async () => {
         @close="profileSettingsOpen = false"
       />
       <DesignPreviewSheet
-        v-if="previewSchema"
-        :schema="previewSchema"
-        @confirm="commitDesign()"
-        @cancel="discardPreview"
+        v-if="activePreviewSchema"
+        :schema="activePreviewSchema"
+        @confirm="confirmDesignPreview"
+        @cancel="discardActivePreview"
       />
     </ClientOnly>
   </main>

@@ -1,4 +1,5 @@
 import { readonly, ref } from 'vue'
+import type { StarPageDesignSchema } from '../types/design-schema'
 
 export type AgentCoreProposalAction = 'accept' | 'reject'
 export type MemoryGovernanceAction = 'confirm' | 'downgrade' | 'archive' | 'reject'
@@ -133,6 +134,24 @@ export function useAgentCore() {
     }
   }
 
+  async function previewDesignProposal(id: string) {
+    pending.value = true
+    error.value = ''
+
+    try {
+      return await $fetch<{ schema: StarPageDesignSchema }>(`/api/agent/design-proposals/${id}`, {
+        method: 'POST',
+      })
+    }
+    catch {
+      error.value = '设计提案预览没有生成成功。'
+      return null
+    }
+    finally {
+      pending.value = false
+    }
+  }
+
   async function runSleep() {
     pending.value = true
     error.value = ''
@@ -221,6 +240,7 @@ export function useAgentCore() {
     error: readonly(error),
     loadCore,
     applyProposal,
+    previewDesignProposal,
     runSleep,
     governMemory,
     loadTimeline,

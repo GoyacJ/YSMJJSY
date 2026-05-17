@@ -332,6 +332,49 @@ describe('agent core api helpers', () => {
     })
   })
 
+  it('keeps page design proposals pending and marks them as preview-required', () => {
+    const updateProposal = vi.fn()
+    const addSnapshot = vi.fn()
+    const updateAgentState = vi.fn()
+
+    const result = applyAgentProposalAction({
+      keyId: 'key_1',
+      proposalId: 'p_design',
+      action: 'accept',
+      now: '2026-05-18T00:00:00.000Z',
+      profile: { assistantName: '月光', mbti: 'INTJ' },
+      agentState: {
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
+      proposals: {
+        listProposalsByKey: () => [{
+          id: 'p_design',
+          keyId: 'key_1',
+          type: 'page_design',
+          title: '调整页面',
+          summary: '让页面更像星空。',
+          payloadJson: JSON.stringify({ instruction: '更像星空' }),
+          status: 'pending',
+          createdAt: '2026-05-18T00:00:00.000Z',
+          updatedAt: '2026-05-18T00:00:00.000Z',
+        }],
+        updateProposal,
+      },
+      snapshots: { addSnapshot },
+      states: { updateAgentState },
+      memories: { updateMemory: vi.fn() },
+    })
+
+    expect(result?.status).toBe('pending')
+    expect(result?.requiresPreview).toBe(true)
+    expect(updateProposal).not.toHaveBeenCalled()
+    expect(addSnapshot).not.toHaveBeenCalled()
+    expect(updateAgentState).not.toHaveBeenCalled()
+  })
+
   it('rejects a proposal without writing a snapshot', () => {
     const updateProposal = vi.fn()
     const addSnapshot = vi.fn()

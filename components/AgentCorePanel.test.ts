@@ -128,6 +128,46 @@ describe('AgentCorePanel', () => {
     expect(applyProposal).toHaveBeenCalledWith('p1', 'reject')
   })
 
+  it('uses preview action for page design proposals', async () => {
+    const previewDesignProposal = vi.fn(async () => true)
+    const applyProposal = vi.fn(async () => true)
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        loadCore: async () => ({
+          ...core,
+          proposals: {
+            pending: [
+              {
+                id: 'p_design',
+                type: 'page_design',
+                title: '调整页面',
+                summary: '让页面更像星空。',
+                payload: { instruction: '更像星空' },
+                status: 'pending',
+                createdAt: '2026-05-18T00:00:00.000Z',
+                updatedAt: '2026-05-18T00:00:00.000Z',
+              },
+            ],
+            history: [],
+          },
+        }),
+        applyProposal,
+        previewDesignProposal,
+      },
+    })
+
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('生成预览')
+    expect(wrapper.find('button[aria-label="接受提案"]').exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="生成设计预览"]').trigger('click')
+
+    expect(previewDesignProposal).toHaveBeenCalledWith('p_design')
+    expect(applyProposal).not.toHaveBeenCalled()
+  })
+
   it('renders empty state without crashing', async () => {
     const wrapper = mount(AgentCorePanel, {
       props: {
