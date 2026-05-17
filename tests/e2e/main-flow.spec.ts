@@ -5,6 +5,8 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   const key = `e2e-${testInfo.project.name}-${runId}`
   const forwardedIp = `e2e-${testInfo.project.name}-${runId}`
   const generatedImageUrl = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+  let sleepCompleted = false
+  let workVisibility: 'private' | 'public' = 'private'
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': forwardedIp })
 
@@ -76,6 +78,11 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
           tone: '克制、温柔、安静',
           relationshipRole: '记忆星球守护者',
           learningMode: '辅助学习',
+          contentStrategy: {
+            replyLength: 'balanced',
+            structure: 'plain',
+            initiative: 'low',
+          },
         },
         memoryCounts: {
           total: 1,
@@ -126,7 +133,83 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             },
           ],
         },
+        sleep: {
+          lastSleepAt: sleepCompleted ? '2026-05-17T00:10:00.000Z' : null,
+          nextSleepAt: '2026-05-17T12:00:00.000Z',
+          latestRun: sleepCompleted
+            ? {
+                id: 'sleep_1',
+                status: 'completed',
+                summary: '整理完成。',
+                startedAt: '2026-05-17T00:10:00.000Z',
+                completedAt: '2026-05-17T00:10:00.000Z',
+                error: null,
+              }
+            : null,
+        },
       }),
+    })
+  })
+
+  await page.route('**/api/agent/sleep', async (route) => {
+    sleepCompleted = true
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        run: { id: 'sleep_1', status: 'completed', summary: '整理完成。' },
+        proposals: [],
+      }),
+    })
+  })
+
+  await page.route('**/api/agent/memories/*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'memory_1', status: 'archived', importance: 0.9 }),
+    })
+  })
+
+  await page.route('**/api/agent/works', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        works: [
+          {
+            id: 'work_1',
+            type: 'image',
+            title: '月光图',
+            summary: '一张月光星空。',
+            visibility: workVisibility,
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/agent/timeline', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          {
+            id: 't1',
+            type: 'memory',
+            title: '形成记忆',
+            summary: '用户喜欢短句。',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/agent/works/*', async (route) => {
+    const body = route.request().postDataJSON()
+    workVisibility = body.visibility
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'work_1', visibility: workVisibility }),
     })
   })
 
@@ -201,7 +284,17 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(planetDialog.getByText('克制、温柔、安静')).toBeVisible()
   await expect(planetDialog.getByText('用户在聊天里确认想要短句回应。')).toBeVisible()
   await expect(planetDialog.getByText('回复更短。')).toBeVisible()
+  await planetDialog.getByRole('button', { name: '让智能体思考' }).click()
+  await expect(planetDialog.getByText('整理完成。')).toBeVisible()
   await expect(page.getByRole('button', { name: '查看记忆：用户喜欢短句。' })).toBeVisible()
+  await page.getByRole('button', { name: '查看记忆：用户喜欢短句。' }).click()
+  await expect(planetDialog.getByText('重要性')).toBeVisible()
+  await planetDialog.getByRole('button', { name: '归档记忆' }).click()
+  await planetDialog.getByRole('button', { name: '查看星球时间线' }).click()
+  await expect(planetDialog.getByText('形成记忆')).toBeVisible()
+  await planetDialog.getByRole('button', { name: '查看智能体作品' }).click()
+  await expect(planetDialog.getByText('月光图')).toBeVisible()
+  await planetDialog.getByRole('button', { name: '公开作品' }).click()
   const planetBox = await page.locator('.memory-planet-panel').boundingBox()
   const dockBox = await page.locator('.star-chat__dock').boundingBox()
   expect(planetBox).not.toBeNull()
