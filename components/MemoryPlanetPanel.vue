@@ -25,11 +25,26 @@ defineEmits<{
 
 const selectedMemoryId = ref<string | null>(null)
 const selectedProposalId = ref<string | null>(null)
+const selectedWorkId = ref<string | null>(null)
+const workFilter = ref('all')
 const activeView = ref<'planet' | 'timeline' | 'works'>('planet')
 const state = computed(() => buildMemoryPlanetState(props.core))
 const selectedMemory = computed(() => props.core?.memories.find(memory => memory.id === selectedMemoryId.value))
 const selectedProposal = computed(() => state.value.proposalLights.find(proposal => proposal.id === selectedProposalId.value))
+const filteredWorks = computed(() => {
+  const works = props.works ?? []
+  return workFilter.value === 'all' ? works : works.filter(work => work.type === workFilter.value)
+})
+const selectedWork = computed(() => (props.works ?? []).find(work => work.id === selectedWorkId.value))
 const latestMemoryGovernanceEvent = computed(() => selectedMemory.value?.governanceEvents?.[0])
+const workFilters = [
+  { value: 'all', label: '全部', aria: '筛选全部作品' },
+  { value: 'image', label: '图片', aria: '筛选图片作品' },
+  { value: 'music', label: '音乐', aria: '筛选音乐作品' },
+  { value: 'video', label: '视频', aria: '筛选视频作品' },
+  { value: 'page_design', label: '页面', aria: '筛选页面作品' },
+  { value: 'letter', label: '文字', aria: '筛选文字作品' },
+]
 const hasPlanetContent = computed(() => {
   return state.value.memoryStars.length > 0
     || state.value.reflectionNebulas.length > 0
@@ -43,6 +58,7 @@ watch(
     if (!open) {
       selectedMemoryId.value = null
       selectedProposalId.value = null
+      selectedWorkId.value = null
     }
   },
 )
@@ -55,6 +71,10 @@ function selectMemory(id: string) {
 function selectProposal(id: string) {
   selectedProposalId.value = id
   selectedMemoryId.value = null
+}
+
+function selectWork(id: string) {
+  selectedWorkId.value = id
 }
 
 async function applyMemoryAction(action: MemoryGovernanceAction) {
@@ -80,6 +100,11 @@ async function switchView(view: 'planet' | 'timeline' | 'works') {
 async function toggleWorkVisibility(work: AgentWorkItem) {
   const nextVisibility = work.visibility === 'public' ? 'private' : 'public'
   await props.updateWorkVisibility?.(work.id, nextVisibility)
+}
+
+function getWorkSchemaTitle(work: AgentWorkItem) {
+  const payload = work.payload
+  return payload && typeof payload.title === 'string' ? payload.title : ''
 }
 </script>
 
@@ -135,14 +160,28 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
     </section>
 
     <section v-else class="memory-planet-panel__list">
-      <article v-for="work in works ?? []" :key="work.id">
-        <strong>{{ work.title }}</strong>
-        <span>{{ work.summary }}</span>
+      <div class="memory-planet-panel__filters" aria-label="作品筛选">
+        <button
+          v-for="filter in workFilters"
+          :key="filter.value"
+          type="button"
+          :aria-label="filter.aria"
+          :aria-pressed="workFilter === filter.value"
+          @click="workFilter = filter.value"
+        >
+          {{ filter.label }}
+        </button>
+      </div>
+      <article v-for="work in filteredWorks" :key="work.id">
+        <button type="button" :aria-label="`查看作品：${work.title}`" @click="selectWork(work.id)">
+          <strong>{{ work.title }}</strong>
+          <span>{{ work.summary }}</span>
+        </button>
         <button type="button" :aria-label="work.visibility === 'public' ? '设为私密作品' : '公开作品'" @click="toggleWorkVisibility(work)">
           {{ work.visibility === 'public' ? '设为私密' : '公开' }}
         </button>
       </article>
-      <p v-if="!(works ?? []).length">还没有作品</p>
+      <p v-if="!filteredWorks.length">还没有作品</p>
     </section>
 
     <section v-if="activeView === 'planet'" class="memory-planet-panel__detail">
@@ -186,6 +225,21 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
         <p>星球正在记录</p>
         <span>点亮一颗记忆星查看内容。</span>
       </template>
+    </section>
+
+    <section v-if="activeView === 'works' && selectedWork" class="memory-planet-panel__detail">
+      <p>作品</p>
+      <strong>{{ selectedWork.title }}</strong>
+      <span>{{ selectedWork.summary }}</span>
+      <span>{{ selectedWork.type }} · {{ selectedWork.visibility }}</span>
+      <span v-if="selectedWork.sourceConversationId">来源 {{ selectedWork.sourceConversationId }}</span>
+      <span v-if="selectedWork.sourceDesignVersion">设计版本 {{ selectedWork.sourceDesignVersion }}</span>
+      <img v-if="selectedWork.type === 'image' && selectedWork.previewUrl" :src="selectedWork.previewUrl" :alt="selectedWork.title">
+      <audio v-else-if="selectedWork.type === 'music' && selectedWork.previewUrl" :src="selectedWork.previewUrl" controls />
+      <video v-else-if="selectedWork.type === 'video' && selectedWork.previewUrl" :src="selectedWork.previewUrl" controls />
+      <span v-else-if="selectedWork.type === 'page_design' && getWorkSchemaTitle(selectedWork)">
+        {{ getWorkSchemaTitle(selectedWork) }}
+      </span>
     </section>
   </aside>
   </div>

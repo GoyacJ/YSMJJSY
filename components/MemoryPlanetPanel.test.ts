@@ -210,6 +210,52 @@ describe('MemoryPlanetPanel', () => {
     expect(wrapper.text()).toContain('月光图')
   })
 
+  it('selects, previews, filters, and toggles works', async () => {
+    const updateWorkVisibility = vi.fn(async () => true)
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        works: [
+          {
+            id: 'w1',
+            type: 'image',
+            title: '月光图',
+            summary: '一张图。',
+            previewUrl: 'https://example.com/moon.png',
+            visibility: 'private',
+            sourceConversationId: 'c1',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+          {
+            id: 'w2',
+            type: 'letter',
+            title: '短句回信',
+            summary: '一封短信。',
+            visibility: 'private',
+            createdAt: '2026-05-17T00:01:00.000Z',
+          },
+        ],
+        updateWorkVisibility,
+      },
+      global,
+    })
+
+    await wrapper.get('button[aria-label="查看智能体作品"]').trigger('click')
+    await wrapper.get('button[aria-label="筛选图片作品"]').trigger('click')
+
+    expect(wrapper.text()).toContain('月光图')
+    expect(wrapper.text()).not.toContain('短句回信')
+
+    await wrapper.get('button[aria-label="查看作品：月光图"]').trigger('click')
+
+    expect(wrapper.get('img[alt="月光图"]').attributes('src')).toBe('https://example.com/moon.png')
+    expect(wrapper.text()).toContain('来源 c1')
+
+    await wrapper.get('button[aria-label="公开作品"]').trigger('click')
+    expect(updateWorkVisibility).toHaveBeenCalledWith('w1', 'public')
+  })
+
   it('renders reflections, pending proposals, and accepted evolution rings', () => {
     const wrapper = mount(MemoryPlanetPanel, {
       props: {

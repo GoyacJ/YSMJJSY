@@ -1380,6 +1380,17 @@ body {
   background: #f6dfb2;
 }
 
+.memory-planet-panel__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.memory-planet-panel__filters button[aria-pressed="true"] {
+  color: #1d1b28;
+  background: #f6dfb2;
+}
+
 .memory-planet-panel__list {
   display: grid;
   gap: 0.55rem;
@@ -1392,6 +1403,27 @@ body {
   border-radius: 0.7rem;
   padding: 0.65rem;
   background: rgb(255 255 255 / 0.055);
+}
+
+.memory-planet-panel__list article > button:first-child {
+  display: grid;
+  justify-items: start;
+  height: auto;
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+}
+
+.memory-planet-panel__detail img,
+.memory-planet-panel__detail video {
+  width: 100%;
+  max-height: 12rem;
+  border-radius: 0.55rem;
+  object-fit: cover;
+}
+
+.memory-planet-panel__detail audio {
+  width: 100%;
 }
 
 .letter-scene {

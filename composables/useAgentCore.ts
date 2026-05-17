@@ -36,6 +36,9 @@ export type AgentWorkItem = {
   summary: string
   previewUrl?: string | null
   visibility: 'private' | 'public'
+  sourceConversationId?: string | null
+  sourceDesignVersion?: number | null
+  payload?: Record<string, unknown>
   createdAt: string
   updatedAt?: string
 }

@@ -14,8 +14,10 @@ describe('agent works api helpers', () => {
             type: 'image',
             title: '月光图',
             summary: '一张图。',
+            sourceConversationId: 'c1',
+            sourceDesignVersion: null,
             previewUrl: 'https://example.com/moon.png',
-            payloadJson: '{}',
+            payloadJson: '{"type":"image"}',
             visibility: 'private',
             createdAt: '2026-05-17T00:00:00.000Z',
             updatedAt: '2026-05-17T00:00:00.000Z',
@@ -25,7 +27,13 @@ describe('agent works api helpers', () => {
     })
 
     expect(result.works).toHaveLength(1)
-    expect(result.works[0]).toMatchObject({ id: 'work_1', visibility: 'private' })
+    expect(result.works[0]).toMatchObject({
+      id: 'work_1',
+      visibility: 'private',
+      sourceConversationId: 'c1',
+      sourceDesignVersion: null,
+      payload: { type: 'image' },
+    })
   })
 
   it('updates current key work visibility', () => {
