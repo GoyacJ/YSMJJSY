@@ -39,7 +39,7 @@ export type AgentEvolutionProposalRecord = {
   id: string
   keyId: string
   reflectionId?: string | null
-  type: 'tone' | 'relationship_role' | 'content_strategy'
+  type: 'tone' | 'relationship_role' | 'content_strategy' | 'memory_weight' | 'page_design'
   title: string
   summary: string
   payloadJson: string
@@ -287,6 +287,47 @@ export function createMemoryRepository(path: string) {
         WHERE key_id = ?
         ORDER BY importance DESC, created_at DESC
       `).all(keyId) as MemoryRecord[]
+    },
+
+    updateMemory(id: string, updates: {
+      importance?: number
+      status?: 'active' | 'archived' | 'rejected'
+      updatedAt: string
+    }) {
+      const current = db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          type,
+          content,
+          importance,
+          confidence,
+          source_conversation_id AS sourceConversationId,
+          source_attachment_id AS sourceAttachmentId,
+          status,
+          updated_at AS updatedAt,
+          created_at AS createdAt
+        FROM memories
+        WHERE id = ?
+      `).get(id) as MemoryRecord | undefined
+
+      if (!current) {
+        return
+      }
+
+      db.prepare(`
+        UPDATE memories
+        SET
+          importance = @importance,
+          status = @status,
+          updated_at = @updatedAt
+        WHERE id = @id
+      `).run({
+        id,
+        importance: updates.importance ?? current.importance,
+        status: updates.status ?? current.status ?? 'active',
+        updatedAt: updates.updatedAt,
+      })
     },
   }
 }

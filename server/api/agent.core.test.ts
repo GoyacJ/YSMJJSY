@@ -222,6 +222,12 @@ describe('agent core api helpers', () => {
       action: 'accept',
       now: '2026-05-17T00:10:00.000Z',
       profile: { assistantName: '阿月', mbti: 'INTJ' },
+      agentState: {
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
       proposals: {
         listProposalsByKey: () => [{
           id: 'p1',
@@ -238,11 +244,13 @@ describe('agent core api helpers', () => {
         updateProposal,
       },
       snapshots: { addSnapshot },
+      states: { updateAgentState: vi.fn() },
+      memories: { updateMemory: vi.fn() },
     })
 
-    expect(result?.status).toBe('accepted')
+    expect(result?.status).toBe('applied')
     expect(updateProposal).toHaveBeenCalledWith('p1', {
-      status: 'accepted',
+      status: 'applied',
       updatedAt: '2026-05-17T00:10:00.000Z',
     })
     expect(addSnapshot).toHaveBeenCalledWith(expect.objectContaining({
@@ -259,6 +267,49 @@ describe('agent core api helpers', () => {
     }))
   })
 
+  it('applies tone proposal into runtime state', () => {
+    const updateAgentState = vi.fn()
+    const updateProposal = vi.fn()
+    const addSnapshot = vi.fn()
+
+    const result = applyAgentProposalAction({
+      keyId: 'key_1',
+      proposalId: 'p1',
+      action: 'accept',
+      now: '2026-05-17T00:00:00.000Z',
+      profile: { assistantName: '月光', mbti: 'INTJ' },
+      agentState: {
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
+      proposals: {
+        listProposalsByKey: () => [{
+          id: 'p1',
+          keyId: 'key_1',
+          type: 'tone',
+          title: '更短',
+          summary: '回复更短。',
+          payloadJson: JSON.stringify({ tone: '更短' }),
+          status: 'pending',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        }],
+        updateProposal,
+      },
+      snapshots: { addSnapshot },
+      states: { updateAgentState },
+      memories: { updateMemory: vi.fn() },
+    })
+
+    expect(result?.status).toBe('applied')
+    expect(updateAgentState).toHaveBeenCalledWith('key_1', {
+      tone: '更短',
+      updatedAt: '2026-05-17T00:00:00.000Z',
+    })
+  })
+
   it('rejects a proposal without writing a snapshot', () => {
     const updateProposal = vi.fn()
     const addSnapshot = vi.fn()
@@ -269,6 +320,12 @@ describe('agent core api helpers', () => {
       action: 'reject',
       now: '2026-05-17T00:10:00.000Z',
       profile: { assistantName: '阿月', mbti: 'INTJ' },
+      agentState: {
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
       proposals: {
         listProposalsByKey: () => [{
           id: 'p1',
@@ -285,6 +342,8 @@ describe('agent core api helpers', () => {
         updateProposal,
       },
       snapshots: { addSnapshot },
+      states: { updateAgentState: vi.fn() },
+      memories: { updateMemory: vi.fn() },
     })
 
     expect(result?.status).toBe('rejected')
@@ -304,11 +363,19 @@ describe('agent core api helpers', () => {
       action: 'accept',
       now: '2026-05-17T00:10:00.000Z',
       profile: { assistantName: '阿月', mbti: 'INTJ' },
+      agentState: {
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
       proposals: {
         listProposalsByKey: () => [],
         updateProposal,
       },
       snapshots: { addSnapshot: vi.fn() },
+      states: { updateAgentState: vi.fn() },
+      memories: { updateMemory: vi.fn() },
     })).toBeUndefined()
     expect(updateProposal).not.toHaveBeenCalled()
   })
