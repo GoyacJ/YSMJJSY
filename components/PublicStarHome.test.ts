@@ -31,7 +31,7 @@ describe('PublicStarHome', () => {
     expect(wrapper.find('.gate-slot').exists()).toBe(true)
   })
 
-  it('renders public work counts without private payloads', () => {
+  it('renders public agent and work cards without private payloads', () => {
     const wrapper = mount(PublicStarHome, {
       props: {
         stars: [
@@ -46,7 +46,11 @@ describe('PublicStarHome', () => {
       },
     })
 
+    expect(wrapper.text()).toContain('公开星球')
+    expect(wrapper.text()).toContain('阿月 / INTJ')
     expect(wrapper.text()).toContain('公开作品 1')
+    expect(wrapper.text()).toContain('月光图')
+    expect(wrapper.text()).toContain('公开作品。')
     expect(wrapper.text()).not.toContain('payloadJson')
   })
 

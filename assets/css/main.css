@@ -254,6 +254,63 @@ body {
   padding: 2rem 1.25rem;
 }
 
+.public-star-home__works {
+  position: absolute;
+  top: clamp(1rem, 4vw, 2rem);
+  left: clamp(1rem, 4vw, 2rem);
+  z-index: 2;
+  display: grid;
+  width: min(18rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  gap: 0.65rem;
+  overflow: auto;
+  color: rgb(255 246 220 / 0.92);
+}
+
+.public-star-home__works > p {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.public-star-home__works article {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid rgb(255 246 220 / 0.16);
+  border-radius: 0.55rem;
+  padding: 0.7rem;
+  background: rgb(5 10 24 / 0.54);
+  backdrop-filter: blur(16px);
+}
+
+.public-star-home__works strong,
+.public-star-home__works span,
+.public-star-home__works small {
+  display: block;
+}
+
+.public-star-home__works article > strong {
+  font-size: 0.86rem;
+}
+
+.public-star-home__works article > span,
+.public-star-home__works small {
+  color: rgb(255 246 220 / 0.7);
+  font-size: 0.72rem;
+}
+
+.public-star-home__works ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-star-home__works li {
+  display: grid;
+  gap: 0.16rem;
+}
+
 .home-entry {
   display: grid;
   width: min(100%, 42rem);

@@ -37,6 +37,7 @@ describe('public star scene utilities', () => {
     ], { width: 1000, height: 700 })[0]
 
     expect(entity?.publicWorkCount).toBe(1)
+    expect(entity?.satelliteCount).toBe(1)
     expect(entity?.orbit).toBeGreaterThan(0.4)
   })
 

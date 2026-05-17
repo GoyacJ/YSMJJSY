@@ -640,9 +640,18 @@ onBeforeUnmount(() => {
   <section class="public-star-home" :data-mode="mode" aria-label="公开星图入口">
     <canvas ref="canvas" class="public-star-home__canvas" aria-hidden="true" />
     <div class="public-star-home__works" aria-label="公开作品">
-      <p v-for="star in stars.filter(item => item.publicWorks?.length)" :key="star.id">
-        {{ star.name }} · 公开作品 {{ star.publicWorks?.length ?? 0 }}
-      </p>
+      <p>公开星球</p>
+      <article v-for="star in stars.filter(item => item.publicWorks?.length)" :key="star.id">
+        <strong>{{ star.name }} / {{ star.mbti }}</strong>
+        <span>公开作品 {{ star.publicWorks?.length ?? 0 }}</span>
+        <ul>
+          <li v-for="work in star.publicWorks" :key="work.id">
+            <span>{{ work.type }}</span>
+            <strong>{{ work.title }}</strong>
+            <small>{{ work.summary }}</small>
+          </li>
+        </ul>
+      </article>
     </div>
     <div class="public-star-home__gate">
       <slot />
