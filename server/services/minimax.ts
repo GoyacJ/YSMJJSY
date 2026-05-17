@@ -458,6 +458,11 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       }
     },
 
+    async reflectAgent(messages: MiniMaxMessage[]): Promise<string> {
+      const result = await this.chat(messages)
+      return result.reply
+    },
+
     async generateDesignPatch(input: DesignPatchInput): Promise<unknown> {
       const result = await this.chat([
         {

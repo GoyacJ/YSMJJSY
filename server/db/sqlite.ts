@@ -15,9 +15,44 @@ export type ConversationRecord = {
 export type MemoryRecord = {
   id: string
   keyId?: string | null
-  type: 'emotion' | 'preference'
+  type: 'emotion' | 'preference' | 'event' | 'person' | 'creative_asset'
   content: string
   importance: number
+  confidence?: number
+  sourceConversationId?: string | null
+  sourceAttachmentId?: string | null
+  status?: 'active' | 'archived' | 'rejected'
+  updatedAt?: string | null
+  createdAt: string
+}
+
+export type AgentReflectionRecord = {
+  id: string
+  keyId: string
+  conversationId?: string | null
+  summary: string
+  rawJson: string
+  createdAt: string
+}
+
+export type AgentEvolutionProposalRecord = {
+  id: string
+  keyId: string
+  reflectionId?: string | null
+  type: 'tone' | 'relationship_role' | 'content_strategy'
+  title: string
+  summary: string
+  payloadJson: string
+  status: 'pending' | 'accepted' | 'rejected' | 'applied'
+  createdAt: string
+  updatedAt: string
+}
+
+export type AgentStateSnapshotRecord = {
+  id: string
+  keyId: string
+  proposalId?: string | null
+  profileJson: string
   createdAt: string
 }
 
@@ -111,6 +146,11 @@ function openDatabase(path: string) {
   ensureColumn(db, 'conversations', 'key_id', 'TEXT')
   ensureColumn(db, 'conversations', 'message_json', 'TEXT')
   ensureColumn(db, 'memories', 'key_id', 'TEXT')
+  ensureColumn(db, 'memories', 'confidence', 'REAL NOT NULL DEFAULT 1')
+  ensureColumn(db, 'memories', 'source_conversation_id', 'TEXT')
+  ensureColumn(db, 'memories', 'source_attachment_id', 'TEXT')
+  ensureColumn(db, 'memories', 'status', `TEXT NOT NULL DEFAULT 'active'`)
+  ensureColumn(db, 'memories', 'updated_at', 'TEXT')
   ensureColumn(db, 'media_tasks', 'key_id', 'TEXT')
   ensureColumn(db, 'key_profiles', 'activity_at', 'TEXT')
   ensureColumn(db, 'key_profiles', 'activity_kind', 'TEXT')
@@ -156,14 +196,57 @@ export function createMemoryRepository(path: string) {
   return {
     addMemory(record: MemoryRecord) {
       db.prepare(`
-        INSERT INTO memories (id, key_id, type, content, importance, created_at)
-        VALUES (@id, @keyId, @type, @content, @importance, @createdAt)
-      `).run({ ...record, keyId: record.keyId ?? null })
+        INSERT INTO memories (
+          id,
+          key_id,
+          type,
+          content,
+          importance,
+          confidence,
+          source_conversation_id,
+          source_attachment_id,
+          status,
+          updated_at,
+          created_at
+        )
+        VALUES (
+          @id,
+          @keyId,
+          @type,
+          @content,
+          @importance,
+          @confidence,
+          @sourceConversationId,
+          @sourceAttachmentId,
+          @status,
+          @updatedAt,
+          @createdAt
+        )
+      `).run({
+        ...record,
+        keyId: record.keyId ?? null,
+        confidence: record.confidence ?? 1,
+        sourceConversationId: record.sourceConversationId ?? null,
+        sourceAttachmentId: record.sourceAttachmentId ?? null,
+        status: record.status ?? 'active',
+        updatedAt: record.updatedAt ?? null,
+      })
     },
 
     listMemories(): MemoryRecord[] {
       return db.prepare(`
-        SELECT id, key_id AS keyId, type, content, importance, created_at AS createdAt
+        SELECT
+          id,
+          key_id AS keyId,
+          type,
+          content,
+          importance,
+          confidence,
+          source_conversation_id AS sourceConversationId,
+          source_attachment_id AS sourceAttachmentId,
+          status,
+          updated_at AS updatedAt,
+          created_at AS createdAt
         FROM memories
         ORDER BY importance DESC, created_at DESC
       `).all() as MemoryRecord[]
@@ -171,11 +254,161 @@ export function createMemoryRepository(path: string) {
 
     listMemoriesByKey(keyId: string): MemoryRecord[] {
       return db.prepare(`
-        SELECT id, key_id AS keyId, type, content, importance, created_at AS createdAt
+        SELECT
+          id,
+          key_id AS keyId,
+          type,
+          content,
+          importance,
+          confidence,
+          source_conversation_id AS sourceConversationId,
+          source_attachment_id AS sourceAttachmentId,
+          status,
+          updated_at AS updatedAt,
+          created_at AS createdAt
         FROM memories
         WHERE key_id = ?
         ORDER BY importance DESC, created_at DESC
       `).all(keyId) as MemoryRecord[]
+    },
+  }
+}
+
+export function createAgentReflectionRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addReflection(record: AgentReflectionRecord) {
+      db.prepare(`
+        INSERT INTO agent_reflections (id, key_id, conversation_id, summary, raw_json, created_at)
+        VALUES (@id, @keyId, @conversationId, @summary, @rawJson, @createdAt)
+      `).run({ ...record, conversationId: record.conversationId ?? null })
+    },
+
+    listReflectionsByKey(keyId: string, limit = 12): AgentReflectionRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          conversation_id AS conversationId,
+          summary,
+          raw_json AS rawJson,
+          created_at AS createdAt
+        FROM agent_reflections
+        WHERE key_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(keyId, limit) as AgentReflectionRecord[]
+    },
+  }
+}
+
+export function createAgentEvolutionRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addProposal(record: AgentEvolutionProposalRecord) {
+      db.prepare(`
+        INSERT INTO agent_evolution_proposals (
+          id,
+          key_id,
+          reflection_id,
+          type,
+          title,
+          summary,
+          payload_json,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          @id,
+          @keyId,
+          @reflectionId,
+          @type,
+          @title,
+          @summary,
+          @payloadJson,
+          @status,
+          @createdAt,
+          @updatedAt
+        )
+      `).run({ ...record, reflectionId: record.reflectionId ?? null })
+    },
+
+    listProposalsByKey(keyId: string, status?: AgentEvolutionProposalRecord['status']): AgentEvolutionProposalRecord[] {
+      if (status) {
+        return db.prepare(`
+          SELECT
+            id,
+            key_id AS keyId,
+            reflection_id AS reflectionId,
+            type,
+            title,
+            summary,
+            payload_json AS payloadJson,
+            status,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM agent_evolution_proposals
+          WHERE key_id = ? AND status = ?
+          ORDER BY created_at DESC
+        `).all(keyId, status) as AgentEvolutionProposalRecord[]
+      }
+
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          reflection_id AS reflectionId,
+          type,
+          title,
+          summary,
+          payload_json AS payloadJson,
+          status,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM agent_evolution_proposals
+        WHERE key_id = ?
+        ORDER BY created_at DESC
+      `).all(keyId) as AgentEvolutionProposalRecord[]
+    },
+
+    updateProposal(id: string, updates: Pick<AgentEvolutionProposalRecord, 'status' | 'updatedAt'>) {
+      db.prepare(`
+        UPDATE agent_evolution_proposals
+        SET status = @status,
+            updated_at = @updatedAt
+        WHERE id = @id
+      `).run({ id, ...updates })
+    },
+  }
+}
+
+export function createAgentSnapshotRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addSnapshot(record: AgentStateSnapshotRecord) {
+      db.prepare(`
+        INSERT INTO agent_state_snapshots (id, key_id, proposal_id, profile_json, created_at)
+        VALUES (@id, @keyId, @proposalId, @profileJson, @createdAt)
+      `).run({ ...record, proposalId: record.proposalId ?? null })
+    },
+
+    listSnapshotsByKey(keyId: string, limit = 12): AgentStateSnapshotRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          proposal_id AS proposalId,
+          profile_json AS profileJson,
+          created_at AS createdAt
+        FROM agent_state_snapshots
+        WHERE key_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(keyId, limit) as AgentStateSnapshotRecord[]
     },
   }
 }

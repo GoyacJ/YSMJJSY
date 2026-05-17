@@ -1,19 +1,32 @@
 import { nanoid } from 'nanoid'
 import { createError, defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import {
-  buildMemoryExtractionMessages,
   buildStarChatMessages,
   chatBodySchema,
+  selectAcceptedEvolutionNotes,
+  selectActiveMemoryContents,
+  selectRecentReflectionSummaries,
   streamStarChatReply,
 } from '../../services/star-chat'
-import { createAttachmentRepository, createConversationRepository, createKeyProfileRepository, createMemoryRepository, createUsageLimitRepository } from '../../db/sqlite'
+import {
+  createAgentEvolutionRepository,
+  createAgentReflectionRepository,
+  createAttachmentRepository,
+  createConversationRepository,
+  createKeyProfileRepository,
+  createMemoryRepository,
+  createUsageLimitRepository,
+  type AgentEvolutionProposalRecord,
+  type AgentReflectionRecord,
+  type MemoryRecord,
+} from '../../db/sqlite'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
 import { resolveChatIntent } from '../../services/chat-intent'
 import { createIpHash } from '../../services/key-access'
 import { markKeyActivity } from '../../services/key-activity'
-import { normalizeMemoryType, shouldPersistMemory } from '../../services/memory'
 import { createMiniMaxClient } from '../../services/minimax'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
+import { buildAgentReflectionMessages, parseAgentReflectionResult } from '../../services/agent-learning'
 
 function encodeSse(event: unknown) {
   return `data: ${JSON.stringify(event)}\n\n`
@@ -47,6 +60,89 @@ function buildUserMessageJson(content: string, attachments: Array<{ kind: 'image
   }
 }
 
+type AgentLearningInput = {
+  keyId: string
+  conversationId: string
+  userMessage: string
+  assistantReply: string
+  existingMemories: string[]
+  profile: {
+    assistantName?: string
+    mbti?: string
+    tone?: string
+    relationshipRole?: string
+  }
+  client: {
+    reflectAgent: (messages: ReturnType<typeof buildAgentReflectionMessages>) => Promise<string>
+  }
+  reflections: {
+    addReflection: (record: AgentReflectionRecord) => void
+  }
+  memories: {
+    addMemory: (record: MemoryRecord) => void
+  }
+  proposals: {
+    addProposal: (record: AgentEvolutionProposalRecord) => void
+  }
+}
+
+export async function runAgentLearning(input: AgentLearningInput) {
+  try {
+    const messages = buildAgentReflectionMessages({
+      userMessage: input.userMessage,
+      assistantReply: input.assistantReply,
+      memories: input.existingMemories,
+      profile: input.profile,
+    })
+    const rawJson = await input.client.reflectAgent(messages)
+    const result = parseAgentReflectionResult(rawJson)
+    const now = new Date().toISOString()
+    const reflectionId = nanoid()
+
+    input.reflections.addReflection({
+      id: reflectionId,
+      keyId: input.keyId,
+      conversationId: input.conversationId,
+      summary: result.summary,
+      rawJson,
+      createdAt: now,
+    })
+
+    for (const memory of result.learned) {
+      input.memories.addMemory({
+        id: nanoid(),
+        keyId: input.keyId,
+        type: memory.type,
+        content: memory.content,
+        importance: memory.importance,
+        confidence: memory.confidence,
+        sourceConversationId: input.conversationId,
+        status: memory.status,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+
+    for (const proposal of result.proposals) {
+      input.proposals.addProposal({
+        id: nanoid(),
+        keyId: input.keyId,
+        reflectionId,
+        type: proposal.type,
+        title: proposal.title,
+        summary: proposal.summary,
+        payloadJson: JSON.stringify(proposal.payload),
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+  }
+  catch {
+    // Agent learning is secondary. A failed reflection should not hide the reply.
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const keyId = event.context.keyId
@@ -68,6 +164,8 @@ export default defineEventHandler(async (event) => {
 
   const conversations = createConversationRepository(config.sqlitePath)
   const memories = createMemoryRepository(config.sqlitePath)
+  const reflections = createAgentReflectionRepository(config.sqlitePath)
+  const proposals = createAgentEvolutionRepository(config.sqlitePath)
   const attachmentRepo = createAttachmentRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
   const usage = createUsageLimitRepository(config.sqlitePath)
@@ -109,7 +207,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const recentConversation = conversations.listRecentConversationsByKey(keyId, 12)
-  const savedMemories = memories.listMemoriesByKey(keyId).map(memory => memory.content)
+  const savedMemoryRecords = memories.listMemoriesByKey(keyId)
+  const savedMemories = selectActiveMemoryContents(savedMemoryRecords)
+  const recentReflections = selectRecentReflectionSummaries(reflections.listReflectionsByKey(keyId, 5))
+  const acceptedEvolutionNotes = selectAcceptedEvolutionNotes(proposals.listProposalsByKey(keyId))
   const firstImage = body.data.attachments.find(attachment => attachment.kind === 'image')
   const imageDataUrl = body.data.imageDataUrl || firstImage?.dataUrl
   const imageDescription = imageDataUrl
@@ -130,6 +231,8 @@ export default defineEventHandler(async (event) => {
     attachmentNotes,
     assistantName: profile?.assistantName || '星信',
     mbti: profile?.mbti || 'INTJ',
+    recentReflections,
+    acceptedEvolutionNotes,
     memories: savedMemories,
     recentConversation,
   })
@@ -182,8 +285,10 @@ export default defineEventHandler(async (event) => {
           'Chat generation failed',
         )
 
+        const assistantConversationId = nanoid()
+
         conversations.addConversation({
-          id: nanoid(),
+          id: assistantConversationId,
           keyId,
           role: 'assistant',
           content: result.message.content,
@@ -198,29 +303,21 @@ export default defineEventHandler(async (event) => {
           // Public activity is secondary. A failed flash update should not hide the reply.
         }
 
-        try {
-          if (['chat', 'audio'].includes(intent) && body.data.message) {
-            const extracted = await client.extractMemory(buildMemoryExtractionMessages(body.data.message, result.reply))
-
-            for (const memory of extracted) {
-              if (!shouldPersistMemory(memory)) {
-                continue
-              }
-
-              memories.addMemory({
-                id: nanoid(),
-                keyId,
-                type: normalizeMemoryType(memory.type),
-                content: memory.content.trim(),
-                importance: memory.importance,
-                createdAt: new Date().toISOString(),
-              })
-            }
-          }
-        }
-        catch {
-          // Memory extraction is secondary. A failed extraction should not hide the reply.
-        }
+        await runAgentLearning({
+          keyId,
+          conversationId: assistantConversationId,
+          userMessage: body.data.message,
+          assistantReply: result.reply,
+          existingMemories: savedMemories,
+          profile: {
+            assistantName: profile?.assistantName || '星信',
+            mbti: profile?.mbti || 'INTJ',
+          },
+          client,
+          reflections,
+          memories,
+          proposals,
+        })
       }
       catch {
         controller.enqueue(encoder.encode(encodeSse({ type: 'error', message: '星信刚刚走神了，等一下再试。' })))

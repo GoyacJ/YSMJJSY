@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  createAgentEvolutionRepository,
+  createAgentReflectionRepository,
+  createAgentSnapshotRepository,
   createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
@@ -19,10 +22,21 @@ describe('sqlite repositories', () => {
       type: 'emotion',
       content: '她喜欢星空部分',
       importance: 0.8,
+      confidence: 0.9,
+      sourceConversationId: 'c1',
+      sourceAttachmentId: 'a1',
+      status: 'active',
+      updatedAt: '2026-05-15T00:01:00.000Z',
       createdAt: '2026-05-15T00:00:00.000Z',
     })
 
-    expect(repo.listMemories()).toHaveLength(1)
+    expect(repo.listMemories()[0]).toMatchObject({
+      confidence: 0.9,
+      sourceConversationId: 'c1',
+      sourceAttachmentId: 'a1',
+      status: 'active',
+      updatedAt: '2026-05-15T00:01:00.000Z',
+    })
   })
 
   it('creates and finds a key profile by lookup hash', () => {
@@ -184,6 +198,104 @@ describe('sqlite repositories', () => {
     })
 
     expect(repo.listMemoriesByKey('key_1').map(item => item.content)).toEqual(['key 1 memory'])
+  })
+
+  it('stores agent reflections by key', () => {
+    const repo = createAgentReflectionRepository(':memory:')
+
+    repo.addReflection({
+      id: 'reflection_1',
+      keyId: 'key_1',
+      conversationId: 'c1',
+      summary: '用户更喜欢短句。',
+      rawJson: '{"summary":"用户更喜欢短句。"}',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    })
+    repo.addReflection({
+      id: 'reflection_2',
+      keyId: 'key_2',
+      conversationId: 'c2',
+      summary: '另一个 key。',
+      rawJson: '{}',
+      createdAt: '2026-05-17T00:01:00.000Z',
+    })
+
+    expect(repo.listReflectionsByKey('key_1')).toEqual([
+      {
+        id: 'reflection_1',
+        keyId: 'key_1',
+        conversationId: 'c1',
+        summary: '用户更喜欢短句。',
+        rawJson: '{"summary":"用户更喜欢短句。"}',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    ])
+  })
+
+  it('stores, lists, and updates agent evolution proposals', () => {
+    const repo = createAgentEvolutionRepository(':memory:')
+
+    repo.addProposal({
+      id: 'proposal_1',
+      keyId: 'key_1',
+      reflectionId: 'reflection_1',
+      type: 'tone',
+      title: '更克制',
+      summary: '回复更短。',
+      payloadJson: '{"tone":"concise"}',
+      status: 'pending',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      updatedAt: '2026-05-17T00:00:00.000Z',
+    })
+
+    repo.updateProposal('proposal_1', {
+      status: 'accepted',
+      updatedAt: '2026-05-17T00:02:00.000Z',
+    })
+
+    expect(repo.listProposalsByKey('key_1')).toEqual([
+      {
+        id: 'proposal_1',
+        keyId: 'key_1',
+        reflectionId: 'reflection_1',
+        type: 'tone',
+        title: '更克制',
+        summary: '回复更短。',
+        payloadJson: '{"tone":"concise"}',
+        status: 'accepted',
+        createdAt: '2026-05-17T00:00:00.000Z',
+        updatedAt: '2026-05-17T00:02:00.000Z',
+      },
+    ])
+  })
+
+  it('stores agent state snapshots by key', () => {
+    const repo = createAgentSnapshotRepository(':memory:')
+
+    repo.addSnapshot({
+      id: 'snapshot_1',
+      keyId: 'key_1',
+      proposalId: 'proposal_1',
+      profileJson: '{"tone":"concise"}',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    })
+    repo.addSnapshot({
+      id: 'snapshot_2',
+      keyId: 'key_2',
+      proposalId: 'proposal_2',
+      profileJson: '{}',
+      createdAt: '2026-05-17T00:01:00.000Z',
+    })
+
+    expect(repo.listSnapshotsByKey('key_1')).toEqual([
+      {
+        id: 'snapshot_1',
+        keyId: 'key_1',
+        proposalId: 'proposal_1',
+        profileJson: '{"tone":"concise"}',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    ])
   })
 
   it('gets media tasks by key only', () => {

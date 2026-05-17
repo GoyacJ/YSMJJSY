@@ -64,6 +64,62 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
     })
   })
 
+  await page.route('**/api/agent/core', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        profile: {
+          keyId: 'key_1',
+          assistantName: '月光',
+          mbti: 'INFJ',
+          configured: true,
+        },
+        memoryCounts: {
+          total: 1,
+          active: 1,
+          archived: 0,
+          rejected: 0,
+        },
+        latestReflections: [
+          {
+            id: 'reflection_1',
+            summary: '用户在聊天里确认想要短句回应。',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+        pendingProposals: [
+          {
+            id: 'proposal_1',
+            type: 'tone',
+            title: '更短',
+            summary: '回复更短。',
+            payload: { tone: 'concise' },
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/agent/proposals/*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'proposal_1', status: 'accepted' }),
+    })
+  })
+
+  async function clickChatTool(name: string) {
+    const visibleTool = page.getByRole('button', { name }).first()
+
+    if (await visibleTool.count()) {
+      await visibleTool.click()
+      return
+    }
+
+    await page.getByRole('button', { name: '添加附件' }).click()
+    await page.getByRole('button', { name }).click()
+  }
+
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
@@ -101,17 +157,21 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.getByLabel('和星信说话').fill('这封信是真的吗？')
   await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('这句我会记得。')).toBeVisible()
+  await page.getByRole('button', { name: '打开 Agent Core' }).click()
+  await expect(page.getByText('用户在聊天里确认想要短句回应。')).toBeVisible()
+  await expect(page.getByText('回复更短。')).toBeVisible()
+  await page.getByRole('button', { name: '关闭 Agent Core' }).click()
   await expect(page.getByText('这封信里的星光')).toHaveCount(0)
   await expect(page.locator('.star-orbit-group').first()).toBeVisible()
 
-  await page.getByRole('button', { name: '画一张' }).click()
+  await clickChatTool('画一张')
   await page.getByLabel('和星信说话').fill('画一张月光星空')
   await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('画好了。')).toBeVisible()
   await expect(page.locator('.star-orbit-stage img[alt="生成的图片"]')).toBeVisible()
   await expect(page.locator('.generated-asset')).toHaveCount(0)
 
-  await page.getByRole('button', { name: '设计模式' }).click()
+  await clickChatTool('设计模式')
   await page.getByPlaceholder('请输入你的创意想法').fill('把页面改成银河和月光')
   await page.getByRole('button', { name: '发送' }).click()
   await expect(page.getByText('银河信笺')).toBeVisible()

@@ -35,6 +35,7 @@ onMounted(async () => {
       </div>
       <StarChat :initial-messages="chatMessages" @design-requested="previewDesign" />
       <StarMemoryMap @open-settings="profileSettingsOpen = true" />
+      <AgentCorePanel />
       <ProfileSettingsSheet
         :open="profileSettingsOpen"
         hide-trigger

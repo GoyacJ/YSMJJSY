@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { Buffer } from 'node:buffer'
 import { finalConfession, letterParagraphs, memoryMoments } from '../../content/letter'
 import { starLetterPersona } from '../../content/persona'
-import type { ConversationRecord } from '../db/sqlite'
+import type { AgentEvolutionProposalRecord, AgentReflectionRecord, ConversationRecord, MemoryRecord } from '../db/sqlite'
 import { getDefaultMusicPrompt, normalizeMediaPrompt } from './media'
 import type { MiniMaxMessage, createMiniMaxClient } from './minimax'
 import type { ResolvedChatIntent } from './chat-intent'
@@ -30,6 +30,10 @@ type BuildStarChatMessagesInput = {
   attachmentNotes?: string[]
   assistantName?: string
   mbti?: string
+  tone?: string
+  relationshipRole?: string
+  recentReflections?: string[]
+  acceptedEvolutionNotes?: string[]
   memories: string[]
   recentConversation: Pick<ConversationRecord, 'role' | 'content'>[]
 }
@@ -108,11 +112,19 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
         `你的称呼是：${assistantName}`,
         `MBTI 性格设定：${mbti}`,
         '',
-        buildLetterContext(),
-        '',
-        '已保存记忆：',
-        memoryText,
-      ].join('\n'),
+    buildLetterContext(),
+    '',
+    ...(input.tone ? [`语气：${input.tone}`, ''] : []),
+    ...(input.relationshipRole ? [`关系角色：${input.relationshipRole}`, ''] : []),
+    ...(input.recentReflections?.length
+      ? ['近期反思：', input.recentReflections.map(item => `- ${item}`).join('\n'), '']
+      : []),
+    ...(input.acceptedEvolutionNotes?.length
+      ? ['已确认的演进：', input.acceptedEvolutionNotes.map(item => `- ${item}`).join('\n'), '']
+      : []),
+    '已保存记忆：',
+    memoryText,
+  ].join('\n'),
     },
     ...input.recentConversation.map(item => ({
       role: item.role === 'assistant' ? 'assistant' : 'user',
@@ -123,6 +135,23 @@ export function buildStarChatMessages(input: BuildStarChatMessagesInput): MiniMa
       content: userContent,
     },
   ]
+}
+
+export function selectActiveMemoryContents(memories: MemoryRecord[]) {
+  return memories
+    .filter(memory => (memory.status ?? 'active') === 'active' && memory.importance >= 0.5)
+    .map(memory => memory.content)
+}
+
+export function selectRecentReflectionSummaries(reflections: AgentReflectionRecord[]) {
+  return reflections.map(reflection => reflection.summary).filter(Boolean)
+}
+
+export function selectAcceptedEvolutionNotes(proposals: AgentEvolutionProposalRecord[]) {
+  return proposals
+    .filter(proposal => proposal.status === 'accepted' || proposal.status === 'applied')
+    .map(proposal => proposal.summary)
+    .filter(Boolean)
 }
 
 export function buildMemoryExtractionMessages(userMessage: string, assistantReply: string): MiniMaxMessage[] {

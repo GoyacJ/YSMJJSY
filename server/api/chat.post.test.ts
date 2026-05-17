@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { runAgentLearning } from './chat/stream.post'
 import { buildStarChatMessages, streamStarChatReply } from '../services/star-chat'
 
 describe('chat api helpers', () => {
@@ -222,5 +223,156 @@ describe('chat api helpers', () => {
     expect(events[0]).toEqual({ type: 'status', text: '视频开始生成了。' })
     expect(video.message.parts).toEqual([{ type: 'status', text: '视频开始生成了。' }])
     expect(video.taskId).toBe('task-1')
+  })
+
+  it('stores one reflection after a successful chat', async () => {
+    const reflections: any[] = []
+
+    await runAgentLearning({
+      keyId: 'key_1',
+      conversationId: 'c_assistant',
+      userMessage: '我喜欢短句。',
+      assistantReply: '好。',
+      existingMemories: [],
+      profile: { assistantName: '星信', mbti: 'INTJ' },
+      client: {
+        reflectAgent: vi.fn(async () => JSON.stringify({
+          summary: '用户喜欢短句。',
+          learned: [],
+          proposals: [],
+        })),
+      },
+      reflections: {
+        addReflection: record => reflections.push(record),
+      },
+      memories: {
+        addMemory: vi.fn(),
+      },
+      proposals: {
+        addProposal: vi.fn(),
+      },
+    })
+
+    expect(reflections).toHaveLength(1)
+    expect(reflections[0]).toMatchObject({
+      keyId: 'key_1',
+      conversationId: 'c_assistant',
+      summary: '用户喜欢短句。',
+    })
+  })
+
+  it('stores learned memories under the current key', async () => {
+    const memories: any[] = []
+
+    await runAgentLearning({
+      keyId: 'key_1',
+      conversationId: 'c_assistant',
+      userMessage: '我喜欢短句。',
+      assistantReply: '好。',
+      existingMemories: [],
+      profile: { assistantName: '星信', mbti: 'INTJ' },
+      client: {
+        reflectAgent: vi.fn(async () => JSON.stringify({
+          summary: '用户喜欢短句。',
+          learned: [
+            {
+              shouldRemember: true,
+              type: 'preference',
+              content: '用户喜欢短句。',
+              importance: 0.8,
+              confidence: 0.9,
+            },
+          ],
+          proposals: [],
+        })),
+      },
+      reflections: {
+        addReflection: vi.fn(),
+      },
+      memories: {
+        addMemory: record => memories.push(record),
+      },
+      proposals: {
+        addProposal: vi.fn(),
+      },
+    })
+
+    expect(memories[0]).toMatchObject({
+      keyId: 'key_1',
+      sourceConversationId: 'c_assistant',
+      type: 'preference',
+      content: '用户喜欢短句。',
+      confidence: 0.9,
+      status: 'active',
+    })
+  })
+
+  it('stores evolution proposals as pending', async () => {
+    const proposals: any[] = []
+
+    await runAgentLearning({
+      keyId: 'key_1',
+      conversationId: 'c_assistant',
+      userMessage: '我喜欢短句。',
+      assistantReply: '好。',
+      existingMemories: [],
+      profile: { assistantName: '星信', mbti: 'INTJ' },
+      client: {
+        reflectAgent: vi.fn(async () => JSON.stringify({
+          summary: '用户喜欢短句。',
+          learned: [],
+          proposals: [
+            {
+              type: 'tone',
+              title: '更短',
+              summary: '回复更短。',
+              payload: { tone: 'concise' },
+            },
+          ],
+        })),
+      },
+      reflections: {
+        addReflection: vi.fn(),
+      },
+      memories: {
+        addMemory: vi.fn(),
+      },
+      proposals: {
+        addProposal: record => proposals.push(record),
+      },
+    })
+
+    expect(proposals[0]).toMatchObject({
+      keyId: 'key_1',
+      reflectionId: expect.any(String),
+      type: 'tone',
+      status: 'pending',
+      payloadJson: '{"tone":"concise"}',
+    })
+  })
+
+  it('swallows learning failures after the chat reply', async () => {
+    await expect(runAgentLearning({
+      keyId: 'key_1',
+      conversationId: 'c_assistant',
+      userMessage: '你好',
+      assistantReply: '你好。',
+      existingMemories: [],
+      profile: { assistantName: '星信', mbti: 'INTJ' },
+      client: {
+        reflectAgent: vi.fn(async () => {
+          throw new Error('reflection failed')
+        }),
+      },
+      reflections: {
+        addReflection: vi.fn(),
+      },
+      memories: {
+        addMemory: vi.fn(),
+      },
+      proposals: {
+        addProposal: vi.fn(),
+      },
+    })).resolves.toBeUndefined()
   })
 })
