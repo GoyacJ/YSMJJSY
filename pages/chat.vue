@@ -15,6 +15,7 @@ const {
   works: agentWorks,
   loadCore: loadAgentCore,
   applyProposal: applyAgentCoreProposal,
+  runSleep,
   governMemory,
   loadTimeline,
   loadWorks,
@@ -60,6 +61,9 @@ onMounted(async () => {
         :core="agentCore"
         :open="memoryPlanetOpen"
         :govern-memory="governMemory"
+        :load-core="loadAgentCore"
+        :apply-proposal="applyAgentCoreProposal"
+        :run-sleep="runSleep"
         :timeline="agentTimeline"
         :works="agentWorks"
         :load-timeline="loadTimeline"
@@ -70,8 +74,6 @@ onMounted(async () => {
       <ProfileSettingsSheet
         :open="profileSettingsOpen"
         hide-trigger
-        :load-agent-core="loadAgentCore"
-        :apply-agent-core-proposal="applyAgentCoreProposal"
         @close="profileSettingsOpen = false"
       />
       <DesignPreviewSheet

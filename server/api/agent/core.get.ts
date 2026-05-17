@@ -2,11 +2,13 @@ import { createError, defineEventHandler } from 'h3'
 import {
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
+  createAgentSleepRepository,
   createAgentStateRepository,
   createKeyProfileRepository,
   createMemoryRepository,
   type AgentEvolutionProposalRecord,
   type AgentReflectionRecord,
+  type AgentSleepRunRecord,
   type AgentStateRecord,
   type KeyProfileRecord,
   type MemoryRecord,
@@ -18,6 +20,7 @@ type AgentCoreInput = {
   memories: MemoryRecord[]
   reflections: AgentReflectionRecord[]
   proposals: AgentEvolutionProposalRecord[]
+  latestSleepRun?: AgentSleepRunRecord
 }
 
 export function requireAgentKey(event: { context: { keyId?: string } }) {
@@ -108,6 +111,20 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
         .filter(proposal => proposal.status !== 'pending')
         .map(serializeProposal),
     },
+    sleep: {
+      lastSleepAt: input.agentState.lastSleepAt ?? null,
+      nextSleepAt: input.agentState.nextSleepAt ?? null,
+      latestRun: input.latestSleepRun
+        ? {
+            id: input.latestSleepRun.id,
+            status: input.latestSleepRun.status,
+            summary: input.latestSleepRun.summary,
+            startedAt: input.latestSleepRun.startedAt,
+            completedAt: input.latestSleepRun.completedAt,
+            error: input.latestSleepRun.error,
+          }
+        : null,
+    },
   }
 }
 
@@ -129,5 +146,6 @@ export default defineEventHandler((event) => {
     memories: createMemoryRepository(config.sqlitePath).listMemoriesByKey(keyId),
     reflections: createAgentReflectionRepository(config.sqlitePath).listReflectionsByKey(keyId, 5),
     proposals: createAgentEvolutionRepository(config.sqlitePath).listProposalsByKey(keyId),
+    latestSleepRun: createAgentSleepRepository(config.sqlitePath).getLatestSleepRunByKey(keyId),
   })
 })

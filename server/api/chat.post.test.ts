@@ -23,6 +23,34 @@ describe('chat api helpers', () => {
     })
   })
 
+  it('maps a video task status message to a video work', () => {
+    const works = buildWorksFromAssistantMessage({
+      keyId: 'key_1',
+      conversationId: 'assistant_1',
+      now: '2026-05-17T00:00:00.000Z',
+      taskId: 'task-1',
+      message: {
+        role: 'assistant',
+        content: '视频开始生成了。',
+        parts: [{ type: 'status', text: '视频开始生成了。' }],
+      },
+    })
+
+    expect(works).toHaveLength(1)
+    expect(works[0]).toMatchObject({
+      type: 'video',
+      title: '视频开始生成了。',
+      sourceConversationId: 'assistant_1',
+      sourceMediaTaskId: 'task-1',
+      previewUrl: null,
+      visibility: 'private',
+    })
+    expect(JSON.parse(works[0].payloadJson)).toEqual({
+      taskId: 'task-1',
+      parts: [{ type: 'status', text: '视频开始生成了。' }],
+    })
+  })
+
   it('includes persona, letter, memories, and user message', () => {
     const messages = buildStarChatMessages({
       userMessage: '这封信是真的吗？',

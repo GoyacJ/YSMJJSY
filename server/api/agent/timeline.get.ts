@@ -101,18 +101,7 @@ export function buildAgentTimeline(input: {
     createdAt: input.profile.createdAt,
   })
 
-  const order: Record<AgentTimelineItem['type'], number> = {
-    profile: 0,
-    memory: 1,
-    reflection: 2,
-    sleep: 3,
-    proposal: 4,
-    work: 5,
-    design: 6,
-    key: 7,
-  }
-
-  return items.sort((a, b) => order[a.type] - order[b.type] || b.createdAt.localeCompare(a.createdAt))
+  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
 export default defineEventHandler((event) => {

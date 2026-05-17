@@ -125,6 +125,16 @@ describe('agent core api helpers', () => {
           updatedAt: '2026-05-17T00:04:00.000Z',
         },
       ],
+      latestSleepRun: {
+        id: 'sleep_1',
+        keyId: 'key_1',
+        status: 'completed',
+        summary: '整理完成。',
+        rawJson: '{}',
+        startedAt: '2026-05-17T00:05:00.000Z',
+        completedAt: '2026-05-17T00:06:00.000Z',
+        error: null,
+      },
     })).toEqual({
       profile: {
         keyId: 'key_1',
@@ -208,6 +218,18 @@ describe('agent core api helpers', () => {
             updatedAt: '2026-05-17T00:04:00.000Z',
           },
         ],
+      },
+      sleep: {
+        lastSleepAt: null,
+        nextSleepAt: null,
+        latestRun: {
+          id: 'sleep_1',
+          status: 'completed',
+          summary: '整理完成。',
+          startedAt: '2026-05-17T00:05:00.000Z',
+          completedAt: '2026-05-17T00:06:00.000Z',
+          error: null,
+        },
       },
     })
   })

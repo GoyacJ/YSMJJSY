@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import MemoryPlanetStage from './MemoryPlanetStage.vue'
-import type { AgentCore, AgentTimelineItem, AgentWorkItem, MemoryGovernanceAction } from '../composables/useAgentCore'
+import type { AgentCore, AgentCoreProposalAction, AgentTimelineItem, AgentWorkItem, MemoryGovernanceAction } from '../composables/useAgentCore'
 import { buildMemoryPlanetState } from '../utils/memory-planet'
 
 const props = defineProps<{
   core: AgentCore | null
   open: boolean
   governMemory?: (id: string, action: MemoryGovernanceAction) => Promise<boolean>
+  loadCore?: () => Promise<AgentCore | null>
+  applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
+  runSleep?: () => Promise<boolean>
   timeline?: AgentTimelineItem[]
   works?: AgentWorkItem[]
   loadTimeline?: () => Promise<AgentTimelineItem[]>
@@ -79,14 +82,15 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
 </script>
 
 <template>
-  <aside v-if="open" class="memory-planet-panel" role="dialog" aria-label="记忆星球">
+  <div v-if="open" class="memory-planet-panel__backdrop" @click.self="$emit('close')">
+  <aside class="memory-planet-panel" role="dialog" aria-label="记忆星球">
     <header>
       <div>
         <p>记忆星球</p>
         <span>记忆、反思和进化轨道</span>
       </div>
-      <button type="button" aria-label="关闭记忆星球" @click="$emit('close')">
-        ×
+      <button type="button" class="memory-planet-panel__close" aria-label="关闭记忆星球" @click="$emit('close')">
+        关闭
       </button>
     </header>
 
@@ -110,7 +114,12 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
       />
 
       <section class="memory-planet-panel__ai" aria-label="星AI">
-        <AgentCorePanel embedded />
+        <AgentCorePanel
+          embedded
+          :load-core="loadCore"
+          :apply-proposal="applyProposal"
+          :run-sleep="runSleep"
+        />
       </section>
     </div>
 
@@ -169,4 +178,5 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
       </template>
     </section>
   </aside>
+  </div>
 </template>

@@ -67,33 +67,57 @@ export function buildWorksFromAssistantMessage(input: {
   keyId: string
   conversationId: string
   now: string
+  taskId?: string
   message: {
     role: 'assistant'
     content: string
-    parts: Array<{ type: string, url?: string, base64?: string }>
+    parts: Array<{ type: string, text?: string, url?: string, base64?: string }>
   }
 }): AgentWorkRecord[] {
-  return input.message.parts
+  const title = input.message.content.trim() || '智能体作品'
+  const normalizedTitle = title.length > 32 ? `${title.slice(0, 32)}...` : title
+  const mediaWorks = input.message.parts
     .filter(part => part.type === 'image' || part.type === 'music' || part.type === 'video')
-    .map((part) => {
-      const title = input.message.content.trim() || '智能体作品'
+    .map(part => ({
+      id: nanoid(),
+      keyId: input.keyId,
+      type: part.type as AgentWorkRecord['type'],
+      title: normalizedTitle,
+      summary: input.message.content,
+      sourceConversationId: input.conversationId,
+      sourceMediaTaskId: input.taskId ?? null,
+      sourceDesignVersion: null,
+      previewUrl: part.url ?? part.base64 ?? null,
+      payloadJson: JSON.stringify(part),
+      visibility: 'private' as const,
+      createdAt: input.now,
+      updatedAt: input.now,
+    }))
 
-      return {
-        id: nanoid(),
-        keyId: input.keyId,
-        type: part.type as AgentWorkRecord['type'],
-        title: title.length > 32 ? `${title.slice(0, 32)}...` : title,
-        summary: input.message.content,
-        sourceConversationId: input.conversationId,
-        sourceMediaTaskId: null,
-        sourceDesignVersion: null,
-        previewUrl: part.url ?? part.base64 ?? null,
-        payloadJson: JSON.stringify(part),
-        visibility: 'private',
-        createdAt: input.now,
-        updatedAt: input.now,
-      }
-    })
+  if (mediaWorks.length > 0 || !input.taskId) {
+    return mediaWorks
+  }
+
+  return [
+    {
+      id: nanoid(),
+      keyId: input.keyId,
+      type: 'video',
+      title: normalizedTitle,
+      summary: input.message.content,
+      sourceConversationId: input.conversationId,
+      sourceMediaTaskId: input.taskId,
+      sourceDesignVersion: null,
+      previewUrl: null,
+      payloadJson: JSON.stringify({
+        taskId: input.taskId,
+        parts: input.message.parts,
+      }),
+      visibility: 'private',
+      createdAt: input.now,
+      updatedAt: input.now,
+    },
+  ]
 }
 
 type AgentLearningInput = {
@@ -343,6 +367,7 @@ export default defineEventHandler(async (event) => {
             keyId,
             conversationId: assistantConversationId,
             now: createdAt,
+            taskId: result.taskId,
             message: result.message,
           })) {
             works.addWork(work)

@@ -83,8 +83,11 @@ describe('MemoryPlanetPanel', () => {
       AgentCorePanel: {
         props: {
           embedded: Boolean,
+          loadCore: Function,
+          applyProposal: Function,
+          runSleep: Function,
         },
-        template: '<section class="agent-core-stub" :data-embedded="String(embedded)">星AI</section>',
+        template: '<section class="agent-core-stub" :data-embedded="String(embedded)" :data-load-core="String(Boolean(loadCore))" :data-apply-proposal="String(Boolean(applyProposal))" :data-run-sleep="String(Boolean(runSleep))">星AI</section>',
       },
     },
   }
@@ -100,6 +103,34 @@ describe('MemoryPlanetPanel', () => {
 
     expect(wrapper.text()).toContain('记忆星球')
     expect(wrapper.text()).toContain('还没有形成星球')
+  })
+
+  it('closes when the backdrop is clicked', async () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+      },
+      global,
+    })
+
+    await wrapper.get('.memory-planet-panel__backdrop').trigger('click')
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('shows an explicit close button', () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+      },
+      global,
+    })
+
+    const button = wrapper.get('button[aria-label="关闭记忆星球"]')
+
+    expect(button.text()).toBe('关闭')
   })
 
   it('renders memory stars and opens memory detail', async () => {
@@ -177,6 +208,28 @@ describe('MemoryPlanetPanel', () => {
     expect(wrapper.get('.agent-core-stub').attributes('data-embedded')).toBe('true')
     expect(wrapper.text()).toContain('星AI')
     expect(wrapper.text()).not.toContain('智能体核心')
+  })
+
+  it('passes shared agent core actions to the embedded star ai', () => {
+    const loadCore = vi.fn(async () => core)
+    const applyProposal = vi.fn(async () => true)
+    const runSleep = vi.fn(async () => true)
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        loadCore,
+        applyProposal,
+        runSleep,
+      },
+      global,
+    })
+
+    const panel = wrapper.get('.agent-core-stub')
+
+    expect(panel.attributes('data-load-core')).toBe('true')
+    expect(panel.attributes('data-apply-proposal')).toBe('true')
+    expect(panel.attributes('data-run-sleep')).toBe('true')
   })
 
   it('places the planet stage and star ai in the same designed layout', () => {
