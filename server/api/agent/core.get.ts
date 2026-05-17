@@ -73,6 +73,10 @@ function serializeProposal(proposal: AgentEvolutionProposalRecord) {
   }
 }
 
+function isSleepReady(nextSleepAt?: string | null) {
+  return !nextSleepAt || Date.now() >= Date.parse(nextSleepAt)
+}
+
 export function buildAgentCoreResponse(input: AgentCoreInput) {
   const memoryCounts = input.memories.reduce((counts, memory) => {
     const status = memory.status ?? 'active'
@@ -128,6 +132,7 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
     sleep: {
       lastSleepAt: input.agentState.lastSleepAt ?? null,
       nextSleepAt: input.agentState.nextSleepAt ?? null,
+      ready: isSleepReady(input.agentState.nextSleepAt),
       latestRun: input.latestSleepRun
         ? {
             id: input.latestSleepRun.id,

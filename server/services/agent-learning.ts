@@ -32,6 +32,27 @@ export type ParsedAgentSleepResult = {
   nextConversationHints: string[]
 }
 
+export function shouldScheduleAgentSleep(input: {
+  lastSleepAt?: string | null
+  nextSleepAt?: string | null
+  now: string
+  newConversationCount: number
+}) {
+  if (input.newConversationCount <= 0) {
+    return false
+  }
+
+  if (!input.nextSleepAt) {
+    return true
+  }
+
+  return Date.parse(input.now) >= Date.parse(input.nextSleepAt)
+}
+
+export function calculateNextSleepAt(now: string) {
+  return new Date(Date.parse(now) + 12 * 60 * 60 * 1000).toISOString()
+}
+
 type BuildAgentReflectionMessagesInput = {
   userMessage: string
   assistantReply: string

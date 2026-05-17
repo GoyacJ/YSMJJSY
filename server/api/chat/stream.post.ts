@@ -20,6 +20,7 @@ import {
   createUsageLimitRepository,
   type AgentEvolutionProposalRecord,
   type AgentReflectionRecord,
+  type AgentStateRecord,
   type AgentWorkRecord,
   type MemoryRecord,
 } from '../../db/sqlite'
@@ -29,7 +30,12 @@ import { createIpHash } from '../../services/key-access'
 import { markKeyActivity } from '../../services/key-activity'
 import { createMiniMaxClient } from '../../services/minimax'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
-import { buildAgentReflectionMessages, parseAgentReflectionResult } from '../../services/agent-learning'
+import {
+  buildAgentReflectionMessages,
+  calculateNextSleepAt,
+  parseAgentReflectionResult,
+  shouldScheduleAgentSleep,
+} from '../../services/agent-learning'
 
 function encodeSse(event: unknown) {
   return `data: ${JSON.stringify(event)}\n\n`
@@ -146,6 +152,30 @@ type AgentLearningInput = {
   }
 }
 
+export function scheduleAgentSleepAfterChat(input: {
+  keyId: string
+  now: string
+  newConversationCount: number
+  agentState: Pick<AgentStateRecord, 'lastSleepAt' | 'nextSleepAt'>
+  states: {
+    updateAgentState: (keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) => void
+  }
+}) {
+  if (!shouldScheduleAgentSleep({
+    lastSleepAt: input.agentState.lastSleepAt,
+    nextSleepAt: input.agentState.nextSleepAt,
+    now: input.now,
+    newConversationCount: input.newConversationCount,
+  })) {
+    return
+  }
+
+  input.states.updateAgentState(input.keyId, {
+    nextSleepAt: calculateNextSleepAt(input.now),
+    updatedAt: input.now,
+  })
+}
+
 export async function runAgentLearning(input: AgentLearningInput) {
   try {
     const messages = buildAgentReflectionMessages({
@@ -226,7 +256,8 @@ export default defineEventHandler(async (event) => {
   const memories = createMemoryRepository(config.sqlitePath)
   const reflections = createAgentReflectionRepository(config.sqlitePath)
   const proposals = createAgentEvolutionRepository(config.sqlitePath)
-  const agentState = createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, new Date().toISOString())
+  const states = createAgentStateRepository(config.sqlitePath)
+  const agentState = states.getOrCreateAgentState(keyId, new Date().toISOString())
   const works = createAgentWorkRepository(config.sqlitePath)
   const attachmentRepo = createAttachmentRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
@@ -352,14 +383,29 @@ export default defineEventHandler(async (event) => {
 
         const assistantConversationId = nanoid()
 
+        const assistantCreatedAt = new Date().toISOString()
+
         conversations.addConversation({
           id: assistantConversationId,
           keyId,
           role: 'assistant',
           content: result.message.content,
           messageJson: JSON.stringify(result.message),
-          createdAt: new Date().toISOString(),
+          createdAt: assistantCreatedAt,
         })
+
+        try {
+          scheduleAgentSleepAfterChat({
+            keyId,
+            now: assistantCreatedAt,
+            newConversationCount: 1,
+            agentState,
+            states,
+          })
+        }
+        catch {
+          // Sleep scheduling is secondary. A failed reminder update should not hide the reply.
+        }
 
         try {
           const createdAt = new Date().toISOString()

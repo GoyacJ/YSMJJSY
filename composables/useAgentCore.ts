@@ -77,6 +77,7 @@ export type AgentCore = {
   sleep?: {
     lastSleepAt?: string | null
     nextSleepAt?: string | null
+    ready?: boolean
     latestRun?: {
       id: string
       status: 'running' | 'completed' | 'failed'

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAgentReflectionMessages,
+  calculateNextSleepAt,
   parseAgentSleepResult,
   parseAgentReflectionResult,
+  shouldScheduleAgentSleep,
 } from './agent-learning'
 
 describe('agent learning service', () => {
@@ -126,5 +128,36 @@ describe('agent learning service', () => {
     expect(result.dailySummary).toBe('今天用户确认了短句偏好。')
     expect(result.memoryActions[0]).toMatchObject({ memoryId: 'm1', action: 'confirm' })
     expect(result.proposals[0]).toMatchObject({ type: 'tone' })
+  })
+
+  it('schedules sleep when there is no next sleep time and new content exists', () => {
+    expect(shouldScheduleAgentSleep({
+      lastSleepAt: null,
+      nextSleepAt: null,
+      now: '2026-05-18T00:00:00.000Z',
+      newConversationCount: 1,
+    })).toBe(true)
+  })
+
+  it('does not schedule sleep before the next sleep time', () => {
+    expect(shouldScheduleAgentSleep({
+      lastSleepAt: '2026-05-17T00:00:00.000Z',
+      nextSleepAt: '2026-05-18T12:00:00.000Z',
+      now: '2026-05-18T00:00:00.000Z',
+      newConversationCount: 1,
+    })).toBe(false)
+  })
+
+  it('schedules sleep when the next sleep time has passed and new content exists', () => {
+    expect(shouldScheduleAgentSleep({
+      lastSleepAt: '2026-05-17T00:00:00.000Z',
+      nextSleepAt: '2026-05-17T12:00:00.000Z',
+      now: '2026-05-18T00:00:00.000Z',
+      newConversationCount: 1,
+    })).toBe(true)
+  })
+
+  it('calculates the next sleep reminder twelve hours later', () => {
+    expect(calculateNextSleepAt('2026-05-18T00:00:00.000Z')).toBe('2026-05-18T12:00:00.000Z')
   })
 })

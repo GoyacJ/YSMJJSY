@@ -65,6 +65,7 @@ describe('agent sleep api helpers', () => {
     expect(addProposal).toHaveBeenCalledWith(expect.objectContaining({ title: '更短' }))
     expect(updateAgentState).toHaveBeenCalledWith('key_1', {
       lastSleepAt: '2026-05-17T00:00:00.000Z',
+      nextSleepAt: '2026-05-17T12:00:00.000Z',
       updatedAt: '2026-05-17T00:00:00.000Z',
     })
   })

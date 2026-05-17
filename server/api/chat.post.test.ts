@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildWorksFromAssistantMessage, runAgentLearning } from './chat/stream.post'
+import { buildWorksFromAssistantMessage, runAgentLearning, scheduleAgentSleepAfterChat } from './chat/stream.post'
 import { buildStarChatMessages, streamStarChatReply } from '../services/star-chat'
 
 describe('chat api helpers', () => {
@@ -48,6 +48,26 @@ describe('chat api helpers', () => {
     expect(JSON.parse(works[0].payloadJson)).toEqual({
       taskId: 'task-1',
       parts: [{ type: 'status', text: '视频开始生成了。' }],
+    })
+  })
+
+  it('schedules the next agent sleep reminder after new chat content', () => {
+    const updateAgentState = vi.fn()
+
+    scheduleAgentSleepAfterChat({
+      keyId: 'key_1',
+      now: '2026-05-18T00:00:00.000Z',
+      newConversationCount: 1,
+      agentState: {
+        lastSleepAt: null,
+        nextSleepAt: null,
+      },
+      states: { updateAgentState },
+    })
+
+    expect(updateAgentState).toHaveBeenCalledWith('key_1', {
+      nextSleepAt: '2026-05-18T12:00:00.000Z',
+      updatedAt: '2026-05-18T00:00:00.000Z',
     })
   })
 

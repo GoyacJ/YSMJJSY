@@ -16,7 +16,7 @@ import {
   type KeyProfileRecord,
   type MemoryRecord,
 } from '../../db/sqlite'
-import { buildAgentSleepMessages, parseAgentSleepResult } from '../../services/agent-learning'
+import { buildAgentSleepMessages, calculateNextSleepAt, parseAgentSleepResult } from '../../services/agent-learning'
 import { createMiniMaxClient } from '../../services/minimax'
 import { requireAgentKey } from './core.get'
 
@@ -127,6 +127,7 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
     })
     input.states.updateAgentState(input.keyId, {
       lastSleepAt: input.now,
+      nextSleepAt: calculateNextSleepAt(input.now),
       updatedAt: input.now,
     })
 

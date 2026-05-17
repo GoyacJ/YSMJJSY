@@ -225,6 +225,7 @@ describe('agent core api helpers', () => {
       sleep: {
         lastSleepAt: null,
         nextSleepAt: null,
+        ready: true,
         latestRun: {
           id: 'sleep_1',
           status: 'completed',
