@@ -1,8 +1,28 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runAgentLearning } from './chat/stream.post'
+import { buildWorksFromAssistantMessage, runAgentLearning } from './chat/stream.post'
 import { buildStarChatMessages, streamStarChatReply } from '../services/star-chat'
 
 describe('chat api helpers', () => {
+  it('maps assistant media message parts to agent works', () => {
+    const works = buildWorksFromAssistantMessage({
+      keyId: 'key_1',
+      conversationId: 'assistant_1',
+      now: '2026-05-17T00:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: '画好了。',
+        parts: [{ type: 'image', url: 'https://example.com/moon.png' }],
+      },
+    })
+
+    expect(works[0]).toMatchObject({
+      type: 'image',
+      title: '画好了。',
+      previewUrl: 'https://example.com/moon.png',
+      visibility: 'private',
+    })
+  })
+
   it('includes persona, letter, memories, and user message', () => {
     const messages = buildStarChatMessages({
       userMessage: '这封信是真的吗？',

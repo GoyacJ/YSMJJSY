@@ -12,6 +12,7 @@ import {
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
   createAgentStateRepository,
+  createAgentWorkRepository,
   createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
@@ -19,6 +20,7 @@ import {
   createUsageLimitRepository,
   type AgentEvolutionProposalRecord,
   type AgentReflectionRecord,
+  type AgentWorkRecord,
   type MemoryRecord,
 } from '../../db/sqlite'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
@@ -59,6 +61,39 @@ function buildUserMessageJson(content: string, attachments: Array<{ kind: 'image
       }),
     ],
   }
+}
+
+export function buildWorksFromAssistantMessage(input: {
+  keyId: string
+  conversationId: string
+  now: string
+  message: {
+    role: 'assistant'
+    content: string
+    parts: Array<{ type: string, url?: string, base64?: string }>
+  }
+}): AgentWorkRecord[] {
+  return input.message.parts
+    .filter(part => part.type === 'image' || part.type === 'music' || part.type === 'video')
+    .map((part) => {
+      const title = input.message.content.trim() || '智能体作品'
+
+      return {
+        id: nanoid(),
+        keyId: input.keyId,
+        type: part.type as AgentWorkRecord['type'],
+        title: title.length > 32 ? `${title.slice(0, 32)}...` : title,
+        summary: input.message.content,
+        sourceConversationId: input.conversationId,
+        sourceMediaTaskId: null,
+        sourceDesignVersion: null,
+        previewUrl: part.url ?? part.base64 ?? null,
+        payloadJson: JSON.stringify(part),
+        visibility: 'private',
+        createdAt: input.now,
+        updatedAt: input.now,
+      }
+    })
 }
 
 type AgentLearningInput = {
@@ -168,6 +203,7 @@ export default defineEventHandler(async (event) => {
   const reflections = createAgentReflectionRepository(config.sqlitePath)
   const proposals = createAgentEvolutionRepository(config.sqlitePath)
   const agentState = createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, new Date().toISOString())
+  const works = createAgentWorkRepository(config.sqlitePath)
   const attachmentRepo = createAttachmentRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
   const usage = createUsageLimitRepository(config.sqlitePath)
@@ -300,6 +336,21 @@ export default defineEventHandler(async (event) => {
           messageJson: JSON.stringify(result.message),
           createdAt: new Date().toISOString(),
         })
+
+        try {
+          const createdAt = new Date().toISOString()
+          for (const work of buildWorksFromAssistantMessage({
+            keyId,
+            conversationId: assistantConversationId,
+            now: createdAt,
+            message: result.message,
+          })) {
+            works.addWork(work)
+          }
+        }
+        catch {
+          // Work capture is secondary. A failed insert should not hide the reply.
+        }
 
         try {
           markKeyActivity(config.sqlitePath, keyId, 'chat')
