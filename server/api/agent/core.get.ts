@@ -1,16 +1,20 @@
 import { createError, defineEventHandler } from 'h3'
 import {
+  createConversationRepository,
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
   createAgentSleepRepository,
   createAgentStateRepository,
   createKeyProfileRepository,
+  createMemoryEventRepository,
   createMemoryRepository,
   type AgentEvolutionProposalRecord,
   type AgentReflectionRecord,
   type AgentSleepRunRecord,
   type AgentStateRecord,
+  type ConversationRecord,
   type KeyProfileRecord,
+  type MemoryEventRecord,
   type MemoryRecord,
 } from '../../db/sqlite'
 
@@ -18,6 +22,8 @@ type AgentCoreInput = {
   profile: KeyProfileRecord
   agentState: AgentStateRecord
   memories: MemoryRecord[]
+  sourceConversations?: ConversationRecord[]
+  memoryEvents?: MemoryEventRecord[]
   reflections: AgentReflectionRecord[]
   proposals: AgentEvolutionProposalRecord[]
   latestSleepRun?: AgentSleepRunRecord
@@ -77,7 +83,26 @@ function isSleepReady(nextSleepAt?: string | null) {
   return !nextSleepAt || Date.now() >= Date.parse(nextSleepAt)
 }
 
+function buildSourceExcerpt(conversation?: ConversationRecord) {
+  if (!conversation?.content) {
+    return ''
+  }
+
+  return conversation.content.length > 90
+    ? `${conversation.content.slice(0, 90)}...`
+    : conversation.content
+}
+
 export function buildAgentCoreResponse(input: AgentCoreInput) {
+  const sourceConversationById = new Map((input.sourceConversations ?? []).map(conversation => [conversation.id, conversation]))
+  const memoryEventsByMemoryId = new Map<string, MemoryEventRecord[]>()
+
+  for (const event of input.memoryEvents ?? []) {
+    memoryEventsByMemoryId.set(event.memoryId, [
+      ...(memoryEventsByMemoryId.get(event.memoryId) ?? []),
+      event,
+    ])
+  }
   const memoryCounts = input.memories.reduce((counts, memory) => {
     const status = memory.status ?? 'active'
     counts.total += 1
@@ -114,6 +139,20 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
         content: memory.content,
         importance: memory.importance,
         confidence: memory.confidence ?? 1,
+        status: memory.status ?? 'active',
+        sourceConversationId: memory.sourceConversationId ?? null,
+        sourceAttachmentId: memory.sourceAttachmentId ?? null,
+        sourceExcerpt: buildSourceExcerpt(
+          memory.sourceConversationId
+            ? sourceConversationById.get(memory.sourceConversationId)
+            : undefined,
+        ),
+        governanceEvents: (memoryEventsByMemoryId.get(memory.id) ?? []).map(event => ({
+          id: event.id,
+          action: event.action,
+          reason: event.reason,
+          createdAt: event.createdAt,
+        })),
         createdAt: memory.createdAt,
       })),
     latestReflections: input.reflections.map(reflection => ({
@@ -162,10 +201,18 @@ export default defineEventHandler((event) => {
     })
   }
 
+  const memories = createMemoryRepository(config.sqlitePath).listMemoriesByKey(keyId)
+  const conversations = createConversationRepository(config.sqlitePath)
+  const sourceConversations = memories
+    .map(memory => memory.sourceConversationId ? conversations.getConversationByKey(keyId, memory.sourceConversationId) : undefined)
+    .filter((conversation): conversation is ConversationRecord => Boolean(conversation))
+
   return buildAgentCoreResponse({
     profile,
     agentState: createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, new Date().toISOString()),
-    memories: createMemoryRepository(config.sqlitePath).listMemoriesByKey(keyId),
+    memories,
+    sourceConversations,
+    memoryEvents: createMemoryEventRepository(config.sqlitePath).listMemoryEventsByKey(keyId),
     reflections: createAgentReflectionRepository(config.sqlitePath).listReflectionsByKey(keyId, 5),
     proposals: createAgentEvolutionRepository(config.sqlitePath).listProposalsByKey(keyId),
     latestSleepRun: createAgentSleepRepository(config.sqlitePath).getLatestSleepRunByKey(keyId),

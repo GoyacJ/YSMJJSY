@@ -254,6 +254,14 @@ export function createConversationRepository(path: string) {
         LIMIT ?
       `).all(keyId, limit).reverse() as ConversationRecord[]
     },
+
+    getConversationByKey(keyId: string, id: string): ConversationRecord | undefined {
+      return db.prepare(`
+        SELECT id, key_id AS keyId, role, content, message_json AS messageJson, created_at AS createdAt
+        FROM conversations
+        WHERE key_id = ? AND id = ?
+      `).get(keyId, id) as ConversationRecord | undefined
+    },
   }
 }
 

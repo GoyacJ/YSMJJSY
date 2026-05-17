@@ -63,6 +63,16 @@ export type AgentCore = {
     content: string
     importance: number
     confidence: number
+    status?: string
+    sourceConversationId?: string | null
+    sourceAttachmentId?: string | null
+    sourceExcerpt?: string
+    governanceEvents?: Array<{
+      id: string
+      action: string
+      reason: string
+      createdAt: string
+    }>
     createdAt: string
   }>
   latestReflections: Array<{

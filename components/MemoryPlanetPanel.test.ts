@@ -29,6 +29,18 @@ const core: AgentCore = {
       content: '用户喜欢短句。',
       importance: 0.9,
       confidence: 0.92,
+      status: 'active',
+      sourceConversationId: 'c1',
+      sourceAttachmentId: 'a1',
+      sourceExcerpt: '用户说自己喜欢短句。',
+      governanceEvents: [
+        {
+          id: 'event_1',
+          action: 'confirm',
+          reason: '用户明确表达。',
+          createdAt: '2026-05-17T00:02:00.000Z',
+        },
+      ],
       createdAt: '2026-05-17T00:00:00.000Z',
     },
   ],
@@ -162,6 +174,22 @@ describe('MemoryPlanetPanel', () => {
 
     await wrapper.get('button[aria-label="归档记忆"]').trigger('click')
     expect(governMemory).toHaveBeenCalledWith('m1', 'archive')
+  })
+
+  it('shows source and governance history for a selected memory', async () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: { core, open: true },
+      global,
+    })
+
+    await wrapper.get('button[aria-label="查看记忆：用户喜欢短句。"]').trigger('click')
+
+    expect(wrapper.text()).toContain('来源')
+    expect(wrapper.text()).toContain('c1')
+    expect(wrapper.text()).toContain('用户说自己喜欢短句。')
+    expect(wrapper.text()).toContain('状态 active')
+    expect(wrapper.text()).toContain('最近治理动作')
+    expect(wrapper.text()).toContain('confirm')
   })
 
   it('switches between planet, timeline, and works views', async () => {

@@ -282,6 +282,24 @@ describe('sqlite repositories', () => {
     expect(repo.listRecentConversationsByKey('key_1').map(item => item.content)).toEqual(['key 1'])
   })
 
+  it('gets a conversation by key and id', () => {
+    const repo = createConversationRepository(':memory:')
+
+    repo.addConversation({
+      id: 'c1',
+      keyId: 'key_1',
+      role: 'user',
+      content: '用户说自己喜欢短句，这段内容只用于私有来源摘要。',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    })
+
+    expect(repo.getConversationByKey('key_1', 'c1')).toMatchObject({
+      id: 'c1',
+      content: '用户说自己喜欢短句，这段内容只用于私有来源摘要。',
+    })
+    expect(repo.getConversationByKey('key_2', 'c1')).toBeUndefined()
+  })
+
   it('stores structured conversation message json', () => {
     const repo = createConversationRepository(':memory:')
 

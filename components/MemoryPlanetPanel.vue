@@ -27,8 +27,9 @@ const selectedMemoryId = ref<string | null>(null)
 const selectedProposalId = ref<string | null>(null)
 const activeView = ref<'planet' | 'timeline' | 'works'>('planet')
 const state = computed(() => buildMemoryPlanetState(props.core))
-const selectedMemory = computed(() => state.value.memoryStars.find(memory => memory.id === selectedMemoryId.value))
+const selectedMemory = computed(() => props.core?.memories.find(memory => memory.id === selectedMemoryId.value))
 const selectedProposal = computed(() => state.value.proposalLights.find(proposal => proposal.id === selectedProposalId.value))
+const latestMemoryGovernanceEvent = computed(() => selectedMemory.value?.governanceEvents?.[0])
 const hasPlanetContent = computed(() => {
   return state.value.memoryStars.length > 0
     || state.value.reflectionNebulas.length > 0
@@ -150,6 +151,13 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
         <strong>{{ selectedMemory.content }}</strong>
         <span>{{ selectedMemory.type }}</span>
         <span>重要性 {{ selectedMemory.importance.toFixed(2) }} · 置信 {{ selectedMemory.confidence.toFixed(2) }}</span>
+        <span>状态 {{ selectedMemory.status ?? 'active' }}</span>
+        <span v-if="selectedMemory.sourceConversationId">来源 {{ selectedMemory.sourceConversationId }}</span>
+        <span v-if="selectedMemory.sourceAttachmentId">附件 {{ selectedMemory.sourceAttachmentId }}</span>
+        <span v-if="selectedMemory.sourceExcerpt">{{ selectedMemory.sourceExcerpt }}</span>
+        <span v-if="latestMemoryGovernanceEvent">
+          最近治理动作 {{ latestMemoryGovernanceEvent.action }} · {{ latestMemoryGovernanceEvent.reason }}
+        </span>
         <div class="memory-planet-panel__actions">
           <button type="button" aria-label="确认记忆" @click="applyMemoryAction('confirm')">
             确认
