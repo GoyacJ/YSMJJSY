@@ -4,6 +4,7 @@ import {
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
   createAgentSleepRepository,
+  createAgentSnapshotRepository,
   createAgentStateRepository,
   createKeyProfileRepository,
   createMemoryEventRepository,
@@ -11,6 +12,7 @@ import {
   type AgentEvolutionProposalRecord,
   type AgentReflectionRecord,
   type AgentSleepRunRecord,
+  type AgentStateSnapshotRecord,
   type AgentStateRecord,
   type ConversationRecord,
   type KeyProfileRecord,
@@ -26,6 +28,7 @@ type AgentCoreInput = {
   memoryEvents?: MemoryEventRecord[]
   reflections: AgentReflectionRecord[]
   proposals: AgentEvolutionProposalRecord[]
+  snapshots?: AgentStateSnapshotRecord[]
   latestSleepRun?: AgentSleepRunRecord
 }
 
@@ -168,6 +171,11 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
         .filter(proposal => proposal.status !== 'pending')
         .map(serializeProposal),
     },
+    snapshots: (input.snapshots ?? []).map(snapshot => ({
+      id: snapshot.id,
+      proposalId: snapshot.proposalId ?? null,
+      createdAt: snapshot.createdAt,
+    })),
     sleep: {
       lastSleepAt: input.agentState.lastSleepAt ?? null,
       nextSleepAt: input.agentState.nextSleepAt ?? null,
@@ -215,6 +223,7 @@ export default defineEventHandler((event) => {
     memoryEvents: createMemoryEventRepository(config.sqlitePath).listMemoryEventsByKey(keyId),
     reflections: createAgentReflectionRepository(config.sqlitePath).listReflectionsByKey(keyId, 5),
     proposals: createAgentEvolutionRepository(config.sqlitePath).listProposalsByKey(keyId),
+    snapshots: createAgentSnapshotRepository(config.sqlitePath).listSnapshotsByKey(keyId, 12),
     latestSleepRun: createAgentSleepRepository(config.sqlitePath).getLatestSleepRunByKey(keyId),
   })
 })

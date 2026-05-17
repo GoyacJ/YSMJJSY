@@ -7,6 +7,7 @@ const props = defineProps<{
   loadCore?: () => Promise<AgentCore | null>
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
   previewDesignProposal?: (id: string) => Promise<boolean>
+  restoreSnapshot?: (id: string) => Promise<boolean>
   runSleep?: () => Promise<boolean>
 }>()
 
@@ -20,6 +21,9 @@ const core = computed(() => loadedCore.value)
 const panelOpen = computed(() => props.embedded || open.value)
 const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
 const proposalHistory = computed(() => core.value?.proposals.history ?? [])
+const snapshotsByProposalId = computed(() => new Map((core.value?.snapshots ?? [])
+  .filter(snapshot => snapshot.proposalId)
+  .map(snapshot => [snapshot.proposalId, snapshot])))
 const latestSleepRun = computed(() => core.value?.sleep?.latestRun ?? null)
 const latestMemoryActionCount = computed(() => latestSleepRun.value?.memoryActions?.length ?? 0)
 const latestWorkIdeas = computed(() => latestSleepRun.value?.workIdeas ?? [])
@@ -86,6 +90,33 @@ async function previewProposal(id: string) {
   }
   catch {
     error.value = '设计提案预览没有生成成功。'
+  }
+  finally {
+    pending.value = false
+  }
+}
+
+async function restoreProposalSnapshot(proposalId: string) {
+  const snapshot = snapshotsByProposalId.value.get(proposalId)
+
+  if (!snapshot) {
+    return
+  }
+
+  pending.value = true
+  error.value = ''
+
+  try {
+    const ok = props.restoreSnapshot
+      ? await props.restoreSnapshot(snapshot.id)
+      : await agentCore.restoreSnapshot(snapshot.id)
+
+    if (ok) {
+      await loadPanel()
+    }
+  }
+  catch {
+    error.value = '快照没有恢复成功。'
   }
   finally {
     pending.value = false
@@ -335,6 +366,15 @@ onMounted(() => {
               <strong>{{ proposal.title }}</strong>
               <span>{{ proposal.summary }}</span>
               <span>{{ getProposalStatusLabel(proposal.status) }}</span>
+              <button
+                v-if="proposal.status === 'applied' && snapshotsByProposalId.has(proposal.id)"
+                type="button"
+                aria-label="回滚提案"
+                :disabled="pending"
+                @click="restoreProposalSnapshot(proposal.id)"
+              >
+                回滚
+              </button>
             </li>
           </ul>
           <p v-else class="agent-core-panel__muted">

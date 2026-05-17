@@ -57,6 +57,7 @@ const core = {
       },
     ],
   },
+  snapshots: [],
   sleep: {
     lastSleepAt: null,
     nextSleepAt: '2026-05-17T12:00:00.000Z',
@@ -283,5 +284,46 @@ describe('AgentCorePanel', () => {
     expect(wrapper.text()).toContain('记忆动作 1')
     expect(wrapper.text()).toContain('短句回信')
     expect(wrapper.text()).toContain('承接短句偏好')
+  })
+
+  it('restores an applied proposal snapshot', async () => {
+    const restoreSnapshot = vi.fn(async () => true)
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        loadCore: async () => ({
+          ...core,
+          proposals: {
+            pending: [],
+            history: [
+              {
+                id: 'p_applied',
+                type: 'tone',
+                title: '更短',
+                summary: '回复更短。',
+                payload: { tone: '更短' },
+                status: 'applied',
+                createdAt: '2026-05-18T00:00:00.000Z',
+                updatedAt: '2026-05-18T00:01:00.000Z',
+              },
+            ],
+          },
+          snapshots: [
+            {
+              id: 'snap_1',
+              proposalId: 'p_applied',
+              createdAt: '2026-05-18T00:00:30.000Z',
+            },
+          ],
+        }),
+        applyProposal: vi.fn(),
+        restoreSnapshot,
+      },
+    })
+
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
+    await flushPromises()
+    await wrapper.get('button[aria-label="回滚提案"]').trigger('click')
+
+    expect(restoreSnapshot).toHaveBeenCalledWith('snap_1')
   })
 })

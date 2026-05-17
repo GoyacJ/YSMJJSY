@@ -95,6 +95,11 @@ export type AgentCore = {
     pending: AgentCoreProposal[]
     history: AgentCoreProposal[]
   }
+  snapshots?: Array<{
+    id: string
+    proposalId?: string | null
+    createdAt: string
+  }>
   sleep?: {
     lastSleepAt?: string | null
     nextSleepAt?: string | null
@@ -172,6 +177,26 @@ export function useAgentCore() {
     catch {
       error.value = '设计提案预览没有生成成功。'
       return null
+    }
+    finally {
+      pending.value = false
+    }
+  }
+
+  async function restoreSnapshot(id: string) {
+    pending.value = true
+    error.value = ''
+
+    try {
+      await $fetch(`/api/agent/snapshots/${id}/restore`, {
+        method: 'POST',
+      })
+      await loadCore()
+      return true
+    }
+    catch {
+      error.value = '快照没有恢复成功。'
+      return false
     }
     finally {
       pending.value = false
@@ -269,6 +294,7 @@ export function useAgentCore() {
     loadCore,
     applyProposal,
     previewDesignProposal,
+    restoreSnapshot,
     runSleep,
     governMemory,
     loadTimeline,

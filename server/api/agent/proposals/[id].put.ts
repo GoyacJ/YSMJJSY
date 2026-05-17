@@ -85,8 +85,11 @@ export function applyAgentProposalAction(input: ApplyAgentProposalActionInput) {
     keyId: input.keyId,
     proposalId: proposal.id,
     profileJson: JSON.stringify({
-      assistantName: input.profile.assistantName,
-      mbti: input.profile.mbti,
+      profile: {
+        assistantName: input.profile.assistantName,
+        mbti: input.profile.mbti,
+      },
+      agentState: input.agentState,
       acceptedProposal: {
         type: proposal.type,
         payload,

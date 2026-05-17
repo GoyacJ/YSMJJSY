@@ -610,6 +610,20 @@ export function createAgentSnapshotRepository(path: string) {
         LIMIT ?
       `).all(keyId, limit) as AgentStateSnapshotRecord[]
     },
+
+    getSnapshotByKey(keyId: string, id: string): AgentStateSnapshotRecord | undefined {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          proposal_id AS proposalId,
+          profile_json AS profileJson,
+          created_at AS createdAt
+        FROM agent_state_snapshots
+        WHERE key_id = ?
+          AND id = ?
+      `).get(keyId, id) as AgentStateSnapshotRecord | undefined
+    },
   }
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildAgentCoreResponse, requireAgentKey } from './agent/core.get'
 import { applyAgentProposalAction } from './agent/proposals/[id].put'
+import { restoreAgentSnapshotAction } from './agent/snapshots/[id]/restore.post'
 
 describe('agent core api helpers', () => {
   it('rejects unauthenticated requests', () => {
@@ -125,6 +126,15 @@ describe('agent core api helpers', () => {
           status: 'applied',
           createdAt: '2026-05-17T00:03:00.000Z',
           updatedAt: '2026-05-17T00:04:00.000Z',
+        },
+      ],
+      snapshots: [
+        {
+          id: 'snap_1',
+          keyId: 'key_1',
+          proposalId: 'p4',
+          profileJson: '{}',
+          createdAt: '2026-05-17T00:03:30.000Z',
         },
       ],
       sourceConversations: [
@@ -257,6 +267,13 @@ describe('agent core api helpers', () => {
           },
         ],
       },
+      snapshots: [
+        {
+          id: 'snap_1',
+          proposalId: 'p4',
+          createdAt: '2026-05-17T00:03:30.000Z',
+        },
+      ],
       sleep: {
         lastSleepAt: null,
         nextSleepAt: null,
@@ -321,8 +338,16 @@ describe('agent core api helpers', () => {
       keyId: 'key_1',
       proposalId: 'p1',
       profileJson: JSON.stringify({
-        assistantName: '阿月',
-        mbti: 'INTJ',
+        profile: {
+          assistantName: '阿月',
+          mbti: 'INTJ',
+        },
+        agentState: {
+          tone: '克制、温柔、安静',
+          relationshipRole: '记忆星球守护者',
+          learningMode: 'assisted',
+          contentStrategy: {},
+        },
         acceptedProposal: {
           type: 'tone',
           payload: { tone: 'concise' },
@@ -485,5 +510,40 @@ describe('agent core api helpers', () => {
       memories: { updateMemory: vi.fn() },
     })).toBeUndefined()
     expect(updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('restores agent state from a snapshot', () => {
+    const updateAgentState = vi.fn()
+    const result = restoreAgentSnapshotAction({
+      keyId: 'key_1',
+      snapshotId: 'snap_1',
+      snapshots: {
+        getSnapshotByKey: () => ({
+          id: 'snap_1',
+          keyId: 'key_1',
+          proposalId: 'p1',
+          profileJson: JSON.stringify({
+            agentState: {
+              tone: '克制、温柔、安静',
+              relationshipRole: '记忆星球守护者',
+              learningMode: 'assisted',
+              contentStrategy: {},
+            },
+          }),
+          createdAt: '2026-05-18T00:00:00.000Z',
+        }),
+      },
+      states: { updateAgentState },
+      now: '2026-05-18T00:01:00.000Z',
+    })
+
+    expect(result.restored).toBe(true)
+    expect(updateAgentState).toHaveBeenCalledWith('key_1', {
+      tone: '克制、温柔、安静',
+      relationshipRole: '记忆星球守护者',
+      learningMode: 'assisted',
+      contentStrategy: {},
+      updatedAt: '2026-05-18T00:01:00.000Z',
+    })
   })
 })
