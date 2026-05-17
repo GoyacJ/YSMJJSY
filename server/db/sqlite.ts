@@ -56,6 +56,23 @@ export type AgentStateSnapshotRecord = {
   createdAt: string
 }
 
+export type AgentContentStrategy = {
+  replyLength?: 'short' | 'balanced' | 'rich'
+  structure?: 'plain' | 'letter' | 'checklist'
+  initiative?: 'low' | 'medium'
+}
+
+export type AgentStateRecord = {
+  keyId: string
+  tone: string
+  relationshipRole: string
+  learningMode: 'manual' | 'assisted' | 'auto'
+  contentStrategy: AgentContentStrategy
+  lastSleepAt?: string | null
+  nextSleepAt?: string | null
+  updatedAt: string
+}
+
 export type MediaTaskRecord = {
   id: string
   keyId?: string | null
@@ -409,6 +426,168 @@ export function createAgentSnapshotRepository(path: string) {
         ORDER BY created_at DESC
         LIMIT ?
       `).all(keyId, limit) as AgentStateSnapshotRecord[]
+    },
+  }
+}
+
+const defaultAgentContentStrategy: Required<AgentContentStrategy> = {
+  replyLength: 'balanced',
+  structure: 'plain',
+  initiative: 'low',
+}
+
+const defaultAgentState = {
+  tone: '克制、温柔、安静',
+  relationshipRole: '记忆星球守护者',
+  learningMode: 'assisted',
+  contentStrategy: defaultAgentContentStrategy,
+} satisfies Omit<AgentStateRecord, 'keyId' | 'updatedAt'>
+
+function parseAgentContentStrategy(value: string): AgentContentStrategy {
+  try {
+    const parsed = JSON.parse(value) as AgentContentStrategy
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ...defaultAgentContentStrategy }
+    }
+
+    return {
+      replyLength: ['short', 'balanced', 'rich'].includes(String(parsed.replyLength))
+        ? parsed.replyLength
+        : defaultAgentContentStrategy.replyLength,
+      structure: ['plain', 'letter', 'checklist'].includes(String(parsed.structure))
+        ? parsed.structure
+        : defaultAgentContentStrategy.structure,
+      initiative: ['low', 'medium'].includes(String(parsed.initiative))
+        ? parsed.initiative
+        : defaultAgentContentStrategy.initiative,
+    }
+  } catch {
+    return { ...defaultAgentContentStrategy }
+  }
+}
+
+function mapAgentStateRow(row: {
+  keyId: string
+  tone: string
+  relationshipRole: string
+  learningMode: AgentStateRecord['learningMode']
+  contentStrategyJson: string
+  lastSleepAt?: string | null
+  nextSleepAt?: string | null
+  updatedAt: string
+}): AgentStateRecord {
+  return {
+    keyId: row.keyId,
+    tone: row.tone,
+    relationshipRole: row.relationshipRole,
+    learningMode: row.learningMode,
+    contentStrategy: parseAgentContentStrategy(row.contentStrategyJson),
+    lastSleepAt: row.lastSleepAt,
+    nextSleepAt: row.nextSleepAt,
+    updatedAt: row.updatedAt,
+  }
+}
+
+export function createAgentStateRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    getAgentState(keyId: string): AgentStateRecord | undefined {
+      const row = db.prepare(`
+        SELECT
+          key_id AS keyId,
+          tone,
+          relationship_role AS relationshipRole,
+          learning_mode AS learningMode,
+          content_strategy_json AS contentStrategyJson,
+          last_sleep_at AS lastSleepAt,
+          next_sleep_at AS nextSleepAt,
+          updated_at AS updatedAt
+        FROM agent_states
+        WHERE key_id = ?
+      `).get(keyId) as Parameters<typeof mapAgentStateRow>[0] | undefined
+
+      return row ? mapAgentStateRow(row) : undefined
+    },
+
+    getOrCreateAgentState(keyId: string, now: string): AgentStateRecord {
+      const existing = this.getAgentState(keyId)
+
+      if (existing) {
+        return existing
+      }
+
+      const record: AgentStateRecord = {
+        keyId,
+        tone: defaultAgentState.tone,
+        relationshipRole: defaultAgentState.relationshipRole,
+        learningMode: defaultAgentState.learningMode,
+        contentStrategy: { ...defaultAgentState.contentStrategy },
+        lastSleepAt: null,
+        nextSleepAt: null,
+        updatedAt: now,
+      }
+
+      db.prepare(`
+        INSERT INTO agent_states (
+          key_id,
+          tone,
+          relationship_role,
+          learning_mode,
+          content_strategy_json,
+          last_sleep_at,
+          next_sleep_at,
+          updated_at
+        )
+        VALUES (
+          @keyId,
+          @tone,
+          @relationshipRole,
+          @learningMode,
+          @contentStrategyJson,
+          @lastSleepAt,
+          @nextSleepAt,
+          @updatedAt
+        )
+      `).run({
+        ...record,
+        contentStrategyJson: JSON.stringify(record.contentStrategy),
+      })
+
+      return record
+    },
+
+    updateAgentState(keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) {
+      const current = this.getAgentState(keyId)
+
+      if (!current) {
+        return
+      }
+
+      const next: AgentStateRecord = {
+        ...current,
+        ...updates,
+        contentStrategy: updates.contentStrategy ?? current.contentStrategy,
+      }
+
+      db.prepare(`
+        UPDATE agent_states
+        SET
+          tone = @tone,
+          relationship_role = @relationshipRole,
+          learning_mode = @learningMode,
+          content_strategy_json = @contentStrategyJson,
+          last_sleep_at = @lastSleepAt,
+          next_sleep_at = @nextSleepAt,
+          updated_at = @updatedAt
+        WHERE key_id = @keyId
+      `).run({
+        ...next,
+        contentStrategyJson: JSON.stringify(next.contentStrategy),
+        lastSleepAt: next.lastSleepAt ?? null,
+        nextSleepAt: next.nextSleepAt ?? null,
+      })
     },
   }
 }

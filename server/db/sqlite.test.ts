@@ -5,6 +5,7 @@ import {
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
   createAgentSnapshotRepository,
+  createAgentStateRepository,
   createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
@@ -14,6 +15,40 @@ import {
 } from './sqlite'
 
 describe('sqlite repositories', () => {
+  it('creates a default agent state for a key', () => {
+    const repo = createAgentStateRepository(':memory:')
+
+    const state = repo.getOrCreateAgentState('key_1', '2026-05-17T00:00:00.000Z')
+
+    expect(state).toMatchObject({
+      keyId: 'key_1',
+      tone: '克制、温柔、安静',
+      relationshipRole: '记忆星球守护者',
+      learningMode: 'assisted',
+      contentStrategy: {
+        replyLength: 'balanced',
+        structure: 'plain',
+        initiative: 'low',
+      },
+    })
+  })
+
+  it('updates agent runtime state without changing unrelated fields', () => {
+    const repo = createAgentStateRepository(':memory:')
+
+    repo.getOrCreateAgentState('key_1', '2026-05-17T00:00:00.000Z')
+    repo.updateAgentState('key_1', {
+      tone: '更短',
+      updatedAt: '2026-05-17T00:01:00.000Z',
+    })
+
+    expect(repo.getAgentState('key_1')).toMatchObject({
+      keyId: 'key_1',
+      tone: '更短',
+      relationshipRole: '记忆星球守护者',
+    })
+  })
+
   it('stores and reads memories', () => {
     const repo = createMemoryRepository(':memory:')
 

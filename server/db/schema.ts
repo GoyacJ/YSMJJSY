@@ -47,6 +47,16 @@ export const schemaStatements = [
     profile_json TEXT NOT NULL,
     created_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_states (
+    key_id TEXT PRIMARY KEY,
+    tone TEXT NOT NULL,
+    relationship_role TEXT NOT NULL,
+    learning_mode TEXT NOT NULL,
+    content_strategy_json TEXT NOT NULL,
+    last_sleep_at TEXT,
+    next_sleep_at TEXT,
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS media_tasks (
     id TEXT PRIMARY KEY,
     key_id TEXT,
