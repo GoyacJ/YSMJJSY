@@ -20,6 +20,14 @@ export type AgentCoreProposal = {
   updatedAt: string
 }
 
+export type AgentTimelineItem = {
+  id: string
+  type: 'key' | 'profile' | 'memory' | 'reflection' | 'sleep' | 'proposal' | 'work' | 'design'
+  title: string
+  summary: string
+  createdAt: string
+}
+
 export type AgentCore = {
   profile: {
     keyId: string
@@ -70,6 +78,7 @@ export type AgentCore = {
 
 export function useAgentCore() {
   const core = ref<AgentCore | null>(null)
+  const timeline = ref<AgentTimelineItem[]>([])
   const pending = ref(false)
   const error = ref('')
 
@@ -153,13 +162,27 @@ export function useAgentCore() {
     }
   }
 
+  async function loadTimeline() {
+    try {
+      const result = await $fetch<{ items: AgentTimelineItem[] }>('/api/agent/timeline')
+      timeline.value = result.items
+      return result.items
+    }
+    catch {
+      error.value = '时间线没有加载成功。'
+      return []
+    }
+  }
+
   return {
     core: readonly(core),
+    timeline: readonly(timeline),
     pending: readonly(pending),
     error: readonly(error),
     loadCore,
     applyProposal,
     runSleep,
     governMemory,
+    loadTimeline,
   }
 }
