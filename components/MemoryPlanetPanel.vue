@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import MemoryPlanetStage from './MemoryPlanetStage.vue'
-import type { AgentCore, AgentCoreProposalAction, AgentTimelineItem, AgentWorkItem, MemoryGovernanceAction } from '../composables/useAgentCore'
+import type { AgentCore, AgentCoreProposalAction, AgentTimelineGroup, AgentTimelineItem, AgentWorkItem, MemoryGovernanceAction } from '../composables/useAgentCore'
 import { buildMemoryPlanetState } from '../utils/memory-planet'
 
 const props = defineProps<{
@@ -13,6 +13,7 @@ const props = defineProps<{
   previewDesignProposal?: (id: string) => Promise<boolean>
   runSleep?: () => Promise<boolean>
   timeline?: AgentTimelineItem[]
+  timelineGroups?: AgentTimelineGroup[]
   works?: AgentWorkItem[]
   loadTimeline?: () => Promise<AgentTimelineItem[]>
   loadWorks?: () => Promise<AgentWorkItem[]>
@@ -45,6 +46,28 @@ const workFilters = [
   { value: 'page_design', label: '页面', aria: '筛选页面作品' },
   { value: 'letter', label: '文字', aria: '筛选文字作品' },
 ]
+const timelineGroupsForDisplay = computed(() => {
+  if (props.timelineGroups?.length) {
+    return props.timelineGroups
+  }
+
+  const items = props.timeline ?? []
+  const groups = items.reduce<AgentTimelineGroup[]>((result, item) => {
+    const date = item.createdAt.slice(0, 10)
+    const group = result.find(existing => existing.date === date)
+
+    if (group) {
+      group.items.push(item)
+    }
+    else {
+      result.push({ date, items: [item] })
+    }
+
+    return result
+  }, [])
+
+  return groups
+})
 const hasPlanetContent = computed(() => {
   return state.value.memoryStars.length > 0
     || state.value.reflectionNebulas.length > 0
@@ -94,6 +117,31 @@ async function switchView(view: 'planet' | 'timeline' | 'works') {
 
   if (view === 'works') {
     await props.loadWorks?.()
+  }
+}
+
+function openTimelineItem(item: AgentTimelineItem) {
+  if (!item.targetId || !item.targetType) {
+    return
+  }
+
+  if (item.targetType === 'memory' && props.core?.memories.some(memory => memory.id === item.targetId)) {
+    selectedMemoryId.value = item.targetId
+    selectedProposalId.value = null
+    activeView.value = 'planet'
+    return
+  }
+
+  if (item.targetType === 'proposal' && state.value.proposalLights.some(proposal => proposal.id === item.targetId)) {
+    selectedProposalId.value = item.targetId
+    selectedMemoryId.value = null
+    activeView.value = 'planet'
+    return
+  }
+
+  if ((item.targetType === 'work' || item.targetType === 'design') && (props.works ?? []).some(work => work.id === item.targetId)) {
+    selectedWorkId.value = item.targetId
+    activeView.value = 'works'
   }
 }
 
@@ -151,12 +199,19 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
       </section>
     </div>
 
-    <section v-else-if="activeView === 'timeline'" class="memory-planet-panel__list">
-      <article v-for="item in timeline ?? []" :key="item.id">
-        <strong>{{ item.title }}</strong>
-        <span>{{ item.summary }}</span>
-      </article>
-      <p v-if="!(timeline ?? []).length">还没有时间线</p>
+    <section v-else-if="activeView === 'timeline'" class="memory-planet-panel__list memory-planet-panel__timeline">
+      <section v-for="group in timelineGroupsForDisplay" :key="group.date" class="memory-planet-panel__timeline-group">
+        <p>{{ group.date }}</p>
+        <article v-for="item in group.items" :key="item.id" :data-importance="item.importance ?? 'normal'">
+          <button type="button" :aria-label="`打开时间线事件：${item.title}`" @click="openTimelineItem(item)">
+            <span>{{ item.type }}</span>
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.summary }}</span>
+            <span v-if="item.importance === 'high'">高信号</span>
+          </button>
+        </article>
+      </section>
+      <p v-if="!timelineGroupsForDisplay.length">还没有时间线</p>
     </section>
 
     <section v-else class="memory-planet-panel__list">

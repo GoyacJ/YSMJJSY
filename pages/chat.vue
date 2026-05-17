@@ -13,6 +13,7 @@ const { loadMessages } = useStarChat()
 const {
   core: agentCore,
   timeline: agentTimeline,
+  timelineGroups: agentTimelineGroups,
   works: agentWorks,
   loadCore: loadAgentCore,
   applyProposal: applyAgentCoreProposal,
@@ -119,6 +120,7 @@ onMounted(async () => {
         :preview-design-proposal="previewAgentDesignProposal"
         :run-sleep="runSleep"
         :timeline="agentTimeline"
+        :timeline-groups="agentTimelineGroups"
         :works="agentWorks"
         :load-timeline="loadTimeline"
         :load-works="loadWorks"

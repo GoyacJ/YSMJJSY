@@ -1414,6 +1414,21 @@ body {
   text-align: left;
 }
 
+.memory-planet-panel__timeline-group {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.memory-planet-panel__timeline-group > p {
+  margin: 0;
+  color: var(--chat-ink-soft);
+  font-size: 0.76rem;
+}
+
+.memory-planet-panel__timeline article[data-importance="high"] {
+  border-color: rgb(246 223 178 / 0.38);
+}
+
 .memory-planet-panel__detail img,
 .memory-planet-panel__detail video {
   width: 100%;

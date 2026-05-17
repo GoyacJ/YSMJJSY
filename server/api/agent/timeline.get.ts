@@ -21,16 +21,19 @@ export type AgentTimelineItem = {
   title: string
   summary: string
   createdAt: string
+  targetId?: string
+  targetType?: 'memory' | 'proposal' | 'sleep' | 'work' | 'design'
+  importance?: 'normal' | 'high'
 }
 
 export function buildAgentTimeline(input: {
   profile: Pick<KeyProfileRecord, 'createdAt' | 'configuredAt'>
-  memories: Array<Pick<MemoryRecord, 'id' | 'content' | 'createdAt'>>
+  memories: Array<Pick<MemoryRecord, 'id' | 'content' | 'importance' | 'createdAt'>>
   reflections: Array<Pick<AgentReflectionRecord, 'id' | 'summary' | 'createdAt'>>
   proposals: Array<Pick<AgentEvolutionProposalRecord, 'id' | 'title' | 'summary' | 'createdAt'>>
   sleepRuns: Array<Pick<AgentSleepRunRecord, 'id' | 'summary' | 'startedAt' | 'status'>>
   works: Array<Pick<AgentWorkRecord, 'id' | 'type' | 'title' | 'summary' | 'createdAt'>>
-}): AgentTimelineItem[] {
+}) {
   const items: AgentTimelineItem[] = []
 
   if (input.profile.configuredAt) {
@@ -50,6 +53,9 @@ export function buildAgentTimeline(input: {
       title: '形成记忆',
       summary: memory.content,
       createdAt: memory.createdAt,
+      targetId: memory.id,
+      targetType: 'memory',
+      importance: memory.importance >= 0.8 ? 'high' : 'normal',
     })
   }
 
@@ -70,6 +76,8 @@ export function buildAgentTimeline(input: {
       title: run.status === 'completed' ? '睡眠整理' : '睡眠记录',
       summary: run.summary,
       createdAt: run.startedAt,
+      targetId: run.id,
+      targetType: 'sleep',
     })
   }
 
@@ -80,16 +88,22 @@ export function buildAgentTimeline(input: {
       title: proposal.title,
       summary: proposal.summary,
       createdAt: proposal.createdAt,
+      targetId: proposal.id,
+      targetType: 'proposal',
     })
   }
 
   for (const work of input.works) {
+    const targetType = work.type === 'page_design' ? 'design' : 'work'
+
     items.push({
       id: work.id,
-      type: work.type === 'page_design' ? 'design' : 'work',
+      type: targetType,
       title: work.title,
       summary: work.summary,
       createdAt: work.createdAt,
+      targetId: work.id,
+      targetType,
     })
   }
 
@@ -101,7 +115,25 @@ export function buildAgentTimeline(input: {
     createdAt: input.profile.createdAt,
   })
 
-  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const sortedItems = items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const groups = sortedItems.reduce<Array<{ date: string, items: AgentTimelineItem[] }>>((result, item) => {
+    const date = item.createdAt.slice(0, 10)
+    const group = result.find(existing => existing.date === date)
+
+    if (group) {
+      group.items.push(item)
+    }
+    else {
+      result.push({ date, items: [item] })
+    }
+
+    return result
+  }, [])
+
+  return {
+    items: sortedItems,
+    groups,
+  }
 }
 
 export default defineEventHandler((event) => {
@@ -116,14 +148,12 @@ export default defineEventHandler((event) => {
     })
   }
 
-  return {
-    items: buildAgentTimeline({
-      profile,
-      memories: createMemoryRepository(config.sqlitePath).listMemoriesByKey(keyId),
-      reflections: createAgentReflectionRepository(config.sqlitePath).listReflectionsByKey(keyId),
-      proposals: createAgentEvolutionRepository(config.sqlitePath).listProposalsByKey(keyId),
-      sleepRuns: createAgentSleepRepository(config.sqlitePath).listSleepRunsByKey(keyId),
-      works: createAgentWorkRepository(config.sqlitePath).listWorksByKey(keyId),
-    }),
-  }
+  return buildAgentTimeline({
+    profile,
+    memories: createMemoryRepository(config.sqlitePath).listMemoriesByKey(keyId),
+    reflections: createAgentReflectionRepository(config.sqlitePath).listReflectionsByKey(keyId),
+    proposals: createAgentEvolutionRepository(config.sqlitePath).listProposalsByKey(keyId),
+    sleepRuns: createAgentSleepRepository(config.sqlitePath).listSleepRunsByKey(keyId),
+    works: createAgentWorkRepository(config.sqlitePath).listWorksByKey(keyId),
+  })
 })

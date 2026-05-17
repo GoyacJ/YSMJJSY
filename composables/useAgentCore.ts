@@ -27,6 +27,14 @@ export type AgentTimelineItem = {
   title: string
   summary: string
   createdAt: string
+  targetId?: string
+  targetType?: 'memory' | 'proposal' | 'sleep' | 'work' | 'design'
+  importance?: 'normal' | 'high'
+}
+
+export type AgentTimelineGroup = {
+  date: string
+  items: AgentTimelineItem[]
 }
 
 export type AgentWorkItem = {
@@ -108,6 +116,7 @@ export type AgentCore = {
 export function useAgentCore() {
   const core = ref<AgentCore | null>(null)
   const timeline = ref<AgentTimelineItem[]>([])
+  const timelineGroups = ref<AgentTimelineGroup[]>([])
   const works = ref<AgentWorkItem[]>([])
   const pending = ref(false)
   const error = ref('')
@@ -212,8 +221,9 @@ export function useAgentCore() {
 
   async function loadTimeline() {
     try {
-      const result = await $fetch<{ items: AgentTimelineItem[] }>('/api/agent/timeline')
+      const result = await $fetch<{ items: AgentTimelineItem[], groups?: AgentTimelineGroup[] }>('/api/agent/timeline')
       timeline.value = result.items
+      timelineGroups.value = result.groups ?? [{ date: '', items: result.items }]
       return result.items
     }
     catch {
@@ -252,6 +262,7 @@ export function useAgentCore() {
   return {
     core: readonly(core),
     timeline: readonly(timeline),
+    timelineGroups: readonly(timelineGroups),
     works: readonly(works),
     pending: readonly(pending),
     error: readonly(error),

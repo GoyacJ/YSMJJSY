@@ -210,6 +210,43 @@ describe('MemoryPlanetPanel', () => {
     expect(wrapper.text()).toContain('月光图')
   })
 
+  it('renders grouped timeline and opens matching memory detail', async () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        timelineGroups: [
+          {
+            date: '2026-05-17',
+            items: [
+              {
+                id: 't1',
+                type: 'memory',
+                title: '形成记忆',
+                summary: '用户喜欢短句。',
+                createdAt: '2026-05-17T00:00:00.000Z',
+                targetId: 'm1',
+                targetType: 'memory',
+                importance: 'high',
+              },
+            ],
+          },
+        ],
+      },
+      global,
+    })
+
+    await wrapper.get('button[aria-label="查看星球时间线"]').trigger('click')
+
+    expect(wrapper.text()).toContain('2026-05-17')
+    expect(wrapper.text()).toContain('高信号')
+
+    await wrapper.get('button[aria-label="打开时间线事件：形成记忆"]').trigger('click')
+
+    expect(wrapper.text()).toContain('记忆')
+    expect(wrapper.text()).toContain('用户喜欢短句。')
+  })
+
   it('selects, previews, filters, and toggles works', async () => {
     const updateWorkVisibility = vi.fn(async () => true)
     const wrapper = mount(MemoryPlanetPanel, {
