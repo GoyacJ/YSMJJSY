@@ -30,6 +30,48 @@ const inferencePatterns = [
   '说明她喜欢',
 ]
 
+function normalizeComparableText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[\s，。！？、,.!?;；:"“”'‘’()[\]{}]/g, '')
+}
+
+function characterOverlapRatio(left: string, right: string) {
+  const leftChars = new Set(Array.from(left))
+  const rightChars = new Set(Array.from(right))
+  const smaller = leftChars.size <= rightChars.size ? leftChars : rightChars
+  const larger = leftChars.size <= rightChars.size ? rightChars : leftChars
+  let overlap = 0
+
+  for (const char of smaller) {
+    if (larger.has(char)) {
+      overlap += 1
+    }
+  }
+
+  return smaller.size > 0 ? overlap / smaller.size : 0
+}
+
+export function isSimilarRejectedMemory(candidate: string, rejected: string[]) {
+  const normalizedCandidate = normalizeComparableText(candidate)
+
+  if (!normalizedCandidate) {
+    return false
+  }
+
+  return rejected.some((item) => {
+    const normalizedRejected = normalizeComparableText(item)
+
+    if (!normalizedRejected) {
+      return false
+    }
+
+    return normalizedCandidate.includes(normalizedRejected)
+      || normalizedRejected.includes(normalizedCandidate)
+      || characterOverlapRatio(normalizedCandidate, normalizedRejected) >= 0.9
+  })
+}
+
 export function shouldPersistMemory(memory: ExtractedMemory) {
   if (!memory.shouldRemember) {
     return false

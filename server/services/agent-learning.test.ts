@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAgentReflectionMessages,
   calculateNextSleepAt,
+  filterRejectedLearnedMemories,
   parseAgentSleepResult,
   parseAgentReflectionResult,
   shouldScheduleAgentSleep,
@@ -159,5 +160,24 @@ describe('agent learning service', () => {
 
   it('calculates the next sleep reminder twelve hours later', () => {
     expect(calculateNextSleepAt('2026-05-18T00:00:00.000Z')).toBe('2026-05-18T12:00:00.000Z')
+  })
+
+  it('filters learned memories similar to rejected memories', () => {
+    expect(filterRejectedLearnedMemories([
+      {
+        type: 'preference',
+        content: '用户喜欢短句。',
+        importance: 0.8,
+        confidence: 0.9,
+        status: 'active',
+      },
+      {
+        type: 'preference',
+        content: '用户喜欢蓝色。',
+        importance: 0.8,
+        confidence: 0.9,
+        status: 'active',
+      },
+    ], ['用户喜欢短句。']).map(memory => memory.content)).toEqual(['用户喜欢蓝色。'])
   })
 })

@@ -375,6 +375,46 @@ describe('chat api helpers', () => {
     })
   })
 
+  it('does not store learned memories similar to rejected memories', async () => {
+    const memories: any[] = []
+
+    await runAgentLearning({
+      keyId: 'key_1',
+      conversationId: 'c_assistant',
+      userMessage: '我喜欢短句。',
+      assistantReply: '好。',
+      existingMemories: [],
+      rejectedMemories: ['用户喜欢短句。'],
+      profile: { assistantName: '星信', mbti: 'INTJ' },
+      client: {
+        reflectAgent: vi.fn(async () => JSON.stringify({
+          summary: '用户喜欢短句。',
+          learned: [
+            {
+              shouldRemember: true,
+              type: 'preference',
+              content: '用户喜欢短句。',
+              importance: 0.8,
+              confidence: 0.9,
+            },
+          ],
+          proposals: [],
+        })),
+      },
+      reflections: {
+        addReflection: vi.fn(),
+      },
+      memories: {
+        addMemory: record => memories.push(record),
+      },
+      proposals: {
+        addProposal: vi.fn(),
+      },
+    })
+
+    expect(memories).toHaveLength(0)
+  })
+
   it('stores evolution proposals as pending', async () => {
     const proposals: any[] = []
 

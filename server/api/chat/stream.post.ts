@@ -33,6 +33,7 @@ import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
 import {
   buildAgentReflectionMessages,
   calculateNextSleepAt,
+  filterRejectedLearnedMemories,
   parseAgentReflectionResult,
   shouldScheduleAgentSleep,
 } from '../../services/agent-learning'
@@ -132,6 +133,7 @@ type AgentLearningInput = {
   userMessage: string
   assistantReply: string
   existingMemories: string[]
+  rejectedMemories?: string[]
   profile: {
     assistantName?: string
     mbti?: string
@@ -198,7 +200,7 @@ export async function runAgentLearning(input: AgentLearningInput) {
       createdAt: now,
     })
 
-    for (const memory of result.learned) {
+    for (const memory of filterRejectedLearnedMemories(result.learned, input.rejectedMemories ?? [])) {
       input.memories.addMemory({
         id: nanoid(),
         keyId: input.keyId,
@@ -302,6 +304,9 @@ export default defineEventHandler(async (event) => {
   const recentConversation = conversations.listRecentConversationsByKey(keyId, 12)
   const savedMemoryRecords = memories.listMemoriesByKey(keyId)
   const savedMemories = selectActiveMemoryContents(savedMemoryRecords)
+  const rejectedMemories = savedMemoryRecords
+    .filter(memory => memory.status === 'rejected')
+    .map(memory => memory.content)
   const recentReflections = selectRecentReflectionSummaries(reflections.listReflectionsByKey(keyId, 5))
   const acceptedEvolutionNotes = selectAcceptedEvolutionNotes(proposals.listProposalsByKey(keyId))
   const firstImage = body.data.attachments.find(attachment => attachment.kind === 'image')
@@ -436,6 +441,7 @@ export default defineEventHandler(async (event) => {
           userMessage: body.data.message,
           assistantReply: result.reply,
           existingMemories: savedMemories,
+          rejectedMemories,
           profile: {
             assistantName: profile?.assistantName || '星信',
             mbti: profile?.mbti || 'INTJ',

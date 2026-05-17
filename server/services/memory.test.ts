@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeMemory, shouldPersistMemory } from './memory'
+import { isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory } from './memory'
 
 describe('memory filtering', () => {
   it('keeps explicit high-importance memories', () => {
@@ -65,5 +65,17 @@ describe('memory filtering', () => {
       confidence: 0.9,
       status: 'active',
     })
+  })
+
+  it('detects exact repeated rejected memory content', () => {
+    expect(isSimilarRejectedMemory('用户喜欢短句。', ['用户喜欢短句。'])).toBe(true)
+  })
+
+  it('detects close substring rejected memory content', () => {
+    expect(isSimilarRejectedMemory('用户喜欢短句回复', ['喜欢短句'])).toBe(true)
+  })
+
+  it('ignores unrelated rejected memory content', () => {
+    expect(isSimilarRejectedMemory('用户喜欢蓝色。', ['用户喜欢短句。'])).toBe(false)
   })
 })
