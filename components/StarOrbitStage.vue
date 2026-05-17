@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import StarGlyphText from './StarGlyphText.vue'
 import StarSpectralMedia from './StarSpectralMedia.vue'
 import type { StarChatMessage, StarChatPart } from '../composables/useStarChat'
@@ -29,6 +29,7 @@ const emit = defineEmits<{
 }>()
 
 const activeMemoryId = ref<string | null>(null)
+const visibleGroupLimit = 2
 
 const groups = computed(() => {
   const nextGroups: OrbitGroup[] = []
@@ -71,23 +72,32 @@ const groups = computed(() => {
   return nextGroups
 })
 
+const visibleGroups = computed(() => groups.value.slice(-visibleGroupLimit))
 const activeMemory = computed(() => groups.value.find(group => group.id === activeMemoryId.value))
 
-function getOrbitPosition(index: number) {
-  const positions = [
-    { x: 48, y: 74 },
-    { x: 34, y: 58 },
-    { x: 62, y: 48 },
-    { x: 43, y: 36 },
-    { x: 69, y: 64 },
-    { x: 25, y: 43 },
-  ]
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+})
 
-  return positions[index % positions.length]
-}
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
+})
 
 function hasMedia(message?: StarChatMessage) {
   return Boolean(message?.parts?.some(part => ['audio', 'image', 'music', 'video'].includes(part.type)))
+}
+
+function getOrbitPosition(index: number) {
+  const positions = [
+    { x: 18, y: 18 },
+    { x: 82, y: 22 },
+    { x: 24, y: 54 },
+    { x: 74, y: 50 },
+    { x: 38, y: 82 },
+    { x: 88, y: 74 },
+  ]
+
+  return positions[index % positions.length]
 }
 
 function getOrbitMood(message?: StarChatMessage): OrbitMood {
@@ -154,6 +164,21 @@ function getGroupStyle(group: OrbitGroup) {
   }
 }
 
+function getVisibleGroupStyle(index: number, total: number) {
+  const positions = total <= 1
+    ? [{ x: 58, y: 56 }]
+    : [
+        { x: 31, y: 40 },
+        { x: 66, y: 56 },
+      ]
+  const position = positions[index] ?? positions.at(-1) ?? { x: 58, y: 66 }
+
+  return {
+    '--orbit-x': `${position.x}%`,
+    '--orbit-y': `${position.y}%`,
+  }
+}
+
 function isGroupActive(group: OrbitGroup) {
   return props.activeMessageIndex === group.userIndex || props.activeMessageIndex === group.assistantIndex || activeMemoryId.value === group.id
 }
@@ -165,6 +190,19 @@ function activateGroup(group: OrbitGroup) {
 function toggleMemory(group: OrbitGroup) {
   activeMemoryId.value = activeMemoryId.value === group.id ? null : group.id
   activateGroup(group)
+}
+
+function closeMemory() {
+  activeMemoryId.value = null
+}
+
+function handleStageClick() {
+  emit('interact')
+  closeMemory()
+}
+
+function handleDocumentClick() {
+  closeMemory()
 }
 
 function copyGroupMessage(group: OrbitGroup) {
@@ -180,7 +218,7 @@ function copyGroupMessage(group: OrbitGroup) {
   <section
     class="star-orbit-stage"
     aria-label="星轨共写"
-    @click="emit('interact')"
+    @click="handleStageClick"
     @touchstart.passive="emit('interact')"
   >
     <div class="star-orbit-stage__field star-chat__messages" aria-live="polite">
@@ -189,12 +227,16 @@ function copyGroupMessage(group: OrbitGroup) {
       </svg>
 
       <article
-        v-for="group in groups"
+        v-for="(group, visibleIndex) in visibleGroups"
         :key="group.id"
         class="star-orbit-group"
-        :class="{ 'star-orbit-group--active': isGroupActive(group) }"
+        :class="{
+          'star-orbit-group--active': isGroupActive(group),
+          'star-orbit-group--latest': visibleIndex === visibleGroups.length - 1,
+          'star-orbit-group--memory-preview': visibleIndex < visibleGroups.length - 1,
+        }"
         :data-mood="group.mood"
-        :style="getGroupStyle(group)"
+        :style="getVisibleGroupStyle(visibleIndex, visibleGroups.length)"
         @click.stop="activateGroup(group)"
       >
         <div class="star-orbit-group__trail" aria-hidden="true" />
@@ -253,22 +295,24 @@ function copyGroupMessage(group: OrbitGroup) {
         </button>
       </div>
 
-      <aside v-if="activeMemory" class="star-memory-popover" role="dialog" aria-label="记忆回看">
-        <button type="button" class="star-memory-popover__close" aria-label="关闭记忆回看" @click="activeMemoryId = null">
-          ×
-        </button>
-        <p class="star-memory-popover__label">{{ activeMemory.memoryLabel }}</p>
-        <p v-if="activeMemory.userMessage">{{ activeMemory.userMessage.content }}</p>
-        <p v-if="activeMemory.assistantMessage">{{ activeMemory.assistantMessage.content }}</p>
-        <button
-          v-if="activeMemory.assistantMessage"
-          type="button"
-          class="star-memory-popover__copy"
-          @click="emit('copy', activeMemory.assistantMessage)"
-        >
-          复制
-        </button>
-      </aside>
+      <Transition name="star-memory-popover">
+        <aside v-if="activeMemory" class="star-memory-popover" role="dialog" aria-label="记忆回看" @click.stop>
+          <button type="button" class="star-memory-popover__close" aria-label="关闭记忆回看" @click="closeMemory">
+            ×
+          </button>
+          <p class="star-memory-popover__label">{{ activeMemory.memoryLabel }}</p>
+          <p v-if="activeMemory.userMessage">{{ activeMemory.userMessage.content }}</p>
+          <p v-if="activeMemory.assistantMessage">{{ activeMemory.assistantMessage.content }}</p>
+          <button
+            v-if="activeMemory.assistantMessage"
+            type="button"
+            class="star-memory-popover__copy"
+            @click="emit('copy', activeMemory.assistantMessage)"
+          >
+            复制
+          </button>
+        </aside>
+      </Transition>
     </div>
   </section>
 </template>

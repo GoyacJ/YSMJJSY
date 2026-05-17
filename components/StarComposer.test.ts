@@ -52,6 +52,9 @@ describe('StarComposer', () => {
     expect(wrapper.get('label[aria-label="上传图片"]').exists()).toBe(true)
     expect(wrapper.get('label[aria-label="上传音频"]').exists()).toBe(true)
     expect(wrapper.get('label[aria-label="上传视频"]').exists()).toBe(true)
+    expect(wrapper.get('.star-chat__mobile-actions button[aria-label="语音输入"]').exists()).toBe(true)
+    expect(wrapper.get('.star-chat__mobile-actions button[aria-label="设计模式"]').exists()).toBe(true)
+    expect(wrapper.get('.star-chat__quick-tools button[aria-label="语音输入"]').exists()).toBe(true)
 
     await wrapper.get('button[aria-label="画一张"]').trigger('click')
     expect(wrapper.emitted('toggle-media-kind')).toEqual([['image']])

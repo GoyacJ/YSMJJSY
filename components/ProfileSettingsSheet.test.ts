@@ -3,6 +3,14 @@ import { describe, expect, it, vi } from 'vitest'
 import ProfileSettingsSheet from './ProfileSettingsSheet.vue'
 
 describe('ProfileSettingsSheet', () => {
+  const global = {
+    stubs: {
+      MiniMaxQuotaPanel: {
+        template: '<section class="quota-panel">星能量</section>',
+      },
+    },
+  }
+
   it('opens settings with current assistant profile', async () => {
     const loadProfile = vi.fn(async () => ({
       keyId: 'key_1',
@@ -13,6 +21,7 @@ describe('ProfileSettingsSheet', () => {
 
     const wrapper = mount(ProfileSettingsSheet, {
       props: { loadProfile },
+      global,
     })
 
     expect(wrapper.get('button[aria-label="打开设置"]').exists()).toBe(true)
@@ -21,6 +30,8 @@ describe('ProfileSettingsSheet', () => {
     await flushPromises()
 
     expect(loadProfile).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('星能量')
+    expect(wrapper.get('button[aria-label="关闭设置"]').text()).toBe('×')
     expect((wrapper.get('input[name="assistantName"]').element as HTMLInputElement).value).toBe('月光')
     expect((wrapper.get('select[name="mbti"]').element as HTMLSelectElement).value).toBe('INFJ')
   })
@@ -41,6 +52,7 @@ describe('ProfileSettingsSheet', () => {
 
     const wrapper = mount(ProfileSettingsSheet, {
       props: { loadProfile, saveProfile },
+      global,
     })
 
     await wrapper.get('button[aria-label="打开设置"]').trigger('click')

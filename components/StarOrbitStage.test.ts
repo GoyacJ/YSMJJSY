@@ -72,4 +72,111 @@ describe('StarOrbitStage', () => {
     expect(wrapper.get('.star-memory-popover').text()).toContain('把这句记下来。')
     expect(wrapper.get('.star-memory-popover').text()).toContain('已经放进星图。')
   })
+
+  it('closes the memory recap when the stage background is clicked', async () => {
+    const wrapper = mount(StarOrbitStage, {
+      props: {
+        messages: [
+          { role: 'user', content: '把这句记下来。', parts: [{ type: 'text', text: '把这句记下来。' }] },
+          { role: 'assistant', content: '已经放进星图。', parts: [{ type: 'text', text: '已经放进星图。' }] },
+        ],
+        activeMessageIndex: null,
+      },
+    })
+
+    await wrapper.get('button[aria-label="回看记忆：把这句记下来"]').trigger('click')
+    await wrapper.get('.star-orbit-stage__field').trigger('click')
+
+    expect(wrapper.find('.star-memory-popover').exists()).toBe(false)
+  })
+
+  it('closes the memory recap when another page area is clicked', async () => {
+    const wrapper = mount(StarOrbitStage, {
+      props: {
+        messages: [
+          { role: 'user', content: '把这句记下来。', parts: [{ type: 'text', text: '把这句记下来。' }] },
+          { role: 'assistant', content: '已经放进星图。', parts: [{ type: 'text', text: '已经放进星图。' }] },
+        ],
+        activeMessageIndex: null,
+      },
+    })
+
+    await wrapper.get('button[aria-label="回看记忆：把这句记下来"]').trigger('click')
+    document.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.star-memory-popover').exists()).toBe(false)
+  })
+
+  it('keeps the memory recap open when the recap itself is clicked', async () => {
+    const wrapper = mount(StarOrbitStage, {
+      props: {
+        messages: [
+          { role: 'user', content: '把这句记下来。', parts: [{ type: 'text', text: '把这句记下来。' }] },
+          { role: 'assistant', content: '已经放进星图。', parts: [{ type: 'text', text: '已经放进星图。' }] },
+        ],
+        activeMessageIndex: null,
+      },
+    })
+
+    await wrapper.get('button[aria-label="回看记忆：把这句记下来"]').trigger('click')
+    await wrapper.get('.star-memory-popover').trigger('click')
+
+    expect(wrapper.find('.star-memory-popover').exists()).toBe(true)
+  })
+
+  it('keeps old rounds as memory stars instead of crowding the stage', () => {
+    const messages = Array.from({ length: 4 }).flatMap((_, index) => [
+      { role: 'user' as const, content: `第${index + 1}句话`, parts: [{ type: 'text' as const, text: `第${index + 1}句话` }] },
+      { role: 'assistant' as const, content: `第${index + 1}句回复`, parts: [{ type: 'text' as const, text: `第${index + 1}句回复` }] },
+    ])
+    const wrapper = mount(StarOrbitStage, {
+      props: {
+        messages,
+        activeMessageIndex: null,
+      },
+    })
+
+    expect(wrapper.findAll('.star-orbit-group')).toHaveLength(2)
+    expect(wrapper.findAll('.star-memory-constellation__star')).toHaveLength(4)
+    expect(wrapper.text()).not.toContain('第1句话')
+    expect(wrapper.text()).toContain('第4句话')
+  })
+
+  it('keeps the visible conversation above the composer zone', () => {
+    const wrapper = mount(StarOrbitStage, {
+      props: {
+        messages: [
+          { role: 'user', content: '第一句', parts: [{ type: 'text', text: '第一句' }] },
+          { role: 'assistant', content: '第一句回复', parts: [{ type: 'text', text: '第一句回复' }] },
+          { role: 'user', content: '第二句', parts: [{ type: 'text', text: '第二句' }] },
+          { role: 'assistant', content: '第二句回复', parts: [{ type: 'text', text: '第二句回复' }] },
+        ],
+        activeMessageIndex: null,
+      },
+    })
+
+    const groups = wrapper.findAll('.star-orbit-group')
+
+    expect(groups.at(-1)?.attributes('style')).toContain('--orbit-y: 56%')
+  })
+
+  it('spreads memory stars across the full stage', () => {
+    const wrapper = mount(StarOrbitStage, {
+      props: {
+        messages: [
+          { role: 'user', content: '第一句', parts: [{ type: 'text', text: '第一句' }] },
+          { role: 'assistant', content: '第一句回复', parts: [{ type: 'text', text: '第一句回复' }] },
+          { role: 'user', content: '第二句', parts: [{ type: 'text', text: '第二句' }] },
+          { role: 'assistant', content: '第二句回复', parts: [{ type: 'text', text: '第二句回复' }] },
+        ],
+        activeMessageIndex: null,
+      },
+    })
+
+    const memoryStars = wrapper.findAll('.star-memory-constellation__star')
+
+    expect(memoryStars[0].attributes('style')).toContain('--orbit-y: 18%')
+    expect(memoryStars[1].attributes('style')).toContain('--orbit-x: 82%')
+  })
 })

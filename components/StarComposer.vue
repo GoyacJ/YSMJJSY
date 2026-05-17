@@ -88,52 +88,100 @@ function handleInputEnter(event: KeyboardEvent) {
               @change="emit('attachment-change', $event, 'video')"
             >
           </label>
+          <div class="star-chat__mobile-actions" aria-label="更多操作">
+            <button
+              type="button"
+              class="star-chat__icon-button"
+              :disabled="pending || listening"
+              aria-label="语音输入"
+              @click="emit('start-voice')"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v10" />
+                <path d="M8 11a4 4 0 0 0 8 0V7a4 4 0 0 0-8 0v4Z" />
+                <path d="M5 11a7 7 0 0 0 14 0" />
+                <path d="M12 18v3" />
+              </svg>
+              <span>{{ listening ? '正在听' : '语音输入' }}</span>
+            </button>
+            <button
+              type="button"
+              class="star-chat__icon-button"
+              :data-active="mode === 'design'"
+              aria-label="设计模式"
+              @click="emit('toggle-mode')"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+                <path d="M4 12l8 4 8-4" />
+                <path d="M4 17l8 4 8-4" />
+              </svg>
+              <span>设计模式</span>
+            </button>
+            <button
+              v-for="action in mediaActions"
+              :key="`mobile-${action.kind}`"
+              type="button"
+              class="star-chat__icon-button"
+              :data-active="selectedMediaKinds.includes(action.kind)"
+              :disabled="pending"
+              :aria-label="action.label"
+              @click="emit('toggle-media-kind', action.kind)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path :d="action.icon" />
+              </svg>
+              <span>{{ action.label }}</span>
+            </button>
+          </div>
         </div>
       </div>
-      <button
-        type="button"
-        class="star-chat__icon-button"
-        :disabled="pending || listening"
-        aria-label="语音输入"
-        @click="emit('start-voice')"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3v10" />
-          <path d="M8 11a4 4 0 0 0 8 0V7a4 4 0 0 0-8 0v4Z" />
-          <path d="M5 11a7 7 0 0 0 14 0" />
-          <path d="M12 18v3" />
-        </svg>
-        <span class="sr-only">{{ listening ? '正在听' : '语音输入' }}</span>
-      </button>
-      <button
-        type="button"
-        class="star-chat__icon-button"
-        :data-active="mode === 'design'"
-        aria-label="设计模式"
-        @click="emit('toggle-mode')"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3 4 7l8 4 8-4-8-4Z" />
-          <path d="M4 12l8 4 8-4" />
-          <path d="M4 17l8 4 8-4" />
-        </svg>
-        <span class="sr-only">设计模式</span>
-      </button>
-      <button
-        v-for="action in mediaActions"
-        :key="action.kind"
-        type="button"
-        class="star-chat__icon-button"
-        :data-active="selectedMediaKinds.includes(action.kind)"
-        :disabled="pending"
-        :aria-label="action.label"
-        @click="emit('toggle-media-kind', action.kind)"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path :d="action.icon" />
-        </svg>
-        <span class="sr-only">{{ action.label }}</span>
-      </button>
+      <div class="star-chat__quick-tools">
+        <button
+          type="button"
+          class="star-chat__icon-button"
+          :disabled="pending || listening"
+          aria-label="语音输入"
+          @click="emit('start-voice')"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v10" />
+            <path d="M8 11a4 4 0 0 0 8 0V7a4 4 0 0 0-8 0v4Z" />
+            <path d="M5 11a7 7 0 0 0 14 0" />
+            <path d="M12 18v3" />
+          </svg>
+          <span class="sr-only">{{ listening ? '正在听' : '语音输入' }}</span>
+        </button>
+        <button
+          type="button"
+          class="star-chat__icon-button"
+          :data-active="mode === 'design'"
+          aria-label="设计模式"
+          @click="emit('toggle-mode')"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+            <path d="M4 12l8 4 8-4" />
+            <path d="M4 17l8 4 8-4" />
+          </svg>
+          <span class="sr-only">设计模式</span>
+        </button>
+        <button
+          v-for="action in mediaActions"
+          :key="action.kind"
+          type="button"
+          class="star-chat__icon-button"
+          :data-active="selectedMediaKinds.includes(action.kind)"
+          :disabled="pending"
+          :aria-label="action.label"
+          @click="emit('toggle-media-kind', action.kind)"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path :d="action.icon" />
+          </svg>
+          <span class="sr-only">{{ action.label }}</span>
+        </button>
+      </div>
     </div>
     <textarea
       id="star-chat-input"

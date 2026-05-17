@@ -10,11 +10,11 @@
   --ink-soft: #74676a;
   --rose-muted: #b9818d;
   --accent-warm: #d8a16c;
-  --chat-surface: #2c2c2d;
-  --chat-surface-soft: rgb(37 37 38 / 0.84);
-  --chat-line: rgb(255 255 255 / 0.1);
-  --chat-ink: rgb(255 255 255 / 0.86);
-  --chat-ink-soft: rgb(255 255 255 / 0.52);
+  --chat-surface: rgb(255 252 248 / 0.92);
+  --chat-surface-soft: rgb(255 255 255 / 0.78);
+  --chat-line: rgb(135 82 93 / 0.15);
+  --chat-ink: rgb(54 45 49 / 0.92);
+  --chat-ink-soft: rgb(90 75 80 / 0.62);
   --chat-thread-surface: rgb(255 250 246 / 0.76);
   --chat-thread-ink: #3d3134;
   --chat-thread-ink-soft: rgb(61 49 52 / 0.62);
@@ -204,7 +204,7 @@ body {
   }
 }
 
-.chat-theater > :not(.chat-theater__atmosphere, .star-quota, .star-chat, .profile-settings, .star-memory-map, .design-preview-sheet) {
+.chat-theater > :not(.chat-theater__atmosphere, .star-chat, .profile-settings, .star-memory-map, .design-preview-sheet) {
   position: relative;
   z-index: 1;
 }
@@ -749,7 +749,7 @@ body {
 
 .profile-settings__panel {
   display: grid;
-  width: min(100%, 24rem);
+  width: min(100%, 31rem);
   gap: 0.9rem;
   border: 1px solid var(--chat-line);
   border-radius: 0.8rem;
@@ -802,9 +802,15 @@ body {
 }
 
 .profile-settings__panel header button {
+  display: grid;
+  width: 2.2rem;
   min-height: 2.2rem;
+  place-items: center;
+  padding: 0;
   color: #f6dfb2;
   background: rgb(255 255 255 / 0.08);
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 .profile-settings__panel button:disabled {
@@ -818,12 +824,23 @@ body {
   font-size: 0.86rem;
 }
 
+.profile-settings__quota {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid rgb(255 244 231 / 0.12);
+  border-radius: 1rem;
+  padding: 0.78rem;
+  background:
+    radial-gradient(circle at 8% 10%, rgb(255 231 185 / 0.14), transparent 9rem),
+    rgb(255 255 255 / 0.055);
+}
+
 .star-memory-map {
   position: fixed;
-  top: clamp(5rem, 10vh, 7rem);
+  top: max(clamp(0.85rem, 2.5vw, 1.5rem), env(safe-area-inset-top));
   right: clamp(1rem, 3vw, 2rem);
   bottom: auto;
-  z-index: 4;
+  z-index: 3;
 }
 
 .star-memory-map button {
@@ -1458,6 +1475,13 @@ body {
   min-width: 0;
 }
 
+.star-chat__quick-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
 .star-chat__dock-bar {
   display: flex;
   align-items: center;
@@ -1572,6 +1596,10 @@ body {
   clip: rect(0, 0, 0, 0);
 }
 
+.star-chat__mobile-actions {
+  display: none;
+}
+
 .star-chat button:disabled {
   cursor: wait;
   opacity: 0.72;
@@ -1641,21 +1669,6 @@ body {
   overflow: auto;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
-}
-
-.star-quota {
-  position: fixed;
-  top: clamp(1rem, 3vw, 1.5rem);
-  right: clamp(1rem, 3vw, 1.5rem);
-  z-index: 2;
-  width: min(calc(100vw - 2rem), 24rem);
-  border: 1px solid var(--chat-line);
-  border-radius: 1rem;
-  padding: 0.62rem 0.72rem;
-  color: var(--chat-ink);
-  background: var(--chat-surface-soft);
-  box-shadow: 0 0.8rem 2.4rem rgb(0 0 0 / 0.13);
-  backdrop-filter: blur(18px);
 }
 
 .media-panel {
@@ -1729,6 +1742,79 @@ body {
   font-size: 0.74rem;
 }
 
+.profile-settings__quota .quota-panel {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.profile-settings__quota .quota-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.profile-settings__quota .quota-panel__header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--chat-ink);
+  font-size: 0.92rem;
+}
+
+.profile-settings__quota .quota-panel__header span::before {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: rgb(255 231 185 / 0.94);
+  box-shadow: 0 0 1rem rgb(255 231 185 / 0.62);
+  content: "";
+}
+
+.profile-settings__quota .quota-panel__header button {
+  min-width: 3.35rem;
+  min-height: 1.9rem;
+  border: 1px solid rgb(255 244 231 / 0.16);
+  border-radius: 999px;
+  padding: 0 0.72rem;
+  color: var(--chat-ink);
+  background: rgb(255 255 255 / 0.08);
+  box-shadow: none;
+  font-size: 0.74rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.profile-settings__quota .quota-panel__status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  color: var(--chat-ink);
+  font-size: 0.76rem;
+}
+
+.profile-settings__quota .quota-panel__status-item {
+  min-width: 0;
+  border: 1px solid rgb(255 244 231 / 0.1);
+  border-radius: 0.78rem;
+  padding: 0.5rem 0.58rem;
+  background: rgb(255 255 255 / 0.055);
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.profile-settings__quota .quota-panel__status-item:not(:last-child)::after {
+  content: none;
+}
+
+.profile-settings__quota .quota-panel__empty,
+.profile-settings__quota .quota-panel__error {
+  border: 1px solid rgb(255 244 231 / 0.1);
+  border-radius: 0.78rem;
+  padding: 0.55rem 0.62rem;
+  background: rgb(255 255 255 / 0.055);
+}
+
 .media-panel__actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1774,6 +1860,10 @@ body {
 }
 
 @media (max-width: 640px) {
+  .chat-theater {
+    min-height: 100dvh;
+  }
+
   .pretext-paragraph[data-layout="moon-wrap"],
   .pretext-paragraph[data-layout="date-orbit"],
   .pretext-paragraph[data-layout="star-trail"] {
@@ -1794,20 +1884,79 @@ body {
 
   .star-chat {
     right: auto;
-    left: 1rem;
-    bottom: 0.85rem;
-    width: calc(100vw - 2rem);
+    left: max(0.7rem, env(safe-area-inset-left));
+    bottom: max(0.7rem, env(safe-area-inset-bottom));
+    width: calc(100vw - max(1.4rem, env(safe-area-inset-left) + env(safe-area-inset-right)));
     margin: 0;
   }
 
   .star-chat form.star-chat__dock {
-    gap: 0.4rem;
-    padding: 0.42rem 0.48rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.38rem;
+    padding: 0.36rem 0.4rem;
+    border-radius: 1.15rem;
   }
 
   .star-chat__tools {
-    display: flex;
-    flex-wrap: nowrap;
+    max-width: none;
+    overflow: visible;
+  }
+
+  .star-chat__quick-tools {
+    display: none;
+  }
+
+  .star-chat__tools button,
+  .star-chat__attachment-button {
+    min-width: 1.86rem;
+    min-height: 1.86rem;
+    padding: 0;
+  }
+
+  .star-chat__icon-button svg {
+    width: 0.92rem;
+    height: 0.92rem;
+  }
+
+  .star-chat__icon-button--send {
+    width: 2.05rem;
+    height: 2.05rem;
+    min-width: 2.05rem;
+  }
+
+  .star-chat__attachment-popover {
+    top: calc(-100dvh + 7.95rem);
+    bottom: auto;
+    left: 0;
+    width: min(15rem, calc(100vw - 1.4rem));
+    max-height: min(24rem, calc(100dvh - 10rem));
+  }
+
+  .star-chat__mobile-actions {
+    display: grid;
+    gap: 0.28rem;
+    border-top: 1px solid var(--chat-line);
+    margin-top: 0.3rem;
+    padding-top: 0.35rem;
+  }
+
+  .star-chat__mobile-actions button {
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: 0.55rem;
+    min-height: 2.35rem;
+    border-radius: 0.65rem;
+    padding: 0 0.75rem;
+    color: var(--chat-ink);
+    font-size: 0.86rem;
+    text-align: left;
+  }
+
+  .star-chat__mobile-actions svg {
+    width: 0.98rem;
+    height: 0.98rem;
   }
 
   .star-chat__dock-bar {
@@ -1815,8 +1964,10 @@ body {
   }
 
   .star-chat textarea {
-    min-height: 2.1rem;
-    font-size: 0.9rem;
+    min-height: 1.95rem;
+    max-height: 5.8rem;
+    padding-top: 0.22rem;
+    font-size: 0.88rem;
   }
 
   .profile-settings {
@@ -1826,20 +1977,23 @@ body {
   }
 
   .star-memory-map {
-    top: 7.35rem;
+    top: max(0.85rem, env(safe-area-inset-top));
     right: 0.85rem;
     bottom: auto;
   }
 
-  .star-memory-map small {
-    display: none;
+  .star-memory-map button {
+    gap: 0.48rem;
+    padding: 0.42rem 0.68rem 0.42rem 0.46rem;
   }
 
-  .star-quota {
-    top: 1rem;
-    right: 4.6rem;
-    left: 1rem;
-    width: auto;
+  .star-memory-map__constellation {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .star-memory-map small {
+    display: none;
   }
 
   .media-panel {
@@ -1854,6 +2008,10 @@ body {
   .quota-panel {
     display: grid;
     gap: 0.35rem;
+  }
+
+  .profile-settings__quota .quota-panel__status {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1979,14 +2137,14 @@ body {
   position: fixed;
   inset: 0;
   z-index: 1;
-  padding: 5.8rem 1rem 7.1rem;
+  padding: 5.2rem max(1rem, env(safe-area-inset-right)) 7.1rem max(1rem, env(safe-area-inset-left));
   overflow: hidden;
   pointer-events: none;
 }
 
 .star-orbit-stage__field {
   position: relative;
-  width: min(100%, 68rem);
+  width: 100%;
   height: 100%;
   margin-inline: auto;
   pointer-events: auto;
@@ -2004,7 +2162,7 @@ body {
 
 .star-orbit-stage__field::before {
   position: absolute;
-  inset: 5% 8% 18%;
+  inset: 4% 3% 14%;
   z-index: 0;
   border: 1px solid rgb(255 244 231 / 0.07);
   border-radius: 52% 48% 46% 54%;
@@ -2019,10 +2177,10 @@ body {
 
 .star-orbit-stage__path {
   position: absolute;
-  inset: 7% 8% 18%;
+  inset: 6% 4% 15%;
   z-index: 0;
-  width: 84%;
-  height: 75%;
+  width: 92%;
+  height: 79%;
   overflow: visible;
   opacity: 0.42;
 }
@@ -2041,7 +2199,7 @@ body {
   top: var(--orbit-y);
   z-index: 1;
   display: grid;
-  width: min(25rem, 42vw);
+  width: min(28rem, 34vw);
   gap: 0.6rem;
   color: var(--chat-thread-ink);
   line-height: 1.78;
@@ -2056,8 +2214,22 @@ body {
   animation: star-orbit-group-arrive 680ms cubic-bezier(0.18, 0.92, 0.24, 1) both;
 }
 
+.star-orbit-group--memory-preview {
+  width: min(22rem, 28vw);
+  opacity: 0.74;
+}
+
+.star-orbit-group--latest {
+  z-index: 2;
+}
+
 .star-chat[data-thread-active="false"] .star-orbit-group {
-  opacity: 0.68;
+  opacity: 0.84;
+}
+
+.star-chat[data-thread-active="false"] .star-orbit-group--latest,
+.star-orbit-group--latest {
+  opacity: 0.98;
 }
 
 .star-orbit-group:is(:hover, :focus-within),
@@ -2107,6 +2279,8 @@ body {
 
 .star-orbit-group__assistant {
   justify-self: start;
+  max-height: min(12rem, 25vh);
+  overflow: auto;
   padding: 0.58rem 0.72rem 0.62rem 0.86rem;
   border: 1px solid rgb(160 198 255 / 0.13);
   border-radius: 0.95rem;
@@ -2118,6 +2292,25 @@ body {
     inset 0 1px 0 rgb(255 255 255 / 0.08),
     0 1rem 2.6rem rgb(0 0 0 / 0.1);
   backdrop-filter: blur(14px);
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+.star-orbit-group__assistant::-webkit-scrollbar {
+  width: 0.32rem;
+}
+
+.star-orbit-group__assistant::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.star-orbit-group__assistant::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+}
+
+.star-orbit-group--memory-preview .star-orbit-group__assistant {
+  max-height: 6.8rem;
 }
 
 .star-orbit-group__core {
@@ -2202,7 +2395,7 @@ body {
 }
 
 .star-memory-constellation {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 2;
   pointer-events: none;
@@ -2222,7 +2415,7 @@ body {
   background: transparent;
   cursor: pointer;
   pointer-events: auto;
-  transform: translate(1.15rem, -2.35rem);
+  transform: translate(-50%, -50%);
 }
 
 .star-memory-constellation__star span {
@@ -2250,6 +2443,7 @@ body {
   bottom: clamp(1rem, 8vh, 5rem);
   z-index: 3;
   display: grid;
+  overflow: hidden;
   width: min(23rem, calc(100vw - 2rem));
   gap: 0.45rem;
   border: 1px solid rgb(255 244 231 / 0.16);
@@ -2263,6 +2457,39 @@ body {
     inset 0 1px 0 rgb(255 255 255 / 0.12),
     0 1.2rem 3rem rgb(0 0 0 / 0.22);
   backdrop-filter: blur(18px);
+}
+
+.star-memory-popover::before {
+  position: absolute;
+  inset: -42% auto auto -28%;
+  width: 8rem;
+  height: 14rem;
+  background: linear-gradient(105deg, transparent, rgb(255 231 185 / 0.22), transparent);
+  content: "";
+  pointer-events: none;
+  transform: rotate(22deg);
+  animation: star-memory-popover-glint 1.6s 120ms ease-out both;
+}
+
+.star-memory-popover > * {
+  position: relative;
+  z-index: 1;
+}
+
+.star-memory-popover-enter-active,
+.star-memory-popover-leave-active {
+  transform-origin: 82% 100%;
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.18, 0.92, 0.24, 1),
+    filter 240ms ease;
+}
+
+.star-memory-popover-enter-from,
+.star-memory-popover-leave-to {
+  opacity: 0;
+  transform: translateY(0.75rem) scale(0.95);
+  filter: blur(0.35rem);
 }
 
 .star-memory-popover p {
@@ -2594,6 +2821,22 @@ body {
   }
 }
 
+@keyframes star-memory-popover-glint {
+  from {
+    opacity: 0;
+    transform: translateX(-1.8rem) rotate(22deg);
+  }
+
+  38% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(24rem) rotate(22deg);
+  }
+}
+
 .star-media-card {
   position: relative;
   display: grid;
@@ -2864,7 +3107,9 @@ body {
 
   .star-orbit-group__user {
     color: rgb(56 43 48 / 0.92);
-    background: rgb(255 255 255 / 0.54);
+    background:
+      linear-gradient(145deg, rgb(255 255 255 / 0.78), rgb(255 245 226 / 0.66));
+    border: 1px solid rgb(128 78 86 / 0.1);
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.72),
       0 0.8rem 2rem rgb(128 78 86 / 0.1);
@@ -2873,13 +3118,13 @@ body {
   .star-orbit-group__assistant,
   .star-memory-popover {
     color: rgb(48 41 45 / 0.9);
-    border-color: rgb(92 73 78 / 0.1);
+    border-color: rgb(128 78 86 / 0.12);
     background:
-      linear-gradient(145deg, rgb(255 255 255 / 0.86), rgb(255 248 240 / 0.72)),
-      rgb(255 255 255 / 0.56);
+      linear-gradient(145deg, rgb(255 255 255 / 0.94), rgb(255 249 243 / 0.84)),
+      rgb(255 255 255 / 0.74);
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.82),
-      0 1rem 2.4rem rgb(128 78 86 / 0.1);
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      0 1rem 2.4rem rgb(128 78 86 / 0.11);
   }
 
   .star-memory-popover__label {
@@ -2950,28 +3195,55 @@ body {
 
 @media (max-width: 640px) {
   .star-orbit-stage {
-    padding: 6.5rem 0.9rem 6.7rem;
+    padding: 4.7rem 0.75rem 8.25rem;
   }
 
   .star-orbit-stage__field::before,
   .star-orbit-stage__path {
-    inset-inline: 1%;
-    width: 98%;
+    inset-inline: -18%;
+    width: 136%;
   }
 
   .star-orbit-group {
     left: 50%;
-    top: min(82%, var(--orbit-y));
-    width: min(92vw, 22rem);
+    top: min(74%, var(--orbit-y));
+    width: min(84vw, 21rem);
+  }
+
+  .star-chat[data-thread-active="false"] .star-orbit-group--latest,
+  .star-orbit-group--latest {
+    opacity: 0.98;
+  }
+
+  .star-orbit-group--memory-preview {
+    display: none;
   }
 
   .star-orbit-group__user,
   .star-orbit-group__assistant {
-    max-width: min(100%, 19rem);
+    max-width: min(100%, 18.5rem);
+    font-size: clamp(0.88rem, 3.8vw, 1rem);
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.18);
+  }
+
+  .star-orbit-group__user {
+    justify-self: end;
+    max-width: min(78vw, 17rem);
+  }
+
+  .star-orbit-group__assistant {
+    max-height: min(13rem, 34vh);
+    background:
+      linear-gradient(135deg, rgb(18 23 35 / 0.64), rgb(32 28 38 / 0.54)),
+      rgb(255 255 255 / 0.06);
+  }
+
+  .star-orbit-group--memory-preview .star-orbit-group__assistant {
+    max-height: 5rem;
   }
 
   .star-memory-constellation__star {
-    transform: translate(8.5rem, -2rem);
+    transform: translate(-50%, -50%);
   }
 
   .star-memory-popover {
@@ -3079,6 +3351,109 @@ body {
     inset 0 1px 0 rgb(255 255 255 / 0.18);
 }
 
+@media (prefers-color-scheme: light) {
+  .profile-settings__trigger,
+  .star-memory-map button,
+  .star-orbit-group__copy,
+  .star-memory-popover__copy,
+  .star-memory-popover__close,
+  .star-spectral-media__actions a {
+    border-color: rgb(128 78 86 / 0.13);
+    color: var(--chat-ink);
+    background:
+      linear-gradient(145deg, rgb(255 255 255 / 0.9), rgb(255 248 242 / 0.76)),
+      var(--chat-surface-soft);
+    box-shadow:
+      0 1rem 2.4rem rgb(128 78 86 / 0.12),
+      inset 0 1px 0 rgb(255 255 255 / 0.78);
+  }
+
+  .star-chat__dock,
+  .star-chat__composer,
+  .star-chat form.star-chat__dock {
+    border-color: rgb(128 78 86 / 0.13);
+    background:
+      linear-gradient(135deg, rgb(255 255 255 / 0.92), rgb(255 248 242 / 0.78)),
+      var(--chat-surface-soft);
+    box-shadow:
+      0 1rem 2.7rem rgb(128 78 86 / 0.14),
+      0 0 0 1px rgb(255 255 255 / 0.48),
+      inset 0 1px 0 rgb(255 255 255 / 0.8);
+  }
+
+  .star-chat__dock:focus-within,
+  .star-chat__composer:focus-within,
+  .star-chat form.star-chat__dock:focus-within {
+    animation-name: star-composer-glow-light;
+    box-shadow:
+      0 1.15rem 2.9rem rgb(128 78 86 / 0.16),
+      0 0 0 0.24rem color-mix(in srgb, var(--accent-warm), transparent 84%),
+      inset 0 1px 0 rgb(255 255 255 / 0.84);
+  }
+
+  .star-chat__icon-button--send {
+    color: #fffaf8;
+    background: #8f5f68;
+  }
+
+  .star-chat__attachment-popover,
+  .media-panel,
+  .generated-asset {
+    border-color: rgb(128 78 86 / 0.13);
+    color: var(--chat-ink);
+    background:
+      linear-gradient(145deg, rgb(255 255 255 / 0.94), rgb(255 249 243 / 0.82)),
+      var(--chat-surface-soft);
+    box-shadow: 0 1rem 2.4rem rgb(128 78 86 / 0.12);
+  }
+
+  .star-chat__attachment-popover label:hover,
+  .media-panel__actions button {
+    background: rgb(128 78 86 / 0.08);
+  }
+
+  .star-memory-map__constellation {
+    background:
+      radial-gradient(circle at 50% 50%, rgb(255 231 185 / 0.72), rgb(255 255 255 / 0.46));
+  }
+
+  .star-orbit-group__trail {
+    background:
+      linear-gradient(92deg, transparent, rgb(255 255 255 / 0.42), transparent),
+      radial-gradient(circle at 18% 35%, rgb(255 231 185 / 0.28), transparent 5.5rem);
+  }
+}
+
+@keyframes star-composer-glow-light {
+  0%,
+  100% {
+    box-shadow:
+      0 1rem 2.7rem rgb(128 78 86 / 0.14),
+      0 0 0 0 rgb(216 161 108 / 0),
+      inset 0 1px 0 rgb(255 255 255 / 0.8);
+  }
+
+  50% {
+    box-shadow:
+      0 1.15rem 2.9rem rgb(128 78 86 / 0.16),
+      0 0 0 0.22rem rgb(216 161 108 / 0.18),
+      inset 0 1px 0 rgb(255 255 255 / 0.86);
+  }
+}
+
+@media (prefers-color-scheme: light) and (max-width: 640px) {
+  .star-orbit-group__user,
+  .star-orbit-group__assistant {
+    text-shadow: 0 1px 0 rgb(255 255 255 / 0.72);
+  }
+
+  .star-orbit-group__assistant {
+    background:
+      linear-gradient(145deg, rgb(255 255 255 / 0.94), rgb(255 249 243 / 0.84)),
+      rgb(255 255 255 / 0.74);
+  }
+}
+
 @keyframes star-composer-glow {
   0%,
   100% {
@@ -3103,7 +3478,19 @@ body {
   .star-orbit-group,
   .star-orbit-group__core,
   .star-orbit-group__status::before,
+  .star-memory-popover::before,
   .star-magic-stage__constellation span {
     animation: none;
+  }
+
+  .star-memory-popover-enter-active,
+  .star-memory-popover-leave-active {
+    transition: opacity 120ms ease;
+  }
+
+  .star-memory-popover-enter-from,
+  .star-memory-popover-leave-to {
+    transform: none;
+    filter: none;
   }
 }

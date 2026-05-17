@@ -33,9 +33,6 @@ onMounted(async () => {
         <span class="chat-theater__star chat-theater__star--three" />
         <span class="chat-theater__meteor" />
       </div>
-      <aside class="star-quota" aria-label="星能量">
-        <MiniMaxQuotaPanel />
-      </aside>
       <StarChat :initial-messages="chatMessages" @design-requested="previewDesign" />
       <StarMemoryMap @open-settings="profileSettingsOpen = true" />
       <ProfileSettingsSheet

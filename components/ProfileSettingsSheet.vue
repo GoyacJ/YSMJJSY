@@ -136,9 +136,13 @@ watch(
         <header>
           <p>设置</p>
           <button type="button" aria-label="关闭设置" @click="closeSettings">
-            关
+            ×
           </button>
         </header>
+
+        <div class="profile-settings__quota">
+          <MiniMaxQuotaPanel />
+        </div>
 
         <label>
           <span>称呼</span>
