@@ -73,6 +73,9 @@ export const schemaStatements = [
     status TEXT NOT NULL,
     summary TEXT NOT NULL,
     raw_json TEXT NOT NULL,
+    memory_actions_json TEXT,
+    work_ideas_json TEXT,
+    next_conversation_hints_json TEXT,
     started_at TEXT NOT NULL,
     completed_at TEXT,
     error TEXT

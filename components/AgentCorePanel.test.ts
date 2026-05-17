@@ -250,4 +250,38 @@ describe('AgentCorePanel', () => {
     await wrapper.get('button[aria-label="让智能体思考"]').trigger('click')
     expect(runSleep).toHaveBeenCalled()
   })
+
+  it('renders the full latest sleep report', async () => {
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        loadCore: async () => ({
+          ...core,
+          sleep: {
+            lastSleepAt: '2026-05-18T00:00:00.000Z',
+            nextSleepAt: '2026-05-18T12:00:00.000Z',
+            latestRun: {
+              id: 'sleep_1',
+              status: 'completed',
+              summary: '整理完成。',
+              memoryActions: [{ memoryId: 'm1', action: 'confirm', reason: '明确表达' }],
+              workIdeas: [{ type: 'letter', title: '短句回信', summary: '写一封短信' }],
+              nextConversationHints: ['承接短句偏好'],
+              startedAt: '2026-05-18T00:00:00.000Z',
+              completedAt: '2026-05-18T00:01:00.000Z',
+              error: null,
+            },
+          },
+        }),
+        applyProposal: vi.fn(),
+      },
+    })
+
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('整理完成。')
+    expect(wrapper.text()).toContain('记忆动作 1')
+    expect(wrapper.text()).toContain('短句回信')
+    expect(wrapper.text()).toContain('承接短句偏好')
+  })
 })

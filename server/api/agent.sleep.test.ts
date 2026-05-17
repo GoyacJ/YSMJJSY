@@ -15,10 +15,10 @@ describe('agent sleep api helpers', () => {
       client: {
         reflectAgent: vi.fn(async () => JSON.stringify({
           dailySummary: '整理完成。',
-          memoryActions: [],
+          memoryActions: [{ memoryId: 'm1', action: 'confirm', reason: '明确表达' }],
           proposals: [{ type: 'tone', title: '更短', summary: '更短。', payload: { tone: '更短' } }],
-          workIdeas: [],
-          nextConversationHints: [],
+          workIdeas: [{ type: 'letter', title: '短句回信', summary: '写一封短信' }],
+          nextConversationHints: ['承接短句偏好'],
         })),
       },
       profile: { assistantName: '月光', mbti: 'INTJ' },
@@ -55,7 +55,12 @@ describe('agent sleep api helpers', () => {
     expect(result.run.status).toBe('completed')
     expect(result.proposals).toHaveLength(1)
     expect(addSleepRun).toHaveBeenCalledWith(expect.objectContaining({ status: 'running' }))
-    expect(updateSleepRun).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: 'completed' }))
+    expect(updateSleepRun).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'completed',
+      memoryActionsJson: JSON.stringify([{ memoryId: 'm1', action: 'confirm', reason: '明确表达' }]),
+      workIdeasJson: JSON.stringify([{ type: 'letter', title: '短句回信', summary: '写一封短信' }]),
+      nextConversationHintsJson: JSON.stringify(['承接短句偏好']),
+    }))
     expect(addReflection).toHaveBeenCalledWith(expect.objectContaining({ summary: '整理完成。' }))
     expect(addProposal).toHaveBeenCalledWith(expect.objectContaining({ title: '更短' }))
     expect(updateAgentState).toHaveBeenCalledWith('key_1', {

@@ -43,7 +43,7 @@ export type ManualAgentSleepInput = {
   }
   sleeps: {
     addSleepRun: (record: AgentSleepRunRecord) => void
-    updateSleepRun: (id: string, updates: Partial<Pick<AgentSleepRunRecord, 'status' | 'summary' | 'rawJson' | 'completedAt' | 'error'>>) => void
+    updateSleepRun: (id: string, updates: Partial<Pick<AgentSleepRunRecord, 'status' | 'summary' | 'rawJson' | 'memoryActionsJson' | 'workIdeasJson' | 'nextConversationHintsJson' | 'completedAt' | 'error'>>) => void
   }
   states: {
     updateAgentState: (keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) => void
@@ -119,6 +119,9 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
       status: 'completed',
       summary: parsed.dailySummary,
       rawJson,
+      memoryActionsJson: JSON.stringify(parsed.memoryActions),
+      workIdeasJson: JSON.stringify(parsed.workIdeas),
+      nextConversationHintsJson: JSON.stringify(parsed.nextConversationHints),
       completedAt: input.now,
       error: null,
     })
@@ -134,6 +137,9 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
         status: 'completed' as const,
         summary: parsed.dailySummary,
         rawJson,
+        memoryActionsJson: JSON.stringify(parsed.memoryActions),
+        workIdeasJson: JSON.stringify(parsed.workIdeas),
+        nextConversationHintsJson: JSON.stringify(parsed.nextConversationHints),
         startedAt: input.now,
         completedAt: input.now,
         error: null,

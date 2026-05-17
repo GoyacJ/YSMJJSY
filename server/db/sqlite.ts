@@ -92,6 +92,9 @@ export type AgentSleepRunRecord = {
   status: 'running' | 'completed' | 'failed'
   summary: string
   rawJson: string
+  memoryActionsJson?: string | null
+  workIdeasJson?: string | null
+  nextConversationHintsJson?: string | null
   startedAt: string
   completedAt?: string | null
   error?: string | null
@@ -215,6 +218,9 @@ function openDatabase(path: string) {
   ensureColumn(db, 'media_tasks', 'key_id', 'TEXT')
   ensureColumn(db, 'key_profiles', 'activity_at', 'TEXT')
   ensureColumn(db, 'key_profiles', 'activity_kind', 'TEXT')
+  ensureColumn(db, 'agent_sleep_runs', 'memory_actions_json', 'TEXT')
+  ensureColumn(db, 'agent_sleep_runs', 'work_ideas_json', 'TEXT')
+  ensureColumn(db, 'agent_sleep_runs', 'next_conversation_hints_json', 'TEXT')
 
   return db
 }
@@ -777,6 +783,9 @@ export function createAgentSleepRepository(path: string) {
           status,
           summary,
           raw_json,
+          memory_actions_json,
+          work_ideas_json,
+          next_conversation_hints_json,
           started_at,
           completed_at,
           error
@@ -787,18 +796,24 @@ export function createAgentSleepRepository(path: string) {
           @status,
           @summary,
           @rawJson,
+          @memoryActionsJson,
+          @workIdeasJson,
+          @nextConversationHintsJson,
           @startedAt,
           @completedAt,
           @error
         )
       `).run({
         ...record,
+        memoryActionsJson: record.memoryActionsJson ?? null,
+        workIdeasJson: record.workIdeasJson ?? null,
+        nextConversationHintsJson: record.nextConversationHintsJson ?? null,
         completedAt: record.completedAt ?? null,
         error: record.error ?? null,
       })
     },
 
-    updateSleepRun(id: string, updates: Partial<Pick<AgentSleepRunRecord, 'status' | 'summary' | 'rawJson' | 'completedAt' | 'error'>>) {
+    updateSleepRun(id: string, updates: Partial<Pick<AgentSleepRunRecord, 'status' | 'summary' | 'rawJson' | 'memoryActionsJson' | 'workIdeasJson' | 'nextConversationHintsJson' | 'completedAt' | 'error'>>) {
       const current = this.getSleepRun(id)
 
       if (!current) {
@@ -811,6 +826,9 @@ export function createAgentSleepRepository(path: string) {
           status = @status,
           summary = @summary,
           raw_json = @rawJson,
+          memory_actions_json = @memoryActionsJson,
+          work_ideas_json = @workIdeasJson,
+          next_conversation_hints_json = @nextConversationHintsJson,
           completed_at = @completedAt,
           error = @error
         WHERE id = @id
@@ -819,6 +837,9 @@ export function createAgentSleepRepository(path: string) {
         status: updates.status ?? current.status,
         summary: updates.summary ?? current.summary,
         rawJson: updates.rawJson ?? current.rawJson,
+        memoryActionsJson: updates.memoryActionsJson ?? current.memoryActionsJson ?? null,
+        workIdeasJson: updates.workIdeasJson ?? current.workIdeasJson ?? null,
+        nextConversationHintsJson: updates.nextConversationHintsJson ?? current.nextConversationHintsJson ?? null,
         completedAt: updates.completedAt ?? current.completedAt ?? null,
         error: updates.error ?? current.error ?? null,
       })
@@ -832,6 +853,9 @@ export function createAgentSleepRepository(path: string) {
           status,
           summary,
           raw_json AS rawJson,
+          memory_actions_json AS memoryActionsJson,
+          work_ideas_json AS workIdeasJson,
+          next_conversation_hints_json AS nextConversationHintsJson,
           started_at AS startedAt,
           completed_at AS completedAt,
           error
@@ -848,6 +872,9 @@ export function createAgentSleepRepository(path: string) {
           status,
           summary,
           raw_json AS rawJson,
+          memory_actions_json AS memoryActionsJson,
+          work_ideas_json AS workIdeasJson,
+          next_conversation_hints_json AS nextConversationHintsJson,
           started_at AS startedAt,
           completed_at AS completedAt,
           error

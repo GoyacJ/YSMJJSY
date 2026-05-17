@@ -46,6 +46,20 @@ function parsePayload(payloadJson: string) {
   }
 }
 
+function parseJsonArray(value?: string | null) {
+  if (!value) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  }
+  catch {
+    return []
+  }
+}
+
 function serializeProposal(proposal: AgentEvolutionProposalRecord) {
   return {
     id: proposal.id,
@@ -119,6 +133,9 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
             id: input.latestSleepRun.id,
             status: input.latestSleepRun.status,
             summary: input.latestSleepRun.summary,
+            memoryActions: parseJsonArray(input.latestSleepRun.memoryActionsJson),
+            workIdeas: parseJsonArray(input.latestSleepRun.workIdeasJson),
+            nextConversationHints: parseJsonArray(input.latestSleepRun.nextConversationHintsJson),
             startedAt: input.latestSleepRun.startedAt,
             completedAt: input.latestSleepRun.completedAt,
             error: input.latestSleepRun.error,

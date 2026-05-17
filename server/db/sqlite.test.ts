@@ -72,6 +72,26 @@ describe('sqlite repositories', () => {
     })
   })
 
+  it('stores parsed sleep report fields', () => {
+    const repo = createAgentSleepRepository(':memory:')
+
+    repo.addSleepRun({
+      id: 'sleep_1',
+      keyId: 'key_1',
+      status: 'completed',
+      summary: '整理完成。',
+      rawJson: '{}',
+      memoryActionsJson: '[{"memoryId":"m1","action":"confirm","reason":"明确表达"}]',
+      workIdeasJson: '[{"type":"letter","title":"短句回信","summary":"写一封短信"}]',
+      nextConversationHintsJson: '["承接短句偏好"]',
+      startedAt: '2026-05-18T00:00:00.000Z',
+      completedAt: '2026-05-18T00:01:00.000Z',
+      error: null,
+    })
+
+    expect(repo.getLatestSleepRunByKey('key_1')?.memoryActionsJson).toContain('confirm')
+  })
+
   it('stores private agent works by key', () => {
     const repo = createAgentWorkRepository(':memory:')
 

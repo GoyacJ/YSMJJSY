@@ -81,6 +81,9 @@ export type AgentCore = {
       id: string
       status: 'running' | 'completed' | 'failed'
       summary: string
+      memoryActions?: Array<Record<string, unknown>>
+      workIdeas?: Array<Record<string, unknown>>
+      nextConversationHints?: string[]
       startedAt: string
       completedAt?: string | null
       error?: string | null

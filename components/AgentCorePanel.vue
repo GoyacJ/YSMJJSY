@@ -21,6 +21,9 @@ const panelOpen = computed(() => props.embedded || open.value)
 const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
 const proposalHistory = computed(() => core.value?.proposals.history ?? [])
 const latestSleepRun = computed(() => core.value?.sleep?.latestRun ?? null)
+const latestMemoryActionCount = computed(() => latestSleepRun.value?.memoryActions?.length ?? 0)
+const latestWorkIdeas = computed(() => latestSleepRun.value?.workIdeas ?? [])
+const latestConversationHints = computed(() => latestSleepRun.value?.nextConversationHints ?? [])
 
 async function loadPanel() {
   pending.value = true
@@ -142,6 +145,14 @@ function getProposalStatusLabel(status: AgentCoreProposal['status']) {
   return '待确认'
 }
 
+function readText(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
+function getWorkIdeaTitle(idea: Record<string, unknown>) {
+  return readText(idea.title) || readText(idea.summary) || '未命名想法'
+}
+
 onMounted(() => {
   if (props.embedded) {
     void loadPanel()
@@ -222,7 +233,30 @@ onMounted(() => {
               <dt>最近报告</dt>
               <dd>{{ latestSleepRun.summary || latestSleepRun.status }}</dd>
             </div>
+            <div v-if="latestSleepRun">
+              <dt>记忆动作</dt>
+              <dd>{{ latestMemoryActionCount }}</dd>
+            </div>
           </dl>
+          <div v-if="latestSleepRun" class="agent-core-panel__sleep-report">
+            <p>记忆动作 {{ latestMemoryActionCount }}</p>
+            <template v-if="latestWorkIdeas.length">
+              <p>作品想法</p>
+              <ul>
+                <li v-for="(idea, index) in latestWorkIdeas" :key="index">
+                  {{ getWorkIdeaTitle(idea) }}
+                </li>
+              </ul>
+            </template>
+            <template v-if="latestConversationHints.length">
+              <p>下次对话</p>
+              <ul>
+                <li v-for="hint in latestConversationHints" :key="hint">
+                  {{ hint }}
+                </li>
+              </ul>
+            </template>
+          </div>
           <button
             type="button"
             class="agent-core-panel__action"
