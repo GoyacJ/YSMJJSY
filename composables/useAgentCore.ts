@@ -28,6 +28,17 @@ export type AgentTimelineItem = {
   createdAt: string
 }
 
+export type AgentWorkItem = {
+  id: string
+  type: string
+  title: string
+  summary: string
+  previewUrl?: string | null
+  visibility: 'private' | 'public'
+  createdAt: string
+  updatedAt?: string
+}
+
 export type AgentCore = {
   profile: {
     keyId: string
@@ -79,6 +90,7 @@ export type AgentCore = {
 export function useAgentCore() {
   const core = ref<AgentCore | null>(null)
   const timeline = ref<AgentTimelineItem[]>([])
+  const works = ref<AgentWorkItem[]>([])
   const pending = ref(false)
   const error = ref('')
 
@@ -174,9 +186,37 @@ export function useAgentCore() {
     }
   }
 
+  async function loadWorks() {
+    try {
+      const result = await $fetch<{ works: AgentWorkItem[] }>('/api/agent/works')
+      works.value = result.works
+      return result.works
+    }
+    catch {
+      error.value = '作品没有加载成功。'
+      return []
+    }
+  }
+
+  async function updateWorkVisibility(id: string, visibility: AgentWorkItem['visibility']) {
+    try {
+      await $fetch(`/api/agent/works/${id}`, {
+        method: 'PUT',
+        body: { visibility },
+      })
+      await loadWorks()
+      return true
+    }
+    catch {
+      error.value = '作品可见性没有更新成功。'
+      return false
+    }
+  }
+
   return {
     core: readonly(core),
     timeline: readonly(timeline),
+    works: readonly(works),
     pending: readonly(pending),
     error: readonly(error),
     loadCore,
@@ -184,5 +224,7 @@ export function useAgentCore() {
     runSleep,
     governMemory,
     loadTimeline,
+    loadWorks,
+    updateWorkVisibility,
   }
 }

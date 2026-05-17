@@ -9,7 +9,17 @@ const {
   discardPreview,
 } = useKeyDesign()
 const { loadMessages } = useStarChat()
-const { core: agentCore, loadCore: loadAgentCore, applyProposal: applyAgentCoreProposal, governMemory } = useAgentCore()
+const {
+  core: agentCore,
+  timeline: agentTimeline,
+  works: agentWorks,
+  loadCore: loadAgentCore,
+  applyProposal: applyAgentCoreProposal,
+  governMemory,
+  loadTimeline,
+  loadWorks,
+  updateWorkVisibility,
+} = useAgentCore()
 const chatMessages = ref<StarChatMessage[]>([])
 const profileSettingsOpen = ref(false)
 const memoryPlanetOpen = ref(false)
@@ -50,6 +60,11 @@ onMounted(async () => {
         :core="agentCore"
         :open="memoryPlanetOpen"
         :govern-memory="governMemory"
+        :timeline="agentTimeline"
+        :works="agentWorks"
+        :load-timeline="loadTimeline"
+        :load-works="loadWorks"
+        :update-work-visibility="updateWorkVisibility"
         @close="memoryPlanetOpen = false"
       />
       <ProfileSettingsSheet

@@ -133,6 +133,24 @@ describe('MemoryPlanetPanel', () => {
     expect(governMemory).toHaveBeenCalledWith('m1', 'archive')
   })
 
+  it('switches between planet, timeline, and works views', async () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        timeline: [{ id: 't1', type: 'memory', title: '形成记忆', summary: '用户喜欢短句。', createdAt: '2026-05-17T00:00:00.000Z' }],
+        works: [{ id: 'w1', type: 'image', title: '月光图', summary: '一张图。', visibility: 'private', createdAt: '2026-05-17T00:00:00.000Z' }],
+      },
+      global,
+    })
+
+    await wrapper.get('button[aria-label="查看星球时间线"]').trigger('click')
+    expect(wrapper.text()).toContain('形成记忆')
+
+    await wrapper.get('button[aria-label="查看智能体作品"]').trigger('click')
+    expect(wrapper.text()).toContain('月光图')
+  })
+
   it('renders reflections, pending proposals, and accepted evolution rings', () => {
     const wrapper = mount(MemoryPlanetPanel, {
       props: {

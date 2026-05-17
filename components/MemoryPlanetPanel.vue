@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import MemoryPlanetStage from './MemoryPlanetStage.vue'
-import type { AgentCore, MemoryGovernanceAction } from '../composables/useAgentCore'
+import type { AgentCore, AgentTimelineItem, AgentWorkItem, MemoryGovernanceAction } from '../composables/useAgentCore'
 import { buildMemoryPlanetState } from '../utils/memory-planet'
 
 const props = defineProps<{
   core: AgentCore | null
   open: boolean
   governMemory?: (id: string, action: MemoryGovernanceAction) => Promise<boolean>
+  timeline?: AgentTimelineItem[]
+  works?: AgentWorkItem[]
+  loadTimeline?: () => Promise<AgentTimelineItem[]>
+  loadWorks?: () => Promise<AgentWorkItem[]>
+  updateWorkVisibility?: (id: string, visibility: AgentWorkItem['visibility']) => Promise<boolean>
 }>()
 
 defineEmits<{
@@ -16,6 +21,7 @@ defineEmits<{
 
 const selectedMemoryId = ref<string | null>(null)
 const selectedProposalId = ref<string | null>(null)
+const activeView = ref<'planet' | 'timeline' | 'works'>('planet')
 const state = computed(() => buildMemoryPlanetState(props.core))
 const selectedMemory = computed(() => state.value.memoryStars.find(memory => memory.id === selectedMemoryId.value))
 const selectedProposal = computed(() => state.value.proposalLights.find(proposal => proposal.id === selectedProposalId.value))
@@ -53,6 +59,23 @@ async function applyMemoryAction(action: MemoryGovernanceAction) {
 
   await props.governMemory(selectedMemory.value.id, action)
 }
+
+async function switchView(view: 'planet' | 'timeline' | 'works') {
+  activeView.value = view
+
+  if (view === 'timeline') {
+    await props.loadTimeline?.()
+  }
+
+  if (view === 'works') {
+    await props.loadWorks?.()
+  }
+}
+
+async function toggleWorkVisibility(work: AgentWorkItem) {
+  const nextVisibility = work.visibility === 'public' ? 'private' : 'public'
+  await props.updateWorkVisibility?.(work.id, nextVisibility)
+}
 </script>
 
 <template>
@@ -67,7 +90,19 @@ async function applyMemoryAction(action: MemoryGovernanceAction) {
       </button>
     </header>
 
-    <div class="memory-planet-panel__layout">
+    <nav class="memory-planet-panel__tabs" aria-label="记忆星球视图">
+      <button type="button" aria-label="查看记忆星球" :aria-pressed="activeView === 'planet'" @click="switchView('planet')">
+        星球
+      </button>
+      <button type="button" aria-label="查看星球时间线" :aria-pressed="activeView === 'timeline'" @click="switchView('timeline')">
+        时间线
+      </button>
+      <button type="button" aria-label="查看智能体作品" :aria-pressed="activeView === 'works'" @click="switchView('works')">
+        作品
+      </button>
+    </nav>
+
+    <div v-if="activeView === 'planet'" class="memory-planet-panel__layout">
       <MemoryPlanetStage
         :state="state"
         @select-memory="selectMemory"
@@ -79,7 +114,26 @@ async function applyMemoryAction(action: MemoryGovernanceAction) {
       </section>
     </div>
 
-    <section class="memory-planet-panel__detail">
+    <section v-else-if="activeView === 'timeline'" class="memory-planet-panel__list">
+      <article v-for="item in timeline ?? []" :key="item.id">
+        <strong>{{ item.title }}</strong>
+        <span>{{ item.summary }}</span>
+      </article>
+      <p v-if="!(timeline ?? []).length">还没有时间线</p>
+    </section>
+
+    <section v-else class="memory-planet-panel__list">
+      <article v-for="work in works ?? []" :key="work.id">
+        <strong>{{ work.title }}</strong>
+        <span>{{ work.summary }}</span>
+        <button type="button" :aria-label="work.visibility === 'public' ? '设为私密作品' : '公开作品'" @click="toggleWorkVisibility(work)">
+          {{ work.visibility === 'public' ? '设为私密' : '公开' }}
+        </button>
+      </article>
+      <p v-if="!(works ?? []).length">还没有作品</p>
+    </section>
+
+    <section v-if="activeView === 'planet'" class="memory-planet-panel__detail">
       <template v-if="selectedMemory">
         <p>记忆</p>
         <strong>{{ selectedMemory.content }}</strong>
