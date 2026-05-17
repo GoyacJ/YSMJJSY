@@ -77,6 +77,21 @@ export const schemaStatements = [
     completed_at TEXT,
     error TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_works (
+    id TEXT PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    source_conversation_id TEXT,
+    source_media_task_id TEXT,
+    source_design_version INTEGER,
+    preview_url TEXT,
+    payload_json TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS media_tasks (
     id TEXT PRIMARY KEY,
     key_id TEXT,

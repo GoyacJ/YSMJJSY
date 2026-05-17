@@ -97,6 +97,25 @@ export type AgentSleepRunRecord = {
   error?: string | null
 }
 
+export type AgentWorkType = 'letter' | 'image' | 'music' | 'video' | 'page_design'
+export type AgentWorkVisibility = 'private' | 'public'
+
+export type AgentWorkRecord = {
+  id: string
+  keyId: string
+  type: AgentWorkType
+  title: string
+  summary: string
+  sourceConversationId?: string | null
+  sourceMediaTaskId?: string | null
+  sourceDesignVersion?: number | null
+  previewUrl?: string | null
+  payloadJson: string
+  visibility: AgentWorkVisibility
+  createdAt: string
+  updatedAt: string
+}
+
 export type MediaTaskRecord = {
   id: string
   keyId?: string | null
@@ -840,6 +859,105 @@ export function createAgentSleepRepository(path: string) {
 
     getLatestSleepRunByKey(keyId: string): AgentSleepRunRecord | undefined {
       return this.listSleepRunsByKey(keyId, 1)[0]
+    },
+  }
+}
+
+export function createAgentWorkRepository(path: string) {
+  const db = openDatabase(path)
+
+  const selectColumns = `
+    id,
+    key_id AS keyId,
+    type,
+    title,
+    summary,
+    source_conversation_id AS sourceConversationId,
+    source_media_task_id AS sourceMediaTaskId,
+    source_design_version AS sourceDesignVersion,
+    preview_url AS previewUrl,
+    payload_json AS payloadJson,
+    visibility,
+    created_at AS createdAt,
+    updated_at AS updatedAt
+  `
+
+  return {
+    addWork(record: AgentWorkRecord) {
+      db.prepare(`
+        INSERT INTO agent_works (
+          id,
+          key_id,
+          type,
+          title,
+          summary,
+          source_conversation_id,
+          source_media_task_id,
+          source_design_version,
+          preview_url,
+          payload_json,
+          visibility,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          @id,
+          @keyId,
+          @type,
+          @title,
+          @summary,
+          @sourceConversationId,
+          @sourceMediaTaskId,
+          @sourceDesignVersion,
+          @previewUrl,
+          @payloadJson,
+          @visibility,
+          @createdAt,
+          @updatedAt
+        )
+      `).run({
+        ...record,
+        sourceConversationId: record.sourceConversationId ?? null,
+        sourceMediaTaskId: record.sourceMediaTaskId ?? null,
+        sourceDesignVersion: record.sourceDesignVersion ?? null,
+        previewUrl: record.previewUrl ?? null,
+      })
+    },
+
+    listWorksByKey(keyId: string): AgentWorkRecord[] {
+      return db.prepare(`
+        SELECT ${selectColumns}
+        FROM agent_works
+        WHERE key_id = ?
+        ORDER BY created_at DESC
+      `).all(keyId) as AgentWorkRecord[]
+    },
+
+    getWorkByKey(keyId: string, id: string): AgentWorkRecord | undefined {
+      return db.prepare(`
+        SELECT ${selectColumns}
+        FROM agent_works
+        WHERE key_id = ? AND id = ?
+      `).get(keyId, id) as AgentWorkRecord | undefined
+    },
+
+    updateWorkVisibility(keyId: string, id: string, visibility: AgentWorkVisibility, updatedAt: string) {
+      db.prepare(`
+        UPDATE agent_works
+        SET visibility = @visibility,
+            updated_at = @updatedAt
+        WHERE key_id = @keyId AND id = @id
+      `).run({ keyId, id, visibility, updatedAt })
+    },
+
+    listPublicWorks(limit = 80): AgentWorkRecord[] {
+      return db.prepare(`
+        SELECT ${selectColumns}
+        FROM agent_works
+        WHERE visibility = 'public'
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `).all(limit) as AgentWorkRecord[]
     },
   }
 }

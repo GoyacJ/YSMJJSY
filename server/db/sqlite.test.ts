@@ -7,6 +7,7 @@ import {
   createAgentSnapshotRepository,
   createAgentSleepRepository,
   createAgentStateRepository,
+  createAgentWorkRepository,
   createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
@@ -68,6 +69,32 @@ describe('sqlite repositories', () => {
     expect(repo.listSleepRunsByKey('key_1')[0]).toMatchObject({
       id: 'sleep_1',
       summary: '整理完成。',
+    })
+  })
+
+  it('stores private agent works by key', () => {
+    const repo = createAgentWorkRepository(':memory:')
+
+    repo.addWork({
+      id: 'work_1',
+      keyId: 'key_1',
+      type: 'image',
+      title: '月光图',
+      summary: '一张月光星空。',
+      sourceConversationId: 'c1',
+      sourceMediaTaskId: null,
+      sourceDesignVersion: null,
+      previewUrl: 'data:image/png;base64,abc',
+      payloadJson: '{}',
+      visibility: 'private',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      updatedAt: '2026-05-17T00:00:00.000Z',
+    })
+
+    expect(repo.listWorksByKey('key_1')[0]).toMatchObject({
+      id: 'work_1',
+      type: 'image',
+      visibility: 'private',
     })
   })
 
