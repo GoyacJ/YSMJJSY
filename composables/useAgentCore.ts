@@ -1,6 +1,7 @@
 import { readonly, ref } from 'vue'
 
 export type AgentCoreProposalAction = 'accept' | 'reject'
+export type MemoryGovernanceAction = 'confirm' | 'downgrade' | 'archive' | 'reject'
 
 export type AgentContentStrategy = {
   replyLength?: 'short' | 'balanced' | 'rich'
@@ -131,6 +132,27 @@ export function useAgentCore() {
     }
   }
 
+  async function governMemory(id: string, action: MemoryGovernanceAction, reason = '') {
+    pending.value = true
+    error.value = ''
+
+    try {
+      await $fetch(`/api/agent/memories/${id}`, {
+        method: 'PUT',
+        body: { action, reason },
+      })
+      await loadCore()
+      return true
+    }
+    catch {
+      error.value = '记忆没有更新成功。'
+      return false
+    }
+    finally {
+      pending.value = false
+    }
+  }
+
   return {
     core: readonly(core),
     pending: readonly(pending),
@@ -138,5 +160,6 @@ export function useAgentCore() {
     loadCore,
     applyProposal,
     runSleep,
+    governMemory,
   }
 }

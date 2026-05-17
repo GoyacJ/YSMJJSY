@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import MemoryPlanetPanel from './MemoryPlanetPanel.vue'
 import type { AgentCore } from '../composables/useAgentCore'
 
@@ -14,6 +14,7 @@ const core: AgentCore = {
     tone: '克制、温柔、安静',
     relationshipRole: '记忆星球守护者',
     learningMode: '辅助学习',
+    contentStrategy: {},
   },
   memoryCounts: {
     total: 1,
@@ -114,6 +115,22 @@ describe('MemoryPlanetPanel', () => {
 
     expect(wrapper.text()).toContain('用户喜欢短句。')
     expect(wrapper.text()).toContain('preference')
+  })
+
+  it('shows memory governance actions for a selected memory', async () => {
+    const governMemory = vi.fn(async () => true)
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: { core, open: true, governMemory },
+      global,
+    })
+
+    await wrapper.get('button[aria-label="查看记忆：用户喜欢短句。"]').trigger('click')
+
+    expect(wrapper.text()).toContain('重要性')
+    expect(wrapper.get('button[aria-label="归档记忆"]').exists()).toBe(true)
+
+    await wrapper.get('button[aria-label="归档记忆"]').trigger('click')
+    expect(governMemory).toHaveBeenCalledWith('m1', 'archive')
   })
 
   it('renders reflections, pending proposals, and accepted evolution rings', () => {

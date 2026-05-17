@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import MemoryPlanetStage from './MemoryPlanetStage.vue'
-import type { AgentCore } from '../composables/useAgentCore'
+import type { AgentCore, MemoryGovernanceAction } from '../composables/useAgentCore'
 import { buildMemoryPlanetState } from '../utils/memory-planet'
 
 const props = defineProps<{
   core: AgentCore | null
   open: boolean
+  governMemory?: (id: string, action: MemoryGovernanceAction) => Promise<boolean>
 }>()
 
 defineEmits<{
@@ -44,6 +45,14 @@ function selectProposal(id: string) {
   selectedProposalId.value = id
   selectedMemoryId.value = null
 }
+
+async function applyMemoryAction(action: MemoryGovernanceAction) {
+  if (!selectedMemory.value || !props.governMemory) {
+    return
+  }
+
+  await props.governMemory(selectedMemory.value.id, action)
+}
 </script>
 
 <template>
@@ -75,6 +84,21 @@ function selectProposal(id: string) {
         <p>记忆</p>
         <strong>{{ selectedMemory.content }}</strong>
         <span>{{ selectedMemory.type }}</span>
+        <span>重要性 {{ selectedMemory.importance.toFixed(2) }} · 置信 {{ selectedMemory.confidence.toFixed(2) }}</span>
+        <div class="memory-planet-panel__actions">
+          <button type="button" aria-label="确认记忆" @click="applyMemoryAction('confirm')">
+            确认
+          </button>
+          <button type="button" aria-label="降低记忆权重" @click="applyMemoryAction('downgrade')">
+            降权
+          </button>
+          <button type="button" aria-label="归档记忆" @click="applyMemoryAction('archive')">
+            归档
+          </button>
+          <button type="button" aria-label="拒绝记忆" @click="applyMemoryAction('reject')">
+            拒绝
+          </button>
+        </div>
       </template>
       <template v-else-if="selectedProposal">
         <p>待确认进化</p>

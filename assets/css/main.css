@@ -1319,6 +1319,24 @@ body {
   font-size: 0.88rem;
 }
 
+.memory-planet-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.memory-planet-panel__actions button {
+  min-height: 2rem;
+  border: 1px solid rgb(255 244 231 / 0.14);
+  border-radius: 999px;
+  padding: 0 0.62rem;
+  color: var(--chat-ink);
+  background: rgb(255 255 255 / 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
 .letter-scene {
   min-height: 100vh;
   padding: clamp(2rem, 8vw, 6rem) 1.25rem;

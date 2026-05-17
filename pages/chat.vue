@@ -9,7 +9,7 @@ const {
   discardPreview,
 } = useKeyDesign()
 const { loadMessages } = useStarChat()
-const { core: agentCore, loadCore: loadAgentCore, applyProposal: applyAgentCoreProposal } = useAgentCore()
+const { core: agentCore, loadCore: loadAgentCore, applyProposal: applyAgentCoreProposal, governMemory } = useAgentCore()
 const chatMessages = ref<StarChatMessage[]>([])
 const profileSettingsOpen = ref(false)
 const memoryPlanetOpen = ref(false)
@@ -49,6 +49,7 @@ onMounted(async () => {
       <MemoryPlanetPanel
         :core="agentCore"
         :open="memoryPlanetOpen"
+        :govern-memory="governMemory"
         @close="memoryPlanetOpen = false"
       />
       <ProfileSettingsSheet
