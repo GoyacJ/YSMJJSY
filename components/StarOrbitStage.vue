@@ -315,7 +315,7 @@ function copyGroupMessage(group: OrbitGroup) {
           :style="activeMemoryStyle"
           @click.stop
         >
-          <button type="button" class="star-memory-popover__close" aria-label="关闭记忆回看" @click="closeMemory">
+          <button type="button" class="dialog-close-button star-memory-popover__close" aria-label="关闭记忆回看" @click="closeMemory">
             ×
           </button>
           <p class="star-memory-popover__label">{{ activeMemory.memoryLabel }}</p>

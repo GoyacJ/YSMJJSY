@@ -1,9 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { MemoryPlanetState } from '../utils/memory-planet'
 
-defineProps<{
+const props = defineProps<{
   state: MemoryPlanetState
 }>()
+
+const hasStageContent = computed(() => {
+  return props.state.memoryStars.length > 0
+    || props.state.reflectionNebulas.length > 0
+    || props.state.proposalLights.length > 0
+    || props.state.orbitRings.length > 0
+})
 
 const emit = defineEmits<{
   selectMemory: [id: string]
@@ -21,6 +29,7 @@ function getPositionStyle(position: { x: number, y: number }) {
 <template>
   <div class="memory-planet-stage" aria-label="记忆星球可视化">
     <span class="memory-planet-stage__core" aria-hidden="true" />
+    <span v-if="!hasStageContent" class="memory-planet-stage__empty">暂无星体</span>
 
     <span
       v-for="ring in state.orbitRings"

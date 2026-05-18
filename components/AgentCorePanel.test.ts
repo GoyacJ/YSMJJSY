@@ -95,6 +95,11 @@ describe('AgentCorePanel', () => {
     expect(wrapper.text()).toContain('接受后：语气会调整为更短')
     expect(wrapper.text()).toContain('进化历史')
     expect(wrapper.text()).toContain('关系定位为守护者。')
+
+    const closeButton = wrapper.get('button[aria-label="关闭面板"]')
+
+    expect(closeButton.text()).toBe('×')
+    expect(closeButton.classes()).toContain('dialog-close-button')
   })
 
   it('accept button calls proposal update', async () => {

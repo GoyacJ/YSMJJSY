@@ -32,7 +32,10 @@ describe('ProfileSettingsSheet', () => {
     expect(loadProfile).toHaveBeenCalled()
     expect(wrapper.text()).toContain('星能量')
     expect(wrapper.find('.agent-core-stub').exists()).toBe(false)
-    expect(wrapper.get('button[aria-label="关闭设置"]').text()).toBe('×')
+    const closeButton = wrapper.get('button[aria-label="关闭设置"]')
+
+    expect(closeButton.text()).toBe('×')
+    expect(closeButton.classes()).toContain('dialog-close-button')
     expect((wrapper.get('input[name="assistantName"]').element as HTMLInputElement).value).toBe('月光')
     expect((wrapper.get('select[name="mbti"]').element as HTMLSelectElement).value).toBe('INFJ')
   })

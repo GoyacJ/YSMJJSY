@@ -115,6 +115,7 @@ describe('MemoryPlanetPanel', () => {
 
     expect(wrapper.text()).toContain('记忆星球')
     expect(wrapper.text()).toContain('还没有形成星球')
+    expect(wrapper.text()).toContain('暂无星体')
   })
 
   it('closes when the backdrop is clicked', async () => {
@@ -142,7 +143,8 @@ describe('MemoryPlanetPanel', () => {
 
     const button = wrapper.get('button[aria-label="关闭记忆星球"]')
 
-    expect(button.text()).toBe('关闭')
+    expect(button.text()).toBe('×')
+    expect(button.classes()).toContain('dialog-close-button')
   })
 
   it('renders memory stars and opens memory detail', async () => {
@@ -283,6 +285,7 @@ describe('MemoryPlanetPanel', () => {
 
     expect(wrapper.text()).toContain('月光图')
     expect(wrapper.text()).not.toContain('短句回信')
+    expect(wrapper.get('.memory-planet-panel__work-preview[alt="月光图"]').attributes('src')).toBe('https://example.com/moon.png')
 
     await wrapper.get('button[aria-label="查看作品：月光图"]').trigger('click')
 
@@ -291,6 +294,35 @@ describe('MemoryPlanetPanel', () => {
 
     await wrapper.get('button[aria-label="公开作品"]').trigger('click')
     expect(updateWorkVisibility).toHaveBeenCalledWith('w1', 'public')
+  })
+
+  it('normalizes legacy base64 image previews before rendering works', async () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        works: [
+          {
+            id: 'w1',
+            type: 'image',
+            title: '月光图',
+            summary: '一张图。',
+            previewUrl: 'img',
+            visibility: 'private',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+      },
+      global,
+    })
+
+    await wrapper.get('button[aria-label="查看智能体作品"]').trigger('click')
+
+    expect(wrapper.get('.memory-planet-panel__work-preview[alt="月光图"]').attributes('src')).toBe('data:image/png;base64,img')
+
+    await wrapper.get('button[aria-label="查看作品：月光图"]').trigger('click')
+
+    expect(wrapper.get('img[alt="月光图"]').attributes('src')).toBe('data:image/png;base64,img')
   })
 
   it('renders reflections, pending proposals, and accepted evolution rings', () => {
@@ -307,7 +339,7 @@ describe('MemoryPlanetPanel', () => {
     expect(wrapper.findAll('.memory-planet-stage__orbit-ring')).toHaveLength(2)
   })
 
-  it('renders agent core inside the planet panel', () => {
+  it('does not render agent core inside the planet panel', () => {
     const wrapper = mount(MemoryPlanetPanel, {
       props: {
         core,
@@ -316,34 +348,12 @@ describe('MemoryPlanetPanel', () => {
       global,
     })
 
-    expect(wrapper.get('.agent-core-stub').attributes('data-embedded')).toBe('true')
-    expect(wrapper.text()).toContain('星AI')
+    expect(wrapper.find('.agent-core-stub').exists()).toBe(false)
+    expect(wrapper.find('.memory-planet-panel__ai').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('智能体核心')
   })
 
-  it('passes shared agent core actions to the embedded star ai', () => {
-    const loadCore = vi.fn(async () => core)
-    const applyProposal = vi.fn(async () => true)
-    const runSleep = vi.fn(async () => true)
-    const wrapper = mount(MemoryPlanetPanel, {
-      props: {
-        core,
-        open: true,
-        loadCore,
-        applyProposal,
-        runSleep,
-      },
-      global,
-    })
-
-    const panel = wrapper.get('.agent-core-stub')
-
-    expect(panel.attributes('data-load-core')).toBe('true')
-    expect(panel.attributes('data-apply-proposal')).toBe('true')
-    expect(panel.attributes('data-run-sleep')).toBe('true')
-  })
-
-  it('places the planet stage and star ai in the same designed layout', () => {
+  it('places the planet stage as the main designed layout', () => {
     const wrapper = mount(MemoryPlanetPanel, {
       props: {
         core,
@@ -354,14 +364,13 @@ describe('MemoryPlanetPanel', () => {
 
     expect(wrapper.get('.memory-planet-panel__layout').exists()).toBe(true)
     expect(wrapper.get('.memory-planet-panel__layout .memory-planet-stage').exists()).toBe(true)
-    expect(wrapper.get('.memory-planet-panel__ai .agent-core-stub').attributes('data-embedded')).toBe('true')
+    expect(wrapper.find('.memory-planet-panel__ai').exists()).toBe(false)
   })
 
-  it('lets the embedded star ai area expand with the planet panel', () => {
+  it('lets the planet stage expand with the planet panel', () => {
     const css = readFileSync(resolve(process.cwd(), 'assets/css/main.css'), 'utf8')
 
-    expect(css).toContain('min-height: min(25rem, calc(100dvh - 15rem));')
-    expect(css).toContain('.memory-planet-panel__ai .agent-core-panel')
-    expect(css).toContain('.memory-planet-panel__ai .agent-core-panel__sheet')
+    expect(css).toContain('min-height: min(27rem, calc(100dvh - 13rem));')
+    expect(css).not.toContain('.memory-planet-panel__ai .agent-core-panel')
   })
 })

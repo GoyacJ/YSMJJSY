@@ -1272,22 +1272,9 @@ body {
 
 .memory-planet-panel__layout {
   display: grid;
-  grid-template-columns: minmax(17rem, 1.05fr) minmax(15rem, 0.95fr);
   gap: 0.85rem;
   align-items: stretch;
-  min-height: min(25rem, calc(100dvh - 15rem));
-}
-
-.memory-planet-panel__ai {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-}
-
-.memory-planet-panel__ai .agent-core-panel,
-.memory-planet-panel__ai .agent-core-panel__sheet {
-  height: 100%;
-  min-height: 0;
+  min-height: min(27rem, calc(100dvh - 13rem));
 }
 
 .memory-planet-stage {
@@ -1316,6 +1303,15 @@ body {
     0 0 2rem rgb(255 231 185 / 0.18),
     inset 0 0 1.4rem rgb(255 255 255 / 0.18);
   transform: translate(-50%, -50%);
+}
+
+.memory-planet-stage__empty {
+  position: absolute;
+  top: calc(50% + 3.9rem);
+  left: 50%;
+  color: var(--chat-ink-soft);
+  font-size: 0.78rem;
+  transform: translateX(-50%);
 }
 
 .memory-planet-stage__orbit-ring {
@@ -1470,6 +1466,15 @@ body {
   border-radius: 0.55rem;
   padding: 0.5rem 0.6rem;
   text-align: left;
+}
+
+.memory-planet-panel__work-preview {
+  display: block;
+  width: min(100%, 12rem);
+  aspect-ratio: 16 / 9;
+  margin-bottom: 0.35rem;
+  border-radius: 0.45rem;
+  object-fit: cover;
 }
 
 .memory-planet-panel__timeline-group {
@@ -2602,12 +2607,6 @@ body {
 
   .memory-planet-panel__layout {
     grid-template-columns: 1fr;
-    min-height: 0;
-  }
-
-  .memory-planet-panel__ai .agent-core-panel__sheet {
-    height: auto;
-    max-height: min(24rem, calc(100dvh - 18rem));
   }
 
   .star-memory-map__constellation {
@@ -4091,6 +4090,26 @@ body {
       0 0 0 0.22rem rgb(255 244 231 / 0.1),
       inset 0 1px 0 rgb(255 255 255 / 0.18);
   }
+}
+
+.profile-settings__panel header .dialog-close-button,
+.agent-core-panel__sheet header .dialog-close-button,
+.memory-planet-panel__close.dialog-close-button,
+.star-memory-popover__close.dialog-close-button {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  min-height: 2.2rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.7rem;
+  padding: 0;
+  color: var(--chat-ink);
+  background: rgb(255 255 255 / 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

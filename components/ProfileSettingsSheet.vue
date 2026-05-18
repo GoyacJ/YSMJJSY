@@ -135,7 +135,7 @@ watch(
       <form class="profile-settings__panel" @submit.prevent="submit">
         <header>
           <p>设置</p>
-          <button type="button" aria-label="关闭设置" @click="closeSettings">
+          <button type="button" class="dialog-close-button" aria-label="关闭设置" @click="closeSettings">
             ×
           </button>
         </header>

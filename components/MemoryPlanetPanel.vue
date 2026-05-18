@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import MemoryPlanetStage from './MemoryPlanetStage.vue'
-import type { AgentCore, AgentCoreProposalAction, AgentTimelineGroup, AgentTimelineItem, AgentWorkItem, MemoryGovernanceAction } from '../composables/useAgentCore'
+import type { AgentCore, AgentTimelineGroup, AgentTimelineItem, AgentWorkItem, MemoryGovernanceAction } from '../composables/useAgentCore'
 import { buildMemoryPlanetState } from '../utils/memory-planet'
 
 const props = defineProps<{
   core: AgentCore | null
   open: boolean
   governMemory?: (id: string, action: MemoryGovernanceAction) => Promise<boolean>
-  loadCore?: () => Promise<AgentCore | null>
-  applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
-  previewDesignProposal?: (id: string) => Promise<boolean>
-  runSleep?: () => Promise<boolean>
   timeline?: AgentTimelineItem[]
   timelineGroups?: AgentTimelineGroup[]
   works?: AgentWorkItem[]
@@ -150,6 +146,26 @@ async function toggleWorkVisibility(work: AgentWorkItem) {
   await props.updateWorkVisibility?.(work.id, nextVisibility)
 }
 
+function getWorkPreviewUrl(work: AgentWorkItem) {
+  if (!work.previewUrl) {
+    return null
+  }
+
+  if (/^(?:data:|https?:|blob:|\/)/.test(work.previewUrl)) {
+    return work.previewUrl
+  }
+
+  if (work.type === 'image') {
+    return `data:image/png;base64,${work.previewUrl}`
+  }
+
+  if (work.type === 'video') {
+    return `data:video/mp4;base64,${work.previewUrl}`
+  }
+
+  return `data:audio/mpeg;base64,${work.previewUrl}`
+}
+
 function getWorkSchemaTitle(work: AgentWorkItem) {
   const payload = work.payload
   return payload && typeof payload.title === 'string' ? payload.title : ''
@@ -164,8 +180,8 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
         <p>记忆星球</p>
         <span>记忆、反思和进化轨道</span>
       </div>
-      <button type="button" class="memory-planet-panel__close" aria-label="关闭记忆星球" @click="$emit('close')">
-        关闭
+      <button type="button" class="dialog-close-button memory-planet-panel__close" aria-label="关闭记忆星球" @click="$emit('close')">
+        ×
       </button>
     </header>
 
@@ -187,16 +203,6 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
         @select-memory="selectMemory"
         @select-proposal="selectProposal"
       />
-
-      <section class="memory-planet-panel__ai" aria-label="星AI">
-        <AgentCorePanel
-          embedded
-          :load-core="loadCore"
-          :apply-proposal="applyProposal"
-          :preview-design-proposal="previewDesignProposal"
-          :run-sleep="runSleep"
-        />
-      </section>
     </div>
 
     <section v-else-if="activeView === 'timeline'" class="memory-planet-panel__list memory-planet-panel__timeline">
@@ -229,6 +235,12 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
       </div>
       <article v-for="work in filteredWorks" :key="work.id">
         <button type="button" :aria-label="`查看作品：${work.title}`" @click="selectWork(work.id)">
+          <img
+            v-if="work.type === 'image' && getWorkPreviewUrl(work)"
+            class="memory-planet-panel__work-preview"
+            :src="getWorkPreviewUrl(work)!"
+            :alt="work.title"
+          >
           <strong>{{ work.title }}</strong>
           <span>{{ work.summary }}</span>
         </button>
@@ -289,9 +301,9 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
       <span>{{ selectedWork.type }} · {{ selectedWork.visibility }}</span>
       <span v-if="selectedWork.sourceConversationId">来源 {{ selectedWork.sourceConversationId }}</span>
       <span v-if="selectedWork.sourceDesignVersion">设计版本 {{ selectedWork.sourceDesignVersion }}</span>
-      <img v-if="selectedWork.type === 'image' && selectedWork.previewUrl" :src="selectedWork.previewUrl" :alt="selectedWork.title">
-      <audio v-else-if="selectedWork.type === 'music' && selectedWork.previewUrl" :src="selectedWork.previewUrl" controls />
-      <video v-else-if="selectedWork.type === 'video' && selectedWork.previewUrl" :src="selectedWork.previewUrl" controls />
+      <img v-if="selectedWork.type === 'image' && getWorkPreviewUrl(selectedWork)" :src="getWorkPreviewUrl(selectedWork)!" :alt="selectedWork.title">
+      <audio v-else-if="selectedWork.type === 'music' && getWorkPreviewUrl(selectedWork)" :src="getWorkPreviewUrl(selectedWork)!" controls />
+      <video v-else-if="selectedWork.type === 'video' && getWorkPreviewUrl(selectedWork)" :src="getWorkPreviewUrl(selectedWork)!" controls />
       <span v-else-if="selectedWork.type === 'page_design' && getWorkSchemaTitle(selectedWork)">
         {{ getWorkSchemaTitle(selectedWork) }}
       </span>

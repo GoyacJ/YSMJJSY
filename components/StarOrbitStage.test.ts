@@ -73,6 +73,11 @@ describe('StarOrbitStage', () => {
     expect(wrapper.get('.star-memory-popover').text()).toContain('已经放进星图。')
     expect(wrapper.get('.star-memory-popover').attributes('style')).toContain('--memory-popover-x: 18%')
     expect(wrapper.get('.star-memory-popover').attributes('style')).toContain('--memory-popover-y: 18%')
+
+    const closeButton = wrapper.get('button[aria-label="关闭记忆回看"]')
+
+    expect(closeButton.text()).toBe('×')
+    expect(closeButton.classes()).toContain('dialog-close-button')
   })
 
   it('closes the memory recap when the stage background is clicked', async () => {

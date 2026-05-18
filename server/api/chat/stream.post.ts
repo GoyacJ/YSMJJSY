@@ -71,6 +71,30 @@ function buildUserMessageJson(content: string, attachments: Array<{ kind: 'image
   }
 }
 
+function buildAgentWorkPreviewUrl(part: { type: string, url?: string, base64?: string }) {
+  if (part.url) {
+    return part.url
+  }
+
+  if (!part.base64) {
+    return null
+  }
+
+  if (part.base64.startsWith('data:')) {
+    return part.base64
+  }
+
+  if (part.type === 'image') {
+    return `data:image/png;base64,${part.base64}`
+  }
+
+  if (part.type === 'video') {
+    return `data:video/mp4;base64,${part.base64}`
+  }
+
+  return `data:audio/mpeg;base64,${part.base64}`
+}
+
 export function buildWorksFromAssistantMessage(input: {
   keyId: string
   conversationId: string
@@ -95,7 +119,7 @@ export function buildWorksFromAssistantMessage(input: {
       sourceConversationId: input.conversationId,
       sourceMediaTaskId: input.taskId ?? null,
       sourceDesignVersion: null,
-      previewUrl: part.url ?? part.base64 ?? null,
+      previewUrl: buildAgentWorkPreviewUrl(part),
       payloadJson: JSON.stringify(part),
       visibility: 'private' as const,
       createdAt: input.now,

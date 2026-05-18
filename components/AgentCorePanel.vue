@@ -209,7 +209,7 @@ onMounted(() => {
           <p>星AI</p>
           <span v-if="core">{{ core.profile.assistantName }} · {{ core.profile.mbti }}</span>
         </div>
-        <button v-if="!embedded" type="button" aria-label="关闭面板" @click="open = false">
+        <button v-if="!embedded" type="button" class="dialog-close-button" aria-label="关闭面板" @click="open = false">
           ×
         </button>
       </header>

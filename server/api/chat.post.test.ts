@@ -23,6 +23,27 @@ describe('chat api helpers', () => {
     })
   })
 
+  it('normalizes base64 media previews for agent works', () => {
+    const works = buildWorksFromAssistantMessage({
+      keyId: 'key_1',
+      conversationId: 'assistant_1',
+      now: '2026-05-17T00:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: '生成好了。',
+        parts: [
+          { type: 'image', base64: 'img' },
+          { type: 'music', base64: 'song' },
+        ],
+      },
+    })
+
+    expect(works.map(work => work.previewUrl)).toEqual([
+      'data:image/png;base64,img',
+      'data:audio/mpeg;base64,song',
+    ])
+  })
+
   it('maps a video task status message to a video work', () => {
     const works = buildWorksFromAssistantMessage({
       keyId: 'key_1',
