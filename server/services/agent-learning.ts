@@ -1,4 +1,4 @@
-import type { MiniMaxMessage } from './minimax'
+import type { AgentModelMessage } from './agent-runtime'
 import { detectMemoryConflict, isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory, type NormalizedMemory } from './memory'
 
 export type AgentEvolutionProposalType = 'tone' | 'relationship_role' | 'content_strategy' | 'memory_weight' | 'page_design'
@@ -88,7 +88,7 @@ const allowedWorkIdeaTypes = new Set<ParsedAgentSleepResult['workIdeas'][number]
   'page_design',
 ])
 
-export function buildAgentReflectionMessages(input: BuildAgentReflectionMessagesInput): MiniMaxMessage[] {
+export function buildAgentReflectionMessages(input: BuildAgentReflectionMessagesInput): AgentModelMessage[] {
   const memories = input.memories.length > 0
     ? input.memories.map(item => `- ${item}`).join('\n')
     : '无'
@@ -129,7 +129,7 @@ export function buildAgentSleepMessages(input: {
   memories: Array<{ id: string, content: string, importance: number, confidence: number }>
   reflections: string[]
   recentConversation: string[]
-}): MiniMaxMessage[] {
+}): AgentModelMessage[] {
   const memories = input.memories.length > 0
     ? input.memories
         .map(memory => `- ${memory.id}: ${memory.content} importance=${memory.importance} confidence=${memory.confidence}`)

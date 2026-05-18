@@ -1,5 +1,10 @@
 import type { ChatResult, DesignPatchInput, MiniMaxMessage, createMiniMaxClient } from './minimax'
 
+export type AgentModelMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
 export type AgentToolRiskLevel = 'low' | 'medium' | 'high'
 
 export type AgentToolResult<Output = unknown> = {
@@ -31,8 +36,8 @@ type MiniMaxAgentModelClient = Pick<
 >
 
 export type AgentModelProvider = {
-  chat: (messages: MiniMaxMessage[]) => Promise<ChatResult>
-  reflect: (messages: MiniMaxMessage[]) => Promise<string>
+  chat: (messages: AgentModelMessage[]) => Promise<ChatResult>
+  reflect: (messages: AgentModelMessage[]) => Promise<string>
   generateDesignPatch: (input: DesignPatchInput) => Promise<unknown>
 }
 
@@ -105,14 +110,21 @@ export function createAgentProviderRegistry(): AgentProviderRegistry {
   }
 }
 
+function toMiniMaxMessages(messages: AgentModelMessage[]): MiniMaxMessage[] {
+  return messages.map(message => ({
+    role: message.role,
+    content: message.content,
+  }))
+}
+
 export function createMiniMaxAgentModelProvider(client: MiniMaxAgentModelClient): AgentModelProvider {
   return {
     chat(messages) {
-      return client.chat(messages)
+      return client.chat(toMiniMaxMessages(messages))
     },
 
     reflect(messages) {
-      return client.reflectAgent(messages)
+      return client.reflectAgent(toMiniMaxMessages(messages))
     },
 
     generateDesignPatch(input) {

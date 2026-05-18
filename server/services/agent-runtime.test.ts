@@ -66,6 +66,17 @@ describe('agent runtime seams', () => {
     expect(client.generateDesignPatch).toHaveBeenCalledWith(designInput)
   })
 
+  it('uses provider-neutral agent messages', async () => {
+    const provider = createMiniMaxAgentModelProvider({
+      chat: vi.fn(async () => ({ reply: 'ok' })),
+      reflectAgent: vi.fn(async () => '{"summary":"ok"}'),
+      generateDesignPatch: vi.fn(async input => input.currentSchema),
+    } as any)
+
+    await provider.reflect([{ role: 'user', content: 'hello' }])
+    expect(typeof provider.reflect).toBe('function')
+  })
+
   it('registers and resolves model providers by name', () => {
     const registry = createAgentProviderRegistry()
     const provider = {
