@@ -44,6 +44,11 @@ export type AgentOsState = {
   events: AgentOsEventItem[]
 }
 
+type AgentTaskCreateInput = {
+  type: string
+  input?: Record<string, unknown>
+}
+
 export function useAgentOs() {
   const os = ref<AgentOsState | null>(null)
   const loading = ref(false)
@@ -94,11 +99,110 @@ export function useAgentOs() {
     }
   }
 
+  async function loadTasks() {
+    try {
+      const result = await $fetch<{ tasks: AgentOsTaskItem[] }>('/api/agents/current/tasks')
+
+      if (os.value) {
+        os.value = { ...os.value, tasks: result.tasks }
+      }
+
+      return result.tasks
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : '加载任务失败'
+      return []
+    }
+  }
+
+  async function enqueueTask(input: AgentTaskCreateInput) {
+    try {
+      const result = await $fetch<{ task: AgentOsTaskItem }>('/api/agents/current/tasks', {
+        method: 'POST',
+        body: input,
+      })
+      await loadTasks()
+      return result.task
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : '创建任务失败'
+      return null
+    }
+  }
+
+  async function runTask(id: string) {
+    try {
+      await $fetch(`/api/agents/current/tasks/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: { action: 'run' },
+      })
+      await loadTasks()
+      return true
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : '运行任务失败'
+      return false
+    }
+  }
+
+  async function cancelTask(id: string) {
+    try {
+      await $fetch(`/api/agents/current/tasks/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: { action: 'cancel' },
+      })
+      await loadTasks()
+      return true
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : '取消任务失败'
+      return false
+    }
+  }
+
+  async function loadInbox() {
+    try {
+      const result = await $fetch<{ inbox: AgentOsInboxItem[] }>('/api/agents/current/inbox')
+
+      if (os.value) {
+        os.value = { ...os.value, inbox: result.inbox }
+      }
+
+      return result.inbox
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : '加载收件箱失败'
+      return []
+    }
+  }
+
+  async function loadEvents() {
+    try {
+      const result = await $fetch<{ events: AgentOsEventItem[] }>('/api/agents/current/events')
+
+      if (os.value) {
+        os.value = { ...os.value, events: result.events }
+      }
+
+      return result.events
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : '加载事件失败'
+      return []
+    }
+  }
+
   return {
     os: readonly(os),
     loading: readonly(loading),
     error: readonly(error),
     loadOs,
+    loadTasks,
+    enqueueTask,
+    runTask,
+    cancelTask,
+    loadInbox,
+    loadEvents,
     approveInboxItem,
     rejectInboxItem,
   }
