@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   createAgentInstanceRepository,
+  createAgentEventRepository,
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
   createAgentSnapshotRepository,
   createAgentSleepRepository,
   createAgentStateRepository,
+  createAgentTaskRepository,
   createAgentWorkRepository,
   createAttachmentRepository,
   createConversationRepository,
@@ -49,6 +51,53 @@ describe('sqlite repositories', () => {
     const two = repo.getOrCreateAgentForOwner({ ownerType: 'key', ownerId: 'key_2', domain: 'star', now })
 
     expect(one.id).not.toBe(two.id)
+  })
+
+  it('stores and updates agent tasks by agent id', () => {
+    const repo = createAgentTaskRepository(':memory:')
+    repo.addTask({
+      id: 'task_1',
+      agentId: 'agent_1',
+      type: 'reflect',
+      status: 'queued',
+      title: '整理最近对话',
+      summary: '提炼最近对话。',
+      inputJson: '{"source":"chat"}',
+      resultJson: null,
+      error: null,
+      createdAt: '2026-05-18T00:00:00.000Z',
+      updatedAt: '2026-05-18T00:00:00.000Z',
+    })
+
+    repo.updateTask('task_1', {
+      status: 'completed',
+      resultJson: '{"summary":"完成"}',
+      updatedAt: '2026-05-18T00:01:00.000Z',
+    })
+
+    expect(repo.listTasksByAgent('agent_1')).toMatchObject([
+      { id: 'task_1', status: 'completed', resultJson: '{"summary":"完成"}' },
+    ])
+  })
+
+  it('records agent events by agent id', () => {
+    const repo = createAgentEventRepository(':memory:')
+    repo.addEvent({
+      id: 'event_1',
+      agentId: 'agent_1',
+      type: 'task.completed',
+      title: '任务完成',
+      summary: '整理完成。',
+      targetType: 'task',
+      targetId: 'task_1',
+      payloadJson: '{}',
+      visibility: 'private',
+      createdAt: '2026-05-18T00:00:00.000Z',
+    })
+
+    expect(repo.listEventsByAgent('agent_1')).toMatchObject([
+      { id: 'event_1', type: 'task.completed', visibility: 'private' },
+    ])
   })
 
   it('creates a default agent state for a key', () => {

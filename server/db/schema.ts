@@ -65,6 +65,31 @@ export const schemaStatements = [
     created_at TEXT NOT NULL,
     UNIQUE(owner_type, owner_id, domain)
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_tasks (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    input_json TEXT NOT NULL,
+    result_json TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS agent_events (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    target_type TEXT,
+    target_id TEXT,
+    payload_json TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS agent_state_snapshots (
     id TEXT PRIMARY KEY,
     key_id TEXT NOT NULL,

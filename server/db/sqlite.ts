@@ -88,6 +88,36 @@ export type AgentForOwnerRecord = AgentInstanceRecord & {
   domain: AgentDomain
 }
 
+export type AgentTaskStatus = 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
+export type AgentTaskType = 'reflect' | 'sleep' | 'govern_memory' | 'propose_evolution' | 'generate_artifact' | 'preview_design' | 'publish_artifact'
+
+export type AgentTaskRecord = {
+  id: string
+  agentId: string
+  type: AgentTaskType
+  status: AgentTaskStatus
+  title: string
+  summary: string
+  inputJson: string
+  resultJson?: string | null
+  error?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type AgentEventRecord = {
+  id: string
+  agentId: string
+  type: string
+  title: string
+  summary: string
+  targetType?: string | null
+  targetId?: string | null
+  payloadJson: string
+  visibility: 'private' | 'public'
+  createdAt: string
+}
+
 export type AgentStateSnapshotRecord = {
   id: string
   keyId: string
@@ -553,6 +583,178 @@ export function createAgentInstanceRepository(path: string) {
         ownerId: input.ownerId,
         domain: input.domain,
       }
+    },
+  }
+}
+
+export function createAgentTaskRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addTask(record: AgentTaskRecord) {
+      db.prepare(`
+        INSERT INTO agent_tasks (
+          id,
+          agent_id,
+          type,
+          status,
+          title,
+          summary,
+          input_json,
+          result_json,
+          error,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          @id,
+          @agentId,
+          @type,
+          @status,
+          @title,
+          @summary,
+          @inputJson,
+          @resultJson,
+          @error,
+          @createdAt,
+          @updatedAt
+        )
+      `).run({
+        ...record,
+        resultJson: record.resultJson ?? null,
+        error: record.error ?? null,
+      })
+    },
+
+    updateTask(id: string, updates: Partial<Pick<AgentTaskRecord, 'status' | 'resultJson' | 'error' | 'updatedAt'>>) {
+      const assignments: string[] = []
+      const params: Record<string, string | null> = { id }
+
+      if (updates.status !== undefined) {
+        assignments.push('status = @status')
+        params.status = updates.status
+      }
+      if (updates.resultJson !== undefined) {
+        assignments.push('result_json = @resultJson')
+        params.resultJson = updates.resultJson ?? null
+      }
+      if (updates.error !== undefined) {
+        assignments.push('error = @error')
+        params.error = updates.error ?? null
+      }
+      if (updates.updatedAt !== undefined) {
+        assignments.push('updated_at = @updatedAt')
+        params.updatedAt = updates.updatedAt
+      }
+
+      if (assignments.length === 0) {
+        return
+      }
+
+      db.prepare(`
+        UPDATE agent_tasks
+        SET ${assignments.join(', ')}
+        WHERE id = @id
+      `).run(params)
+    },
+
+    getTask(id: string): AgentTaskRecord | undefined {
+      return db.prepare(`
+        SELECT
+          id,
+          agent_id AS agentId,
+          type,
+          status,
+          title,
+          summary,
+          input_json AS inputJson,
+          result_json AS resultJson,
+          error,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM agent_tasks
+        WHERE id = ?
+      `).get(id) as AgentTaskRecord | undefined
+    },
+
+    listTasksByAgent(agentId: string, limit = 20): AgentTaskRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          agent_id AS agentId,
+          type,
+          status,
+          title,
+          summary,
+          input_json AS inputJson,
+          result_json AS resultJson,
+          error,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM agent_tasks
+        WHERE agent_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(agentId, limit) as AgentTaskRecord[]
+    },
+  }
+}
+
+export function createAgentEventRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addEvent(record: AgentEventRecord) {
+      db.prepare(`
+        INSERT INTO agent_events (
+          id,
+          agent_id,
+          type,
+          title,
+          summary,
+          target_type,
+          target_id,
+          payload_json,
+          visibility,
+          created_at
+        )
+        VALUES (
+          @id,
+          @agentId,
+          @type,
+          @title,
+          @summary,
+          @targetType,
+          @targetId,
+          @payloadJson,
+          @visibility,
+          @createdAt
+        )
+      `).run({
+        ...record,
+        targetType: record.targetType ?? null,
+        targetId: record.targetId ?? null,
+      })
+    },
+
+    listEventsByAgent(agentId: string, limit = 40): AgentEventRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          agent_id AS agentId,
+          type,
+          title,
+          summary,
+          target_type AS targetType,
+          target_id AS targetId,
+          payload_json AS payloadJson,
+          visibility,
+          created_at AS createdAt
+        FROM agent_events
+        WHERE agent_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(agentId, limit) as AgentEventRecord[]
     },
   }
 }
