@@ -29,6 +29,7 @@ import { resolveChatIntent } from '../../services/chat-intent'
 import { createIpHash } from '../../services/key-access'
 import { markKeyActivity } from '../../services/key-activity'
 import { createMiniMaxClient } from '../../services/minimax'
+import { createDefaultAgentModelProvider } from '../../services/agent-providers'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
 import {
   buildAgentReflectionMessages,
@@ -166,7 +167,8 @@ type AgentLearningInput = {
     relationshipRole?: string
   }
   client: {
-    reflectAgent: (messages: ReturnType<typeof buildAgentReflectionMessages>) => Promise<string>
+    reflect?: (messages: ReturnType<typeof buildAgentReflectionMessages>) => Promise<string>
+    reflectAgent?: (messages: ReturnType<typeof buildAgentReflectionMessages>) => Promise<string>
   }
   reflections: {
     addReflection: (record: AgentReflectionRecord) => void
@@ -211,7 +213,13 @@ export async function runAgentLearning(input: AgentLearningInput) {
       memories: input.existingMemories,
       profile: input.profile,
     })
-    const rawJson = await input.client.reflectAgent(messages)
+    const reflect = input.client.reflect ?? input.client.reflectAgent
+
+    if (!reflect) {
+      throw new Error('Agent reflection provider is missing')
+    }
+
+    const rawJson = await reflect(messages)
     const result = parseAgentReflectionResult(rawJson)
     const now = new Date().toISOString()
     const reflectionId = nanoid()
@@ -297,6 +305,10 @@ export default defineEventHandler(async (event) => {
   const client = createMiniMaxClient({
     apiKey: config.minimaxApiKey,
     groupId: config.minimaxGroupId,
+  })
+  const agentModelProvider = createDefaultAgentModelProvider({
+    minimaxApiKey: config.minimaxApiKey,
+    minimaxGroupId: config.minimaxGroupId,
   })
   const today = new Date().toISOString().slice(0, 10)
   const currentUsage = usage.getUsage(keyId, today)
@@ -478,7 +490,7 @@ export default defineEventHandler(async (event) => {
             tone: agentState.tone,
             relationshipRole: agentState.relationshipRole,
           },
-          client,
+          client: agentModelProvider,
           reflections,
           memories,
           proposals,

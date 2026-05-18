@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAgentToolRegistry, createMiniMaxAgentModelProvider } from './agent-runtime'
+import { createAgentProviderRegistry, createAgentToolRegistry, createMiniMaxAgentModelProvider } from './agent-runtime'
 
 describe('agent runtime seams', () => {
   it('registers, lists, resolves, and executes agent tools by name', async () => {
@@ -64,5 +64,20 @@ describe('agent runtime seams', () => {
     expect(client.chat).toHaveBeenCalledWith(messages)
     expect(client.reflectAgent).toHaveBeenCalledWith(messages)
     expect(client.generateDesignPatch).toHaveBeenCalledWith(designInput)
+  })
+
+  it('registers and resolves model providers by name', () => {
+    const registry = createAgentProviderRegistry()
+    const provider = {
+      name: 'fake',
+      chat: vi.fn(),
+      reflect: vi.fn(),
+      generateDesignPatch: vi.fn(),
+    }
+
+    registry.register(provider)
+
+    expect(registry.get('fake')).toBe(provider)
+    expect(registry.getDefault()).toBe(provider)
   })
 })

@@ -36,6 +36,16 @@ export type AgentModelProvider = {
   generateDesignPatch: (input: DesignPatchInput) => Promise<unknown>
 }
 
+export type NamedAgentModelProvider = AgentModelProvider & {
+  name: string
+}
+
+export type AgentProviderRegistry = {
+  register: (provider: NamedAgentModelProvider) => void
+  get: (name: string) => NamedAgentModelProvider | undefined
+  getDefault: () => NamedAgentModelProvider
+}
+
 export function createAgentToolRegistry(): AgentToolRegistry {
   const tools = new Map<string, AgentTool>()
 
@@ -65,6 +75,32 @@ export function createAgentToolRegistry(): AgentToolRegistry {
       }
 
       return tool.execute(input)
+    },
+  }
+}
+
+export function createAgentProviderRegistry(): AgentProviderRegistry {
+  const providers = new Map<string, NamedAgentModelProvider>()
+  let defaultProviderName: string | undefined
+
+  return {
+    register(provider) {
+      providers.set(provider.name, provider)
+      defaultProviderName ??= provider.name
+    },
+
+    get(name) {
+      return providers.get(name)
+    },
+
+    getDefault() {
+      const provider = defaultProviderName ? providers.get(defaultProviderName) : undefined
+
+      if (!provider) {
+        throw new Error('No agent model provider registered')
+      }
+
+      return provider
     },
   }
 }

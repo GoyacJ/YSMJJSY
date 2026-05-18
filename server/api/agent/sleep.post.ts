@@ -22,7 +22,7 @@ import {
   type MemoryRecord,
 } from '../../db/sqlite'
 import { buildAgentSleepMessages, calculateNextSleepAt, parseAgentSleepResult } from '../../services/agent-learning'
-import { createMiniMaxClient } from '../../services/minimax'
+import { createDefaultAgentModelProvider } from '../../services/agent-providers'
 import { requireAgentKey } from './core.get'
 
 export type ManualAgentSleepInput = {
@@ -32,7 +32,8 @@ export type ManualAgentSleepInput = {
     id: string
   }
   client: {
-    reflectAgent: (messages: ReturnType<typeof buildAgentSleepMessages>) => Promise<string>
+    reflect?: (messages: ReturnType<typeof buildAgentSleepMessages>) => Promise<string>
+    reflectAgent?: (messages: ReturnType<typeof buildAgentSleepMessages>) => Promise<string>
   }
   profile: Pick<KeyProfileRecord, 'assistantName' | 'mbti'>
   agentState: AgentStateRecord
@@ -130,7 +131,13 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
       reflections: reflections.map(reflection => reflection.summary).filter(Boolean),
       recentConversation: recentConversation.map(item => `${item.role}: ${item.content}`),
     })
-    const rawJson = await input.client.reflectAgent(messages)
+    const reflect = input.client.reflect ?? input.client.reflectAgent
+
+    if (!reflect) {
+      throw new Error('Agent sleep provider is missing')
+    }
+
+    const rawJson = await reflect(messages)
     const parsed = parseAgentSleepResult(rawJson)
 
     input.reflections.addReflection({
@@ -269,9 +276,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const client = createMiniMaxClient({
-    apiKey: config.minimaxApiKey,
-    groupId: config.minimaxGroupId,
+  const client = createDefaultAgentModelProvider({
+    minimaxApiKey: config.minimaxApiKey,
+    minimaxGroupId: config.minimaxGroupId,
   })
   const states = createAgentStateRepository(config.sqlitePath)
   const now = new Date().toISOString()

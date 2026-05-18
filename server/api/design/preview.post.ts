@@ -7,7 +7,7 @@ import {
 } from '../../db/sqlite'
 import { createDefaultDesignSchema, parseDesignSchema } from '../../services/design-schema'
 import { createIpHash } from '../../services/key-access'
-import { createMiniMaxClient } from '../../services/minimax'
+import { createDefaultAgentModelProvider } from '../../services/agent-providers'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
 
@@ -70,12 +70,12 @@ export default defineEventHandler(async (event) => {
     ? parseDesignSchema(JSON.parse(latest.schemaJson))
     : createDefaultDesignSchema()
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
-  const client = createMiniMaxClient({
-    apiKey: config.minimaxApiKey,
-    groupId: config.minimaxGroupId,
+  const provider = createDefaultAgentModelProvider({
+    minimaxApiKey: config.minimaxApiKey,
+    minimaxGroupId: config.minimaxGroupId,
   })
   const generated = await withMiniMaxErrorBoundary(
-    () => client.generateDesignPatch({
+    () => provider.generateDesignPatch({
       currentSchema,
       instruction,
       assistantName: profile?.assistantName || '星信',
