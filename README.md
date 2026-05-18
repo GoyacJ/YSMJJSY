@@ -45,3 +45,9 @@ node .output/server/index.mjs
 ```
 
 服务器部署见 [docs/deployment.md](docs/deployment.md)。
+
+## Agent OS
+
+每把钥匙通过 binding 拥有一个 `star` domain agent。业务仍以 key 为入口，Agent OS 负责统一任务、收件箱、审计事件和工具执行边界。
+
+`/api/agents/current/*` 和 `/api/agent/*` 都要求当前 session。公开宇宙只读取显式公开的星星和作品摘要，不返回私密 payload、原始模型响应、session、hash 或完整对话。

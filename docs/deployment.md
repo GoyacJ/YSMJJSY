@@ -38,6 +38,14 @@ NUXT_SQLITE_PATH=/var/lib/ysmjjsy/app.sqlite
 
 API Key 只放在服务器环境变量里。不要写进前端文件、静态资源或仓库。
 
+## Agent OS 部署边界
+
+Agent OS 和业务 API 运行在同一个 Nuxt 服务进程里。当前版本没有独立 worker 或外部队列。
+
+`/api/agents/current/*` 和 `/api/agent/*` 依赖 session cookie。反向代理必须透传 `Host`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。
+
+公开宇宙接口只返回显式公开的星星和作品摘要。SQLite 里的私密 payload、模型原始响应、session、hash 和完整对话不能通过公开接口暴露。
+
 ## SQLite
 
 创建数据目录：

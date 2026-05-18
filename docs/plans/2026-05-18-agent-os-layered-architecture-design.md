@@ -729,3 +729,36 @@ Agent event 可以保留私密审计信息，但只能在当前 key 的私有控
 - 所有重要动作有 event。
 - 所有高风险动作进入 inbox。
 - 后续可以扩展多 Agent，而不重写星空业务。
+
+## 状态附录：2026-05-18 完成情况
+
+### 已实现
+
+- key 到 agent 的 binding。
+- `agent_tasks` 和 `agent_events`。
+- sleep run 进入 task/event 记录。
+- 提案和作品公开审批进入 inbox。
+- 星AI从记忆星球中拆出，作为 Agent 控制台入口。
+- 公开宇宙只展示显式公开的星星和作品摘要。
+
+### 本计划补完
+
+- `agent_observations` 输入流。
+- 统一事件类型和 OS 安全序列化。
+- Agent provider registry。
+- Star domain tool registry。
+- 固定策略引擎。
+- 同步 task queue / runner。
+- `/api/agents/current`、tasks、inbox、events API。
+- 记忆治理、等待审批任务、回滚候选进入 inbox。
+- chat、design、media、approval、memory governance 写 observation/event。
+- 高风险业务动作通过 Agent tools 执行。
+- Agent Core 显示 OS 状态、任务动作和审计事件。
+- OS/Core/Public 响应增加隐私契约回归测试。
+
+### 仍属未来
+
+- background worker。
+- multi-agent collaboration。
+- third-party provider UI。
+- full physical `agent_id` migration。
