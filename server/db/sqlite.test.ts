@@ -5,6 +5,7 @@ import {
   createAgentInstanceRepository,
   createAgentEventRepository,
   createAgentEvolutionRepository,
+  createAgentObservationRepository,
   createAgentReflectionRepository,
   createAgentSnapshotRepository,
   createAgentSleepRepository,
@@ -97,6 +98,31 @@ describe('sqlite repositories', () => {
 
     expect(repo.listEventsByAgent('agent_1')).toMatchObject([
       { id: 'event_1', type: 'task.completed', visibility: 'private' },
+    ])
+  })
+
+  it('stores agent observations by agent id', () => {
+    const repo = createAgentObservationRepository(':memory:')
+    repo.addObservation({
+      id: 'observation_1',
+      agentId: 'agent_1',
+      sourceType: 'chat',
+      sourceId: 'conversation_1',
+      summary: '用户发送了一条消息。',
+      payloadJson: '{"private":true}',
+      createdAt: '2026-05-18T00:00:00.000Z',
+    })
+
+    expect(repo.listObservationsByAgent('agent_1')).toEqual([
+      {
+        id: 'observation_1',
+        agentId: 'agent_1',
+        sourceType: 'chat',
+        sourceId: 'conversation_1',
+        summary: '用户发送了一条消息。',
+        payloadJson: '{"private":true}',
+        createdAt: '2026-05-18T00:00:00.000Z',
+      },
     ])
   })
 

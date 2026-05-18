@@ -90,6 +90,15 @@ export const schemaStatements = [
     visibility TEXT NOT NULL,
     created_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_observations (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    source_id TEXT,
+    summary TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS agent_state_snapshots (
     id TEXT PRIMARY KEY,
     key_id TEXT NOT NULL,

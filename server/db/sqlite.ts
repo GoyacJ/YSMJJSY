@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { schemaStatements } from './schema'
+import type { AgentObservationSourceType } from '../services/agent-domain'
 
 export type ConversationRecord = {
   id: string
@@ -115,6 +116,16 @@ export type AgentEventRecord = {
   targetId?: string | null
   payloadJson: string
   visibility: 'private' | 'public'
+  createdAt: string
+}
+
+export type AgentObservationRecord = {
+  id: string
+  agentId: string
+  sourceType: AgentObservationSourceType
+  sourceId?: string | null
+  summary: string
+  payloadJson: string
   createdAt: string
 }
 
@@ -755,6 +766,55 @@ export function createAgentEventRepository(path: string) {
         ORDER BY created_at DESC
         LIMIT ?
       `).all(agentId, limit) as AgentEventRecord[]
+    },
+  }
+}
+
+export function createAgentObservationRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addObservation(record: AgentObservationRecord) {
+      db.prepare(`
+        INSERT INTO agent_observations (
+          id,
+          agent_id,
+          source_type,
+          source_id,
+          summary,
+          payload_json,
+          created_at
+        )
+        VALUES (
+          @id,
+          @agentId,
+          @sourceType,
+          @sourceId,
+          @summary,
+          @payloadJson,
+          @createdAt
+        )
+      `).run({
+        ...record,
+        sourceId: record.sourceId ?? null,
+      })
+    },
+
+    listObservationsByAgent(agentId: string, limit = 40): AgentObservationRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          agent_id AS agentId,
+          source_type AS sourceType,
+          source_id AS sourceId,
+          summary,
+          payload_json AS payloadJson,
+          created_at AS createdAt
+        FROM agent_observations
+        WHERE agent_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(agentId, limit) as AgentObservationRecord[]
     },
   }
 }
