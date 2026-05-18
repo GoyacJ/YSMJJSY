@@ -171,7 +171,7 @@ describe('StarChat', () => {
     expect(wrapper.get('.star-chat__dock').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="设计模式"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="设计模式"]').exists()).toBe(false)
     expect(wrapper.get('button[aria-label="听一听"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="画一张"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="做一段"]').exists()).toBe(true)
@@ -274,17 +274,24 @@ describe('StarChat', () => {
     expect(wrapper.text()).toContain('我看到了这张图。')
   })
 
-  it('uses design mode placeholder and emits design requests', async () => {
-    const wrapper = mountStarChat()
+  it('does not expose design mode from the chat composer', async () => {
+    const sendMessageStream = createStreamReply('收到。')
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
 
-    await wrapper.get('button[aria-label="设计模式"]').trigger('click')
-
-    expect(wrapper.get('textarea').attributes('placeholder')).toBe('请输入你的创意想法')
-
+    expect(wrapper.find('button[aria-label="设计模式"]').exists()).toBe(false)
+    expect(wrapper.get('textarea').attributes('placeholder')).toBe('把想说的话交给这片星空')
     await wrapper.find('textarea').setValue('把页面改成月光感')
     await wrapper.find('form').trigger('submit.prevent')
 
-    expect(wrapper.emitted('designRequested')?.[0]).toEqual(['把页面改成月光感'])
+    expect(sendMessageStream).toHaveBeenCalledWith({
+      message: '把页面改成月光感',
+      attachments: [],
+      intent: 'auto',
+    }, expect.any(Function))
   })
 
   it('sends selected media intent through the chat request only', async () => {
@@ -361,6 +368,200 @@ describe('StarChat', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('你好')
+  })
+
+  it('queues a second message while the first reply is still streaming', async () => {
+    let finishFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      finishFirst = resolve
+    })
+    const sendMessageStream = vi.fn(async (payload, onEvent) => {
+      if (payload.message === '第一条') {
+        await firstGate
+        onEvent({
+          type: 'message',
+          reply: '第一条回复',
+          message: {
+            role: 'assistant' as const,
+            content: '第一条回复',
+            parts: [{ type: 'text' as const, text: '第一条回复' }],
+          },
+        })
+        return {
+          reply: '第一条回复',
+          message: {
+            role: 'assistant' as const,
+            content: '第一条回复',
+            parts: [{ type: 'text' as const, text: '第一条回复' }],
+          },
+        }
+      }
+
+      onEvent({
+        type: 'message',
+        reply: '第二条回复',
+        message: {
+          role: 'assistant' as const,
+          content: '第二条回复',
+          parts: [{ type: 'text' as const, text: '第二条回复' }],
+        },
+      })
+      return {
+        reply: '第二条回复',
+        message: {
+          role: 'assistant' as const,
+          content: '第二条回复',
+          parts: [{ type: 'text' as const, text: '第二条回复' }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('第一条')
+    const firstSubmit = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.find('textarea').setValue('第二条')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(sendMessageStream).toHaveBeenCalledTimes(1)
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('')
+    expect(wrapper.text()).toContain('第二条')
+
+    finishFirst()
+    await firstSubmit
+    await flushPromises()
+
+    expect(sendMessageStream).toHaveBeenNthCalledWith(2, {
+      message: '第二条',
+      attachments: [],
+      intent: 'auto',
+    }, expect.any(Function))
+    expect(wrapper.text()).toContain('第一条回复')
+    expect(wrapper.text()).toContain('第二条回复')
+  })
+
+  it('shows queued messages above the composer while waiting to send', async () => {
+    let finishFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      finishFirst = resolve
+    })
+    const sendMessageStream = vi.fn(async (payload, onEvent) => {
+      if (payload.message === '第一条') {
+        await firstGate
+      }
+
+      const reply = `${payload.message}回复`
+      onEvent({
+        type: 'message',
+        reply,
+        message: {
+          role: 'assistant' as const,
+          content: reply,
+          parts: [{ type: 'text' as const, text: reply }],
+        },
+      })
+      return {
+        reply,
+        message: {
+          role: 'assistant' as const,
+          content: reply,
+          parts: [{ type: 'text' as const, text: reply }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('第一条')
+    const firstSubmit = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.find('textarea').setValue('第二条')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    const queue = wrapper.get('.star-chat__queue')
+    expect(queue.text()).toContain('排队中')
+    expect(queue.text()).toContain('第二条')
+
+    finishFirst()
+    await firstSubmit
+    await flushPromises()
+
+    expect(wrapper.find('.star-chat__queue').exists()).toBe(false)
+  })
+
+  it('removes a queued message before it is sent', async () => {
+    let finishFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      finishFirst = resolve
+    })
+    const sendMessageStream = vi.fn(async (payload, onEvent) => {
+      if (payload.message === '第一条') {
+        await firstGate
+      }
+
+      const reply = `${payload.message}回复`
+      onEvent({
+        type: 'message',
+        reply,
+        message: {
+          role: 'assistant' as const,
+          content: reply,
+          parts: [{ type: 'text' as const, text: reply }],
+        },
+      })
+      return {
+        reply,
+        message: {
+          role: 'assistant' as const,
+          content: reply,
+          parts: [{ type: 'text' as const, text: reply }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('第一条')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.find('textarea').setValue('第二条')
+    await wrapper.find('form').trigger('submit.prevent')
+    await wrapper.find('textarea').setValue('第三条')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="删除排队消息：第二条"]').trigger('click')
+
+    expect(wrapper.get('.star-chat__queue').text()).not.toContain('第二条')
+    expect(wrapper.get('.star-chat__queue').text()).toContain('第三条')
+
+    finishFirst()
+    await flushPromises()
+    await flushPromises()
+
+    expect(sendMessageStream).toHaveBeenCalledTimes(2)
+    expect(sendMessageStream).toHaveBeenNthCalledWith(2, {
+      message: '第三条',
+      attachments: [],
+      intent: 'auto',
+    }, expect.any(Function))
+    expect(wrapper.text()).not.toContain('第二条回复')
+    expect(wrapper.text()).toContain('第三条回复')
   })
 
   it('shows contextual thinking status before the assistant reply starts', async () => {

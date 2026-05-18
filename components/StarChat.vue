@@ -22,10 +22,6 @@ const props = defineProps<{
   initialMessages?: StarChatMessage[]
 }>()
 
-const emit = defineEmits<{
-  designRequested: [instruction: string]
-}>()
-
 const input = ref('')
 const pending = ref(false)
 const error = ref('')
@@ -33,7 +29,6 @@ const localMessages = ref<StarChatMessage[]>([])
 const attachments = ref<StarChatAttachment[]>([])
 const selectedMediaKinds = ref<MediaIntent[]>([])
 const listening = ref(false)
-const mode = ref<'chat' | 'design'>('chat')
 const threadActive = ref(false)
 const activeMessageIndex = ref<number | null>(null)
 const attachmentMenuOpen = ref(false)
@@ -41,6 +36,16 @@ const attachmentMenuRef = ref<HTMLElement | null>(null)
 const messagesThreadRef = ref<{ $el: HTMLElement } | null>(null)
 const chat = useStarChat()
 let recognition: { start: () => void; stop?: () => void; abort?: () => void; lang: string; interimResults: boolean; onresult: ((event: any) => void) | null; onerror: (() => void) | null; onend: (() => void) | null } | null = null
+
+type QueuedChatRequest = {
+  id: number
+  text: string
+  attachments: StarChatAttachment[]
+  intent: StarChatIntent
+}
+
+const chatQueue = ref<QueuedChatRequest[]>([])
+let nextQueuedChatRequestId = 1
 
 const attachmentRules: Record<AttachmentKind, { mimeTypes: string[], maxSize: number, label: string }> = {
   image: {
@@ -160,6 +165,10 @@ async function scrollMessagesToLatest() {
 
 function removeAttachment(index: number) {
   attachments.value.splice(index, 1)
+}
+
+function removeQueuedChatRequest(id: number) {
+  chatQueue.value = chatQueue.value.filter(request => request.id !== id)
 }
 
 function toggleMediaKind(kind: MediaIntent) {
@@ -360,34 +369,52 @@ async function submit() {
     return
   }
 
-  if ((!text && selectedAttachments.length === 0) || pending.value) {
+  if (!text && selectedAttachments.length === 0) {
     return
   }
 
-  if (mode.value === 'design') {
-    emit('designRequested', text)
-    input.value = ''
-    attachmentMenuOpen.value = false
-    selectedMediaKinds.value = []
-    return
-  }
-
-  pending.value = true
   error.value = ''
-  localMessages.value.push({
-    role: 'user',
-    content: text || '发送了一个附件',
-    parts: buildAttachmentParts(text || '发送了一个附件', selectedAttachments),
-  })
   input.value = ''
   attachments.value = []
   attachmentMenuOpen.value = false
   selectedMediaKinds.value = []
+  chatQueue.value.push({
+    id: nextQueuedChatRequestId++,
+    text,
+    attachments: selectedAttachments,
+    intent: selectedIntent,
+  })
+
+  void processChatQueue()
+}
+
+async function processChatQueue() {
+  if (pending.value) {
+    return
+  }
+
+  const nextRequest = chatQueue.value.shift()
+
+  if (!nextRequest) {
+    return
+  }
+
+  pending.value = true
 
   try {
-    const payload = { message: text, attachments: selectedAttachments, intent: selectedIntent }
+    localMessages.value.push({
+      role: 'user',
+      content: nextRequest.text || '发送了一个附件',
+      parts: buildAttachmentParts(nextRequest.text || '发送了一个附件', nextRequest.attachments),
+    })
+
+    const payload = {
+      message: nextRequest.text,
+      attachments: nextRequest.attachments,
+      intent: nextRequest.intent,
+    }
     const streamMessage = props.sendMessageStream ?? chat.sendMessageStream
-    const assistantMessage = createStreamingAssistantMessage(buildThinkingStatusParts(selectedIntent, selectedAttachments))
+    const assistantMessage = createStreamingAssistantMessage(buildThinkingStatusParts(nextRequest.intent, nextRequest.attachments))
     const assistantIndex = localMessages.value.length
     localMessages.value.push(assistantMessage)
     const result = await streamMessage(payload, handleStreamEvent(assistantIndex))
@@ -405,6 +432,10 @@ async function submit() {
   }
   finally {
     pending.value = false
+
+    if (chatQueue.value.length > 0) {
+      void processChatQueue()
+    }
   }
 }
 
@@ -467,12 +498,46 @@ onBeforeUnmount(() => {
         {{ error }}
       </p>
 
-      <div ref="attachmentMenuRef">
+      <div ref="attachmentMenuRef" class="star-chat__dock-stack">
+        <div
+          v-if="chatQueue.length"
+          class="star-chat__queue"
+          role="status"
+          aria-label="等待发送的消息"
+        >
+          <div class="star-chat__queue-header">
+            <span>排队中</span>
+            <strong>{{ chatQueue.length }}</strong>
+          </div>
+          <article
+            v-for="request in chatQueue"
+            :key="request.id"
+            class="star-chat__queue-item"
+          >
+            <p>{{ request.text || '发送了一个附件' }}</p>
+            <small v-if="request.attachments.length">
+              {{ request.attachments.length }} 个附件
+            </small>
+            <button
+              type="button"
+              class="star-chat__queue-remove"
+              :aria-label="`删除排队消息：${request.text || '附件'}`"
+              @click="removeQueuedChatRequest(request.id)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+                <path d="M6 7l1 13h10l1-13" />
+                <path d="M9 7V4h6v3" />
+              </svg>
+            </button>
+          </article>
+        </div>
         <StarComposer
           v-model:input="input"
           :pending="pending"
           :listening="listening"
-          :mode="mode"
           :selected-media-kinds="selectedMediaKinds"
           :attachment-menu-open="attachmentMenuOpen"
           @submit="submit"
@@ -480,7 +545,6 @@ onBeforeUnmount(() => {
           @toggle-attachments="attachmentMenuOpen = !attachmentMenuOpen"
           @attachment-change="handleAttachmentChange"
           @start-voice="startVoiceInput"
-          @toggle-mode="mode = mode === 'design' ? 'chat' : 'design'"
           @toggle-media-kind="toggleMediaKind"
         />
       </div>

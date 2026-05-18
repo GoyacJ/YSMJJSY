@@ -67,7 +67,7 @@ export function buildAgentInbox(input: {
 }): AgentOsInboxItem[] {
   return [
     ...input.pendingProposals.map(proposal => ({
-      id: proposal.id,
+      id: `proposal:${proposal.id}`,
       type: 'proposal' as const,
       title: proposal.title,
       summary: proposal.summary,
@@ -75,7 +75,7 @@ export function buildAgentInbox(input: {
       createdAt: proposal.createdAt,
     })),
     ...input.publicWorkCandidates.map(work => ({
-      id: work.id,
+      id: `work_visibility:${work.id}`,
       type: 'work_visibility' as const,
       title: work.title,
       summary: work.summary,

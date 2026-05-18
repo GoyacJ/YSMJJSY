@@ -59,7 +59,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
           title: '银河信笺',
           subtitle: '把这一页改成更像星空的样子。',
           sections: [
-            { type: 'letter', layout: 'star-trail', text: '这是一段由设计模式生成的预览。' },
+            { type: 'letter', layout: 'star-trail', text: '这是一段由设计预览生成的内容。' },
             { type: 'star-scene', density: 0.8, caption: '保存后，这片星空会留在这把钥匙里。' },
           ],
         },
@@ -393,8 +393,9 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.getByText('承接短句偏好')).toBeVisible()
   await page.getByRole('button', { name: '关闭面板' }).click()
   await expect(page.getByText('这里会慢慢写下只属于这把钥匙的内容。')).toHaveCount(0)
-  await expect(page.locator('.star-chat__dock')).toHaveAttribute('data-mode', 'chat')
+  await expect(page.locator('.star-chat__dock')).not.toHaveAttribute('data-mode', /.+/)
   await expect(page.getByPlaceholder('把想说的话交给这片星空')).toBeVisible()
+  await expect(page.getByRole('button', { name: '设计模式' })).toHaveCount(0)
   await expect(page.getByText('完全访问权限')).toHaveCount(0)
   await page.getByRole('button', { name: '添加附件' }).click()
   await expect(page.getByRole('menuitem', { name: '上传图片' })).toBeVisible()
@@ -452,12 +453,22 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.locator('.star-orbit-stage img[alt="生成的图片"]')).toBeVisible()
   await expect(page.locator('.generated-asset')).toHaveCount(0)
 
-  await clickChatTool('设计模式')
-  await page.getByPlaceholder('请输入你的创意想法').fill('把页面改成银河和月光')
-  await page.getByRole('button', { name: '发送' }).click()
-  await expect(page.getByText('银河信笺')).toBeVisible()
-  await page.getByRole('button', { name: '保存这个设计' }).click()
-  await expect(page.getByText('保存后，这片星空会留在这把钥匙里。')).toBeVisible()
+  await page.request.post('/api/design/commit', {
+    data: {
+      prompt: '把页面改成银河和月光',
+      schema: {
+        version: 1,
+        theme: 'moon-note',
+        palette: 'midnight',
+        title: '银河信笺',
+        subtitle: '把这一页改成更像星空的样子。',
+        sections: [
+          { type: 'letter', layout: 'star-trail', text: '这是一段由测试保存的设计。' },
+          { type: 'star-scene', density: 0.8, caption: '保存后，这片星空会留在这把钥匙里。' },
+        ],
+      },
+    },
+  })
   const worksResponse = await page.request.get('/api/agent/works')
   const worksBody = await worksResponse.json()
   const committedDesignWork = worksBody.works.find((work: { type: string }) => work.type === 'page_design')

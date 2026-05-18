@@ -63,7 +63,7 @@ describe('agent os service', () => {
     expect(result.agent.id).toBe('agent_1')
     expect(result.tasks[0].status).toBe('completed')
     expect(result.events[0]).not.toHaveProperty('payload')
-    expect(result.inbox).toMatchObject([{ id: 'proposal_1', type: 'proposal', title: '更短' }])
+    expect(result.inbox).toMatchObject([{ id: 'proposal:proposal_1', type: 'proposal', title: '更短' }])
   })
 
   it('builds inbox items for proposals and public work candidates', () => {
@@ -83,7 +83,7 @@ describe('agent os service', () => {
         },
       ],
     })).toMatchObject([
-      { id: 'work_1', type: 'work_visibility', action: 'publish' },
+      { id: 'work_visibility:work_1', type: 'work_visibility', action: 'publish' },
     ])
   })
 })

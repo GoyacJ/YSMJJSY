@@ -7,7 +7,6 @@ defineProps<{
   input: string
   pending: boolean
   listening: boolean
-  mode: 'chat' | 'design'
   selectedMediaKinds: MediaIntent[]
   attachmentMenuOpen: boolean
 }>()
@@ -19,7 +18,6 @@ const emit = defineEmits<{
   'toggle-attachments': []
   'attachment-change': [event: Event, kind: AttachmentKind]
   'start-voice': []
-  'toggle-mode': []
   'toggle-media-kind': [kind: MediaIntent]
 }>()
 
@@ -41,7 +39,7 @@ function handleInputEnter(event: KeyboardEvent) {
 </script>
 
 <template>
-  <form class="star-chat__composer star-chat__dock" :data-mode="mode" @submit.prevent="emit('submit')">
+  <form class="star-chat__composer star-chat__dock" @submit.prevent="emit('submit')">
     <label class="sr-only" for="star-chat-input">和星信说话</label>
     <div class="star-chat__tools">
       <div class="star-chat__attachment-menu">
@@ -92,7 +90,7 @@ function handleInputEnter(event: KeyboardEvent) {
             <button
               type="button"
               class="star-chat__icon-button"
-              :disabled="pending || listening"
+              :disabled="listening"
               aria-label="语音输入"
               @click="emit('start-voice')"
             >
@@ -105,26 +103,11 @@ function handleInputEnter(event: KeyboardEvent) {
               <span>{{ listening ? '正在听' : '语音输入' }}</span>
             </button>
             <button
-              type="button"
-              class="star-chat__icon-button"
-              :data-active="mode === 'design'"
-              aria-label="设计模式"
-              @click="emit('toggle-mode')"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3 4 7l8 4 8-4-8-4Z" />
-                <path d="M4 12l8 4 8-4" />
-                <path d="M4 17l8 4 8-4" />
-              </svg>
-              <span>设计模式</span>
-            </button>
-            <button
               v-for="action in mediaActions"
               :key="`mobile-${action.kind}`"
               type="button"
               class="star-chat__icon-button"
               :data-active="selectedMediaKinds.includes(action.kind)"
-              :disabled="pending"
               :aria-label="action.label"
               @click="emit('toggle-media-kind', action.kind)"
             >
@@ -140,7 +123,7 @@ function handleInputEnter(event: KeyboardEvent) {
         <button
           type="button"
           class="star-chat__icon-button"
-          :disabled="pending || listening"
+          :disabled="listening"
           aria-label="语音输入"
           @click="emit('start-voice')"
         >
@@ -153,26 +136,11 @@ function handleInputEnter(event: KeyboardEvent) {
           <span class="sr-only">{{ listening ? '正在听' : '语音输入' }}</span>
         </button>
         <button
-          type="button"
-          class="star-chat__icon-button"
-          :data-active="mode === 'design'"
-          aria-label="设计模式"
-          @click="emit('toggle-mode')"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3 4 7l8 4 8-4-8-4Z" />
-            <path d="M4 12l8 4 8-4" />
-            <path d="M4 17l8 4 8-4" />
-          </svg>
-          <span class="sr-only">设计模式</span>
-        </button>
-        <button
           v-for="action in mediaActions"
           :key="action.kind"
           type="button"
           class="star-chat__icon-button"
           :data-active="selectedMediaKinds.includes(action.kind)"
-          :disabled="pending"
           :aria-label="action.label"
           @click="emit('toggle-media-kind', action.kind)"
         >
@@ -187,7 +155,7 @@ function handleInputEnter(event: KeyboardEvent) {
       id="star-chat-input"
       :value="input"
       rows="1"
-      :placeholder="mode === 'design' ? '请输入你的创意想法' : '把想说的话交给这片星空'"
+      placeholder="把想说的话交给这片星空"
       @input="emit('update:input', ($event.target as HTMLTextAreaElement).value)"
       @focus="emit('focus')"
       @keydown.enter="handleInputEnter"
@@ -195,14 +163,13 @@ function handleInputEnter(event: KeyboardEvent) {
     <button
       class="star-chat__icon-button star-chat__icon-button--send"
       type="submit"
-      :disabled="pending"
       aria-label="发送"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M5 12h13" />
         <path d="m13 6 6 6-6 6" />
       </svg>
-      <span class="sr-only">{{ pending ? '等待发送' : '发送' }}</span>
+      <span class="sr-only">{{ pending ? '加入发送队列' : '发送' }}</span>
     </button>
   </form>
 </template>

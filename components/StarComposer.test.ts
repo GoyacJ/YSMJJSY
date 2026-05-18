@@ -8,7 +8,6 @@ function mountComposer(props = {}) {
       input: '',
       pending: false,
       listening: false,
-      mode: 'chat',
       selectedMediaKinds: [],
       attachmentMenuOpen: false,
       ...props,
@@ -22,7 +21,7 @@ describe('StarComposer', () => {
 
     expect(wrapper.get('button[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="设计模式"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="设计模式"]').exists()).toBe(false)
     expect(wrapper.get('button[aria-label="听一听"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="画一张"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="做一段"]').exists()).toBe(true)
@@ -36,14 +35,23 @@ describe('StarComposer', () => {
     expect(wrapper.emitted('submit')).toHaveLength(1)
   })
 
-  it('keeps Shift Enter for new lines and switches design mode', async () => {
+  it('keeps text entry and send available while pending', async () => {
+    const wrapper = mountComposer({ pending: true })
+
+    await wrapper.get('textarea').setValue('排队发送')
+    await wrapper.get('textarea').trigger('keydown.enter')
+
+    expect(wrapper.get('textarea').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('button[aria-label="发送"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.emitted('update:input')).toEqual([['排队发送']])
+    expect(wrapper.emitted('submit')).toHaveLength(1)
+  })
+
+  it('keeps Shift Enter for new lines', async () => {
     const wrapper = mountComposer({ input: '第一行' })
 
     await wrapper.get('textarea').trigger('keydown.enter', { shiftKey: true })
     expect(wrapper.emitted('submit')).toBeUndefined()
-
-    await wrapper.get('button[aria-label="设计模式"]').trigger('click')
-    expect(wrapper.emitted('toggle-mode')).toHaveLength(1)
   })
 
   it('opens attachment options and emits attachment changes', async () => {
@@ -53,21 +61,20 @@ describe('StarComposer', () => {
     expect(wrapper.get('label[aria-label="上传音频"]').exists()).toBe(true)
     expect(wrapper.get('label[aria-label="上传视频"]').exists()).toBe(true)
     expect(wrapper.get('.star-chat__mobile-actions button[aria-label="语音输入"]').exists()).toBe(true)
-    expect(wrapper.get('.star-chat__mobile-actions button[aria-label="设计模式"]').exists()).toBe(true)
+    expect(wrapper.find('.star-chat__mobile-actions button[aria-label="设计模式"]').exists()).toBe(false)
     expect(wrapper.get('.star-chat__quick-tools button[aria-label="语音输入"]').exists()).toBe(true)
 
     await wrapper.get('button[aria-label="画一张"]').trigger('click')
     expect(wrapper.emitted('toggle-media-kind')).toEqual([['image']])
   })
 
-  it('marks design mode on the composer shell', () => {
+  it('marks selected media intent on the composer shell', () => {
     const wrapper = mountComposer({
-      mode: 'design',
       selectedMediaKinds: ['image'],
     })
 
-    expect(wrapper.get('form').attributes('data-mode')).toBe('design')
-    expect(wrapper.get('textarea').attributes('placeholder')).toBe('请输入你的创意想法')
+    expect(wrapper.get('form').attributes('data-mode')).toBeUndefined()
+    expect(wrapper.get('textarea').attributes('placeholder')).toBe('把想说的话交给这片星空')
     expect(wrapper.get('button[aria-label="画一张"]').attributes('data-active')).toBe('true')
   })
 })

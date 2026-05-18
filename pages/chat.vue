@@ -5,7 +5,6 @@ import type { StarPageDesignSchema } from '../types/design-schema'
 const {
   previewSchema,
   loadDesign,
-  previewDesign,
   commitDesign,
   discardPreview,
 } = useKeyDesign()
@@ -106,7 +105,7 @@ onMounted(async () => {
         <span class="chat-theater__star chat-theater__star--three" />
         <span class="chat-theater__meteor" />
       </div>
-      <StarChat :initial-messages="chatMessages" @design-requested="previewDesign" />
+      <StarChat :initial-messages="chatMessages" />
       <StarMemoryMap
         @open-planet="openMemoryPlanet"
         @open-settings="profileSettingsOpen = true"
