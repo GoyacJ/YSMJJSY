@@ -260,6 +260,32 @@ describe('AgentCorePanel', () => {
     expect(cancelTask).toHaveBeenCalledWith('task_1')
   })
 
+  it('creates an image task from the task center', async () => {
+    const enqueueTask = vi.fn(async () => ({ id: 'task_1' }))
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        embedded: true,
+        loadCore: async () => core,
+        loadOs: async () => ({
+          agent: { id: 'agent_1', status: 'active', ownerType: 'key', ownerId: 'key_1', domain: 'star' },
+          inbox: [],
+          tasks: [],
+          events: [],
+        }),
+        enqueueTask,
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[aria-label="任务提示词"]').setValue('月光森林')
+    await wrapper.get('[aria-label="创建图片任务"]').trigger('click')
+
+    expect(enqueueTask).toHaveBeenCalledWith({
+      type: 'generate_artifact',
+      input: { artifactType: 'image', prompt: '月光森林' },
+    })
+  })
+
   it('accept button calls proposal update', async () => {
     const applyProposal = vi.fn(async () => true)
     const wrapper = mount(AgentCorePanel, {

@@ -44,7 +44,7 @@ export type AgentOsState = {
   events: AgentOsEventItem[]
 }
 
-type AgentTaskCreateInput = {
+export type AgentTaskCreateInput = {
   type: string
   input?: Record<string, unknown>
 }

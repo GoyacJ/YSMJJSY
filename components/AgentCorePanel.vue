@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useAgentCore, type AgentCore, type AgentCoreProposal, type AgentCoreProposalAction } from '../composables/useAgentCore'
-import { useAgentOs, type AgentOsInboxItem, type AgentOsState } from '../composables/useAgentOs'
+import { useAgentOs, type AgentOsInboxItem, type AgentOsState, type AgentOsTaskItem, type AgentTaskCreateInput } from '../composables/useAgentOs'
 
 const props = defineProps<{
   embedded?: boolean
@@ -10,6 +10,7 @@ const props = defineProps<{
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
   approveInboxItem?: (id: string) => Promise<boolean>
   rejectInboxItem?: (id: string) => Promise<boolean>
+  enqueueTask?: (input: AgentTaskCreateInput) => Promise<AgentOsTaskItem | null>
   runTask?: (id: string) => Promise<boolean>
   cancelTask?: (id: string) => Promise<boolean>
   previewDesignProposal?: (id: string) => Promise<boolean>
@@ -24,6 +25,7 @@ const loadedCore = ref<AgentCore | null>(null)
 const loadedOs = ref<AgentOsState | null>(null)
 const pending = ref(false)
 const error = ref('')
+const taskPrompt = ref('')
 
 const core = computed(() => loadedCore.value)
 const panelOpen = computed(() => props.embedded || open.value)
@@ -157,6 +159,23 @@ async function cancelOsTask(id: string) {
   }
   finally {
     pending.value = false
+  }
+}
+
+async function createImageTask() {
+  const prompt = taskPrompt.value.trim()
+
+  if (!prompt) {
+    return
+  }
+
+  const created = props.enqueueTask
+    ? await props.enqueueTask({ type: 'generate_artifact', input: { artifactType: 'image', prompt } })
+    : await agentOs.enqueueTask({ type: 'generate_artifact', input: { artifactType: 'image', prompt } })
+
+  if (created) {
+    taskPrompt.value = ''
+    await loadPanel()
   }
 }
 
@@ -378,6 +397,17 @@ onMounted(() => {
           <p class="agent-core-panel__label">
             任务中心
           </p>
+          <div class="agent-core-panel__task-create">
+            <input v-model="taskPrompt" aria-label="任务提示词" maxlength="120">
+            <button
+              type="button"
+              aria-label="创建图片任务"
+              :disabled="pending || !taskPrompt.trim()"
+              @click="createImageTask"
+            >
+              图片任务
+            </button>
+          </div>
           <ul v-if="osTasks.length">
             <li v-for="task in osTasks" :key="task.id" class="agent-core-panel__task">
               <strong>{{ task.title }}</strong>
