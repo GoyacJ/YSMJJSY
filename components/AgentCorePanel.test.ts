@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { useAgentOs } from '../composables/useAgentOs'
 import AgentCorePanel from './AgentCorePanel.vue'
 
 function flushPromises() {
@@ -66,6 +67,15 @@ const core = {
 }
 
 describe('AgentCorePanel', () => {
+  it('exposes agent os composable actions for panel integration', () => {
+    const agentOs = useAgentOs()
+
+    expect(agentOs.os.value).toBeNull()
+    expect(agentOs.loadOs).toEqual(expect.any(Function))
+    expect(agentOs.approveInboxItem).toEqual(expect.any(Function))
+    expect(agentOs.rejectInboxItem).toEqual(expect.any(Function))
+  })
+
   it('renders profile, memory counts, reflections, and pending proposals', async () => {
     const wrapper = mount(AgentCorePanel, {
       props: {
