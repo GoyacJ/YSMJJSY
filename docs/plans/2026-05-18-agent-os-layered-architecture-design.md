@@ -194,6 +194,8 @@ Agent OS 负责回答：
 - 哪些任务失败了。
 - 哪些结果可以回滚。
 
+当前 hardened runtime boundary 见 [Agent OS Runtime](../agent-os-runtime.md)。AgentLoop 负责规划、policy-gated 工具执行、审批恢复和 stale task recovery。业务路由可以收集上下文，但高风险 mutation 必须先表达为 Agent task/tool。
+
 ### 4. Agent Kernel 层
 
 这是底层通用 Agent 能力。
