@@ -2,9 +2,12 @@ import { createError, defineEventHandler, getRouterParam } from 'h3'
 import {
   createAgentSnapshotRepository,
   createAgentStateRepository,
+  createKeyDesignRepository,
   type AgentStateRecord,
   type AgentStateSnapshotRecord,
+  type KeyDesignRecord,
 } from '../../../../db/sqlite'
+import { parseDesignSchema } from '../../../../services/design-schema'
 import { requireAgentKey } from '../../core.get'
 
 type RestoreAgentSnapshotActionInput = {
@@ -15,6 +18,10 @@ type RestoreAgentSnapshotActionInput = {
   }
   states: {
     updateAgentState: (keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) => void
+  }
+  designs?: {
+    getLatestDesign: (keyId: string) => Pick<KeyDesignRecord, 'version'> | undefined
+    addKeyDesign: (record: { keyId: string, version: number, schemaJson: string, prompt: string, createdAt: string }) => void
   }
   now: string
 }
@@ -44,12 +51,60 @@ function parseSnapshotAgentState(profileJson: string) {
   }
 }
 
+function parseSnapshotPageDesign(profileJson: string) {
+  try {
+    const parsed = JSON.parse(profileJson)
+    const acceptedProposal = parsed?.acceptedProposal
+
+    if (acceptedProposal?.type !== 'page_design') {
+      return null
+    }
+
+    const schema = parseDesignSchema(acceptedProposal.payload?.schema)
+
+    return {
+      schema,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
 export function restoreAgentSnapshotAction(input: RestoreAgentSnapshotActionInput) {
   const snapshot = input.snapshots.getSnapshotByKey(input.keyId, input.snapshotId)
 
   if (!snapshot) {
     return {
       restored: false,
+    }
+  }
+
+  const pageDesign = parseSnapshotPageDesign(snapshot.profileJson)
+
+  if (pageDesign) {
+    if (!input.designs) {
+      return {
+        restored: false,
+      }
+    }
+
+    const latest = input.designs.getLatestDesign(input.keyId)
+    const version = latest ? latest.version + 1 : 1
+
+    input.designs.addKeyDesign({
+      keyId: input.keyId,
+      version,
+      schemaJson: JSON.stringify(pageDesign.schema),
+      prompt: `restore snapshot ${snapshot.id}`,
+      createdAt: input.now,
+    })
+
+    return {
+      restored: true,
+      snapshotId: snapshot.id,
+      restoredType: 'page_design',
+      version,
     }
   }
 
@@ -92,6 +147,7 @@ export default defineEventHandler((event) => {
     snapshotId,
     snapshots: createAgentSnapshotRepository(config.sqlitePath),
     states: createAgentStateRepository(config.sqlitePath),
+    designs: createKeyDesignRepository(config.sqlitePath),
     now: new Date().toISOString(),
   })
 
