@@ -708,6 +708,27 @@ export function createAgentTaskRepository(path: string) {
         LIMIT ?
       `).all(agentId, limit) as AgentTaskRecord[]
     },
+
+    listTasksByStatus(status: AgentTaskStatus, limit = 100): AgentTaskRecord[] {
+      return db.prepare(`
+        SELECT
+          id,
+          agent_id AS agentId,
+          type,
+          status,
+          title,
+          summary,
+          input_json AS inputJson,
+          result_json AS resultJson,
+          error,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM agent_tasks
+        WHERE status = ?
+        ORDER BY updated_at ASC
+        LIMIT ?
+      `).all(status, limit) as AgentTaskRecord[]
+    },
   }
 }
 

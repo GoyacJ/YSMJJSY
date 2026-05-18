@@ -81,6 +81,25 @@ describe('sqlite repositories', () => {
     ])
   })
 
+  it('lists running agent tasks for recovery', () => {
+    const repo = createAgentTaskRepository(':memory:')
+    repo.addTask({
+      id: 'task_1',
+      agentId: 'agent_1',
+      type: 'generate_artifact',
+      status: 'running',
+      title: '生成作品',
+      summary: '生成。',
+      inputJson: '{}',
+      resultJson: null,
+      error: null,
+      createdAt: '2026-05-18T00:00:00.000Z',
+      updatedAt: '2026-05-18T00:00:00.000Z',
+    })
+
+    expect(repo.listTasksByStatus('running')).toMatchObject([{ id: 'task_1' }])
+  })
+
   it('records agent events by agent id', () => {
     const repo = createAgentEventRepository(':memory:')
     repo.addEvent({
