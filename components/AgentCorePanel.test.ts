@@ -154,8 +154,110 @@ describe('AgentCorePanel', () => {
     expect(wrapper.text()).toContain('任务中心')
     expect(wrapper.text()).toContain('睡眠整理')
 
-    await wrapper.get('button[aria-label="批准待办"]').trigger('click')
+    const approveButton = wrapper.findAll('button').find(button => button.text() === '批准')
+    expect(approveButton).toBeTruthy()
+    await approveButton!.trigger('click')
     expect(approveInboxItem).toHaveBeenCalledWith('proposal:p1')
+  })
+
+  it('shows agent events without raw payloads', async () => {
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        loadCore: async () => core,
+        loadOs: async () => ({
+          agent: { id: 'agent_1', status: 'active', ownerType: 'key', ownerId: 'key_1', domain: 'star' },
+          inbox: [
+            {
+              id: 'memory_governance:m1:archive',
+              type: 'memory_governance',
+              title: '记忆治理',
+              summary: '过期。',
+              action: 'execute',
+              createdAt: '2026-05-18T00:00:00.000Z',
+            },
+            {
+              id: 'task_approval:task_1',
+              type: 'task_approval',
+              title: '公开作品',
+              summary: '公开月光图。',
+              action: 'approve',
+              createdAt: '2026-05-18T00:00:00.000Z',
+            },
+          ],
+          tasks: [
+            {
+              id: 'task_1',
+              type: 'publish_artifact',
+              status: 'waiting_approval',
+              title: '公开作品',
+              summary: '公开月光图。',
+              createdAt: '2026-05-18T00:00:00.000Z',
+              updatedAt: '2026-05-18T00:00:00.000Z',
+            },
+          ],
+          events: [{
+            id: 'event_1',
+            type: 'provider.failed',
+            title: 'Provider failed',
+            summary: '模型失败。',
+            createdAt: '2026-05-18T00:00:00.000Z',
+          }],
+        }),
+        applyProposal: vi.fn(),
+      },
+    })
+
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('审计事件')
+    expect(wrapper.text()).toContain('Provider failed')
+    expect(wrapper.text()).toContain('记忆治理')
+    expect(wrapper.text()).toContain('执行')
+    expect(wrapper.text()).toContain('公开作品')
+    expect(wrapper.text()).not.toContain('payloadJson')
+  })
+
+  it('can run and cancel os tasks', async () => {
+    const runTask = vi.fn(async () => true)
+    const cancelTask = vi.fn(async () => true)
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        loadCore: async () => core,
+        loadOs: async () => ({
+          agent: { id: 'agent_1', status: 'active', ownerType: 'key', ownerId: 'key_1', domain: 'star' },
+          inbox: [],
+          tasks: [
+            {
+              id: 'task_1',
+              type: 'generate_artifact',
+              status: 'queued',
+              title: '生成图片',
+              summary: '生成图片。',
+              createdAt: '2026-05-18T00:00:00.000Z',
+              updatedAt: '2026-05-18T00:00:00.000Z',
+            },
+          ],
+          events: [],
+        }),
+        runTask,
+        cancelTask,
+        applyProposal: vi.fn(),
+      },
+    })
+
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
+    await flushPromises()
+    const runButton = wrapper.findAll('button').find(button => button.text() === '运行')
+    expect(runButton).toBeTruthy()
+    await runButton!.trigger('click')
+    await flushPromises()
+    const cancelButton = wrapper.findAll('button').find(button => button.text() === '取消')
+    expect(cancelButton).toBeTruthy()
+    await cancelButton!.trigger('click')
+
+    expect(runTask).toHaveBeenCalledWith('task_1')
+    expect(cancelTask).toHaveBeenCalledWith('task_1')
   })
 
   it('accept button calls proposal update', async () => {

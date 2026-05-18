@@ -10,6 +10,8 @@ const props = defineProps<{
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
   approveInboxItem?: (id: string) => Promise<boolean>
   rejectInboxItem?: (id: string) => Promise<boolean>
+  runTask?: (id: string) => Promise<boolean>
+  cancelTask?: (id: string) => Promise<boolean>
   previewDesignProposal?: (id: string) => Promise<boolean>
   restoreSnapshot?: (id: string) => Promise<boolean>
   runSleep?: () => Promise<boolean>
@@ -27,6 +29,7 @@ const core = computed(() => loadedCore.value)
 const panelOpen = computed(() => props.embedded || open.value)
 const inboxItems = computed(() => loadedOs.value?.inbox ?? [])
 const osTasks = computed(() => loadedOs.value?.tasks ?? [])
+const osEvents = computed(() => loadedOs.value?.events ?? [])
 const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
 const pendingProposalLabel = computed(() => inboxItems.value.length ? '进化细节' : '待确认进化')
 const proposalHistory = computed(() => core.value?.proposals.history ?? [])
@@ -109,6 +112,48 @@ async function rejectInbox(item: AgentOsInboxItem) {
   }
   catch {
     error.value = '待办没有拒绝成功。'
+  }
+  finally {
+    pending.value = false
+  }
+}
+
+async function runOsTask(id: string) {
+  pending.value = true
+  error.value = ''
+
+  try {
+    const ok = props.runTask
+      ? await props.runTask(id)
+      : await agentOs.runTask(id)
+
+    if (ok) {
+      await loadPanel()
+    }
+  }
+  catch {
+    error.value = '任务没有运行成功。'
+  }
+  finally {
+    pending.value = false
+  }
+}
+
+async function cancelOsTask(id: string) {
+  pending.value = true
+  error.value = ''
+
+  try {
+    const ok = props.cancelTask
+      ? await props.cancelTask(id)
+      : await agentOs.cancelTask(id)
+
+    if (ok) {
+      await loadPanel()
+    }
+  }
+  catch {
+    error.value = '任务没有取消成功。'
   }
   finally {
     pending.value = false
@@ -278,6 +323,7 @@ onMounted(() => {
         <div>
           <p>星AI</p>
           <span v-if="core">{{ core.profile.assistantName }} · {{ core.profile.mbti }}</span>
+          <span v-if="loadedOs">{{ loadedOs.agent.status }} · {{ loadedOs.agent.domain }}</span>
         </div>
         <button v-if="!embedded" type="button" class="dialog-close-button" aria-label="关闭面板" @click="open = false">
           ×
@@ -308,7 +354,6 @@ onMounted(() => {
               <div>
                 <button
                   type="button"
-                  aria-label="批准待办"
                   :disabled="pending"
                   @click="approveInbox(item)"
                 >
@@ -316,7 +361,6 @@ onMounted(() => {
                 </button>
                 <button
                   type="button"
-                  aria-label="拒绝待办"
                   :disabled="pending"
                   @click="rejectInbox(item)"
                 >
@@ -339,10 +383,42 @@ onMounted(() => {
               <strong>{{ task.title }}</strong>
               <span>{{ task.summary }}</span>
               <small>{{ task.status }}</small>
+              <div v-if="task.status === 'queued' || task.status === 'waiting_approval'">
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="runOsTask(task.id)"
+                >
+                  运行
+                </button>
+                <button
+                  type="button"
+                  :disabled="pending"
+                  @click="cancelOsTask(task.id)"
+                >
+                  取消
+                </button>
+              </div>
             </li>
           </ul>
           <p v-else class="agent-core-panel__muted">
             还没有任务
+          </p>
+        </section>
+
+        <section class="agent-core-panel__events">
+          <p class="agent-core-panel__label">
+            审计事件
+          </p>
+          <ul v-if="osEvents.length">
+            <li v-for="event in osEvents" :key="event.id">
+              <strong>{{ event.title }}</strong>
+              <span>{{ event.summary }}</span>
+              <small>{{ event.type }} · {{ formatTime(event.createdAt) }}</small>
+            </li>
+          </ul>
+          <p v-else class="agent-core-panel__muted">
+            还没有事件
           </p>
         </section>
 

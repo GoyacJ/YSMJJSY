@@ -26,6 +26,8 @@ const {
 const {
   os: agentOs,
   loadOs: loadAgentOs,
+  runTask,
+  cancelTask,
   approveInboxItem,
   rejectInboxItem,
 } = useAgentOs()
@@ -116,6 +118,8 @@ onMounted(async () => {
         :apply-proposal="applyAgentCoreProposal"
         :approve-inbox-item="approveInboxItem"
         :reject-inbox-item="rejectInboxItem"
+        :run-task="runTask"
+        :cancel-task="cancelTask"
         :preview-design-proposal="previewAgentDesignProposal"
         :run-sleep="runSleep"
       />

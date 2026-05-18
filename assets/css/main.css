@@ -1153,29 +1153,35 @@ body {
 }
 
 .agent-core-panel__inbox li,
-.agent-core-panel__task {
+.agent-core-panel__task,
+.agent-core-panel__events li {
   display: grid;
   gap: 0.35rem;
 }
 
 .agent-core-panel__inbox strong,
-.agent-core-panel__task strong {
+.agent-core-panel__task strong,
+.agent-core-panel__events strong {
   font-size: 0.82rem;
 }
 
 .agent-core-panel__inbox span,
 .agent-core-panel__task span,
-.agent-core-panel__task small {
+.agent-core-panel__task small,
+.agent-core-panel__events span,
+.agent-core-panel__events small {
   color: var(--chat-ink-soft);
 }
 
-.agent-core-panel__inbox div {
+.agent-core-panel__inbox div,
+.agent-core-panel__task div {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
 }
 
-.agent-core-panel__inbox button {
+.agent-core-panel__inbox button,
+.agent-core-panel__task button {
   min-height: 2rem;
   border: 1px solid rgb(255 244 231 / 0.14);
   border-radius: 999px;
@@ -1187,12 +1193,14 @@ body {
   font-size: 0.78rem;
 }
 
-.agent-core-panel__inbox button:first-child {
+.agent-core-panel__inbox button:first-child,
+.agent-core-panel__task button:first-child {
   color: #1d1b28;
   background: #f6dfb2;
 }
 
-.agent-core-panel__inbox button:disabled {
+.agent-core-panel__inbox button:disabled,
+.agent-core-panel__task button:disabled {
   cursor: wait;
   opacity: 0.65;
 }

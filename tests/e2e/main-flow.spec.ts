@@ -8,6 +8,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   let sleepCompleted = false
   let workVisibility: 'private' | 'public' = 'private'
   let rollbackRestored = false
+  let memoryGovernanceApproved = false
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': forwardedIp })
 
@@ -203,6 +204,14 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
         },
         inbox: [
           {
+            id: 'memory_governance:memory_1:archive',
+            type: 'memory_governance',
+            title: '记忆治理',
+            summary: '过期。',
+            action: 'execute',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+          {
             id: 'proposal:proposal_1',
             type: 'proposal',
             title: '调整页面',
@@ -222,12 +231,40 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             updatedAt: '2026-05-17T00:01:00.000Z',
           },
         ],
-        events: [],
+        events: [
+          {
+            id: 'event_1',
+            type: 'provider.failed',
+            title: 'Provider failed',
+            summary: '模型失败。',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/agents/current/events', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        events: [
+          {
+            id: 'event_1',
+            type: 'provider.failed',
+            title: 'Provider failed',
+            summary: '模型失败。',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
       }),
     })
   })
 
   await page.route('**/api/agents/current/inbox/*/approve', async (route) => {
+    if (route.request().url().includes('memory_governance')) {
+      memoryGovernanceApproved = true
+    }
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ ok: true }),
@@ -381,6 +418,10 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.getByText('决策收件箱')).toBeVisible()
   await expect(page.getByText('任务中心')).toBeVisible()
   await expect(page.getByText('睡眠整理')).toBeVisible()
+  await expect(page.getByText('审计事件')).toBeVisible()
+  await expect(page.getByText('Provider failed')).toBeVisible()
+  await page.getByRole('button', { name: '执行' }).click()
+  await expect.poll(() => memoryGovernanceApproved).toBe(true)
   await page.getByRole('button', { name: '生成设计预览' }).click()
   await expect(page.getByLabel('设计预览')).toBeVisible()
   await expect(page.getByText('银河信笺')).toBeVisible()
