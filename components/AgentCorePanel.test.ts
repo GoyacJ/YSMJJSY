@@ -112,6 +112,52 @@ describe('AgentCorePanel', () => {
     expect(closeButton.classes()).toContain('dialog-close-button')
   })
 
+  it('shows agent os inbox and task center when os state is provided', async () => {
+    const approveInboxItem = vi.fn(async () => true)
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        loadCore: async () => core,
+        loadOs: async () => ({
+          agent: { id: 'agent_1', status: 'active', ownerType: 'key', ownerId: 'key_1', domain: 'star' },
+          inbox: [
+            {
+              id: 'proposal:p1',
+              type: 'proposal',
+              title: '更短',
+              summary: '回复更短。',
+              action: 'approve',
+              createdAt: '2026-05-18T00:00:00.000Z',
+            },
+          ],
+          tasks: [
+            {
+              id: 'task_1',
+              type: 'sleep',
+              status: 'completed',
+              title: '睡眠整理',
+              summary: '整理完成。',
+              createdAt: '2026-05-18T00:00:00.000Z',
+              updatedAt: '2026-05-18T00:01:00.000Z',
+            },
+          ],
+          events: [],
+        }),
+        approveInboxItem,
+        applyProposal: vi.fn(),
+      },
+    })
+
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('决策收件箱')
+    expect(wrapper.text()).toContain('任务中心')
+    expect(wrapper.text()).toContain('睡眠整理')
+
+    await wrapper.get('button[aria-label="批准待办"]').trigger('click')
+    expect(approveInboxItem).toHaveBeenCalledWith('proposal:p1')
+  })
+
   it('accept button calls proposal update', async () => {
     const applyProposal = vi.fn(async () => true)
     const wrapper = mount(AgentCorePanel, {

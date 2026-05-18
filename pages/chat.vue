@@ -24,6 +24,12 @@ const {
   loadWorks,
   updateWorkVisibility,
 } = useAgentCore()
+const {
+  os: agentOs,
+  loadOs: loadAgentOs,
+  approveInboxItem,
+  rejectInboxItem,
+} = useAgentOs()
 const chatMessages = ref<StarChatMessage[]>([])
 const profileSettingsOpen = ref(false)
 const memoryPlanetOpen = ref(false)
@@ -107,7 +113,10 @@ onMounted(async () => {
       />
       <AgentCorePanel
         :load-core="loadAgentCore"
+        :load-os="loadAgentOs"
         :apply-proposal="applyAgentCoreProposal"
+        :approve-inbox-item="approveInboxItem"
+        :reject-inbox-item="rejectInboxItem"
         :preview-design-proposal="previewAgentDesignProposal"
         :run-sleep="runSleep"
       />

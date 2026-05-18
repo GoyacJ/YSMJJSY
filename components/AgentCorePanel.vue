@@ -1,25 +1,34 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useAgentCore, type AgentCore, type AgentCoreProposal, type AgentCoreProposalAction } from '../composables/useAgentCore'
+import { useAgentOs, type AgentOsInboxItem, type AgentOsState } from '../composables/useAgentOs'
 
 const props = defineProps<{
   embedded?: boolean
   loadCore?: () => Promise<AgentCore | null>
+  loadOs?: () => Promise<AgentOsState | null>
   applyProposal?: (id: string, action: AgentCoreProposalAction) => Promise<boolean>
+  approveInboxItem?: (id: string) => Promise<boolean>
+  rejectInboxItem?: (id: string) => Promise<boolean>
   previewDesignProposal?: (id: string) => Promise<boolean>
   restoreSnapshot?: (id: string) => Promise<boolean>
   runSleep?: () => Promise<boolean>
 }>()
 
 const agentCore = useAgentCore()
+const agentOs = useAgentOs()
 const open = ref(false)
 const loadedCore = ref<AgentCore | null>(null)
+const loadedOs = ref<AgentOsState | null>(null)
 const pending = ref(false)
 const error = ref('')
 
 const core = computed(() => loadedCore.value)
 const panelOpen = computed(() => props.embedded || open.value)
+const inboxItems = computed(() => loadedOs.value?.inbox ?? [])
+const osTasks = computed(() => loadedOs.value?.tasks ?? [])
 const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
+const pendingProposalLabel = computed(() => inboxItems.value.length ? '进化细节' : '待确认进化')
 const proposalHistory = computed(() => core.value?.proposals.history ?? [])
 const snapshotsByProposalId = computed(() => new Map((core.value?.snapshots ?? [])
   .filter(snapshot => snapshot.proposalId)
@@ -34,7 +43,13 @@ async function loadPanel() {
   error.value = ''
 
   try {
-    loadedCore.value = props.loadCore ? await props.loadCore() : await agentCore.loadCore()
+    const [nextCore, nextOs] = await Promise.all([
+      props.loadCore ? props.loadCore() : agentCore.loadCore(),
+      props.loadOs ? props.loadOs() : agentOs.loadOs(),
+    ])
+
+    loadedCore.value = nextCore
+    loadedOs.value = nextOs
   }
   catch {
     error.value = 'Agent Core 没有加载成功。'
@@ -49,6 +64,54 @@ async function openPanel() {
 
   if (open.value && !loadedCore.value) {
     await loadPanel()
+  }
+}
+
+function normalizeInboxActionId(item: AgentOsInboxItem) {
+  return item.id.includes(':') ? item.id : `${item.type}:${item.id}`
+}
+
+async function approveInbox(item: AgentOsInboxItem) {
+  pending.value = true
+  error.value = ''
+
+  try {
+    const id = normalizeInboxActionId(item)
+    const ok = props.approveInboxItem
+      ? await props.approveInboxItem(id)
+      : await agentOs.approveInboxItem(id)
+
+    if (ok) {
+      await loadPanel()
+    }
+  }
+  catch {
+    error.value = '待办没有批准成功。'
+  }
+  finally {
+    pending.value = false
+  }
+}
+
+async function rejectInbox(item: AgentOsInboxItem) {
+  pending.value = true
+  error.value = ''
+
+  try {
+    const id = normalizeInboxActionId(item)
+    const ok = props.rejectInboxItem
+      ? await props.rejectInboxItem(id)
+      : await agentOs.rejectInboxItem(id)
+
+    if (ok) {
+      await loadPanel()
+    }
+  }
+  catch {
+    error.value = '待办没有拒绝成功。'
+  }
+  finally {
+    pending.value = false
   }
 }
 
@@ -227,6 +290,55 @@ onMounted(() => {
           <span>归档 {{ core.memoryCounts.archived }}</span>
         </div>
 
+        <section class="agent-core-panel__inbox">
+          <p class="agent-core-panel__label">
+            决策收件箱
+          </p>
+          <ul v-if="inboxItems.length">
+            <li v-for="item in inboxItems" :key="`${item.type}:${item.id}`">
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.summary }}</span>
+              <div>
+                <button
+                  type="button"
+                  aria-label="批准待办"
+                  :disabled="pending"
+                  @click="approveInbox(item)"
+                >
+                  {{ item.action === 'publish' ? '公开' : '批准' }}
+                </button>
+                <button
+                  type="button"
+                  aria-label="拒绝待办"
+                  :disabled="pending"
+                  @click="rejectInbox(item)"
+                >
+                  拒绝
+                </button>
+              </div>
+            </li>
+          </ul>
+          <p v-else class="agent-core-panel__muted">
+            没有待处理事项
+          </p>
+        </section>
+
+        <section class="agent-core-panel__tasks">
+          <p class="agent-core-panel__label">
+            任务中心
+          </p>
+          <ul v-if="osTasks.length">
+            <li v-for="task in osTasks" :key="task.id" class="agent-core-panel__task">
+              <strong>{{ task.title }}</strong>
+              <span>{{ task.summary }}</span>
+              <small>{{ task.status }}</small>
+            </li>
+          </ul>
+          <p v-else class="agent-core-panel__muted">
+            还没有任务
+          </p>
+        </section>
+
         <section>
           <p class="agent-core-panel__label">
             当前状态
@@ -315,7 +427,7 @@ onMounted(() => {
 
         <section>
           <p class="agent-core-panel__label">
-            待确认进化
+            {{ pendingProposalLabel }}
           </p>
           <ul v-if="pendingProposals.length" class="agent-core-panel__proposals">
             <li v-for="proposal in pendingProposals" :key="proposal.id">
