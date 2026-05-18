@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentInbox, buildAgentOsResponse } from './agent-os'
+import { buildAgentInbox, buildAgentOsResponse, parseMemoryActionCandidatesFromSleepRun } from './agent-os'
 
 describe('agent os service', () => {
   const forbiddenResponseSubstrings = [
@@ -232,5 +232,67 @@ describe('agent os service', () => {
       'task_approval:task_1',
       'rollback:snapshot_1',
     ])
+  })
+
+  it('includes rollback candidates in os responses', () => {
+    const result = buildAgentOsResponse({
+      agent: {
+        id: 'agent_1',
+        status: 'active',
+        createdAt: '2026-05-18T00:00:00.000Z',
+        updatedAt: '2026-05-18T00:00:00.000Z',
+        bindingId: 'binding_1',
+        ownerType: 'key',
+        ownerId: 'key_1',
+        domain: 'star',
+      },
+      tasks: [],
+      events: [],
+      pendingProposals: [],
+      publicWorkCandidates: [],
+      rollbackCandidates: [
+        {
+          snapshotId: 'snapshot_1',
+          title: '回滚提案',
+          summary: '恢复旧状态。',
+          createdAt: '2026-05-18T00:00:00.000Z',
+        },
+      ],
+    })
+
+    expect(result.inbox).toMatchObject([
+      { id: 'rollback:snapshot_1', type: 'rollback', action: 'rollback' },
+    ])
+  })
+
+  it('filters sleep memory actions that already have approval events', () => {
+    const candidates = parseMemoryActionCandidatesFromSleepRun({
+      id: 'sleep_1',
+      keyId: 'key_1',
+      status: 'completed',
+      summary: '整理完成。',
+      rawJson: '{}',
+      memoryActionsJson: JSON.stringify([
+        { memoryId: 'm1', action: 'archive', reason: '过期。' },
+        { memoryId: 'm2', action: 'downgrade', reason: '降低权重。' },
+      ]),
+      startedAt: '2026-05-18T00:00:00.000Z',
+      completedAt: '2026-05-18T00:10:00.000Z',
+    }, [
+      {
+        id: 'event_1',
+        agentId: 'agent_1',
+        type: 'approval.approved',
+        title: '审批通过',
+        summary: '待办已通过。',
+        targetType: 'memory',
+        targetId: 'm1',
+        payloadJson: JSON.stringify({ itemId: 'memory_governance:m1:archive' }),
+        visibility: 'private',
+        createdAt: '2026-05-18T00:11:00.000Z',
+      },
+    ])
+
+    expect(candidates.map(item => item.memoryId)).toEqual(['m2'])
   })
 })

@@ -5,7 +5,7 @@ import {
   createKeyProfileRepository,
 } from '../../../db/sqlite'
 import { createDefaultDesignSchema, parseDesignSchema } from '../../../services/design-schema'
-import { createDefaultAgentModelProvider } from '../../../services/agent-providers'
+import { createDefaultAgentProviderRegistry } from '../../../services/agent-providers'
 import { createAgentToolRegistry } from '../../../services/agent-runtime'
 import { registerStarAgentTools } from '../../../services/star-agent-tools'
 import { withMiniMaxErrorBoundary } from '../../../services/api-errors'
@@ -66,10 +66,11 @@ export default defineEventHandler(async (event) => {
     ? parseDesignSchema(JSON.parse(latest.schemaJson))
     : createDefaultDesignSchema()
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
-  const provider = createDefaultAgentModelProvider({
+  const providerRegistry = createDefaultAgentProviderRegistry({
     minimaxApiKey: config.minimaxApiKey,
     minimaxGroupId: config.minimaxGroupId,
   })
+  const provider = providerRegistry.getDefault()
   const registry = createAgentToolRegistry()
 
   registerStarAgentTools(registry, { provider })

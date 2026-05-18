@@ -22,7 +22,7 @@ import {
   type MemoryRecord,
 } from '../../db/sqlite'
 import { buildAgentSleepMessages, calculateNextSleepAt, parseAgentSleepResult } from '../../services/agent-learning'
-import { createDefaultAgentModelProvider } from '../../services/agent-providers'
+import { createDefaultAgentProviderRegistry } from '../../services/agent-providers'
 import {
   completeAgentTask,
   enqueueAgentTask,
@@ -253,10 +253,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const client = createDefaultAgentModelProvider({
+  const providerRegistry = createDefaultAgentProviderRegistry({
     minimaxApiKey: config.minimaxApiKey,
     minimaxGroupId: config.minimaxGroupId,
   })
+  const client = providerRegistry.getDefault()
   const states = createAgentStateRepository(config.sqlitePath)
   const now = new Date().toISOString()
   const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({

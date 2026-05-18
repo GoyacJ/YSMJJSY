@@ -4,12 +4,15 @@ import {
   createAgentInstanceRepository,
   createAgentTaskRepository,
   createAgentWorkRepository,
+  createMemoryEventRepository,
+  createMemoryRepository,
   type AgentTaskRecord,
 } from '../../../../db/sqlite'
-import { cancelAgentTask, runAgentTask } from '../../../../services/agent-task-queue'
+import { cancelAgentTask } from '../../../../services/agent-task-queue'
+import { createAgentLoop } from '../../../../services/agent-loop'
 import { defaultAgentPolicy } from '../../../../services/agent-policy'
 import { createAgentToolRegistry } from '../../../../services/agent-runtime'
-import { registerStarAgentTools } from '../../../../services/star-agent-tools'
+import { registerDefaultStarAgentTools } from '../../../../services/star-agent-runtime'
 import { requireAgentKey } from '../../../agent/core.get'
 import { serializeAgentTaskForOs } from '../tasks.post'
 
@@ -60,14 +63,13 @@ export async function updateCurrentAgentTask(input: {
     }
   }
 
-  await runAgentTask({
-    task,
+  await createAgentLoop({
     now: input.now,
     tasks: input.tasks,
     events: input.events,
     registry: input.registry,
     policy: defaultAgentPolicy,
-  })
+  }).runTask(task)
 
   return {
     task: serializeAgentTaskForOs({
@@ -95,10 +97,14 @@ export default defineEventHandler(async (event) => {
   })
   const registry = createAgentToolRegistry()
 
-  registerStarAgentTools(registry, {
+  registerDefaultStarAgentTools(registry, {
     keyId,
     now,
+    minimaxApiKey: config.minimaxApiKey,
+    minimaxGroupId: config.minimaxGroupId,
     works: createAgentWorkRepository(config.sqlitePath),
+    memories: createMemoryRepository(config.sqlitePath),
+    memoryEvents: createMemoryEventRepository(config.sqlitePath),
   })
 
   return updateCurrentAgentTask({

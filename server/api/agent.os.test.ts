@@ -346,4 +346,62 @@ describe('agent os api helpers', () => {
       targetId: 'work_1',
     }))
   })
+
+  it('approves rollback inbox items by restoring the snapshot', () => {
+    const updateAgentState = vi.fn()
+    const addEvent = vi.fn()
+
+    expect(approveAgentInboxItem({
+      itemId: 'rollback:snapshot_1',
+      keyId: 'key_1',
+      agentId: 'agent_1',
+      now: '2026-05-18T00:00:00.000Z',
+      profile: { assistantName: '月光', mbti: 'INTJ' },
+      agentState: {
+        tone: '当前',
+        relationshipRole: '当前关系',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
+      proposals: {
+        listProposalsByKey: () => [],
+        updateProposal: vi.fn(),
+      },
+      snapshots: {
+        addSnapshot: vi.fn(),
+        getSnapshotByKey: () => ({
+          id: 'snapshot_1',
+          keyId: 'key_1',
+          proposalId: 'proposal_1',
+          profileJson: JSON.stringify({
+            agentState: {
+              tone: '旧语气',
+              relationshipRole: '旧关系',
+              learningMode: 'manual',
+              contentStrategy: { replyLength: 'short' },
+            },
+          }),
+          createdAt: '2026-05-18T00:00:00.000Z',
+        }),
+      },
+      states: { updateAgentState },
+      memories: { updateMemory: vi.fn() },
+      works: {
+        getWorkByKey: vi.fn(),
+        updateWorkVisibility: vi.fn(),
+      },
+      events: { addEvent },
+    } as any)).toEqual({ id: 'snapshot_1', type: 'rollback', status: 'restored' })
+
+    expect(updateAgentState).toHaveBeenCalledWith('key_1', expect.objectContaining({
+      tone: '旧语气',
+      relationshipRole: '旧关系',
+      learningMode: 'manual',
+    }))
+    expect(addEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'approval.approved',
+      targetType: 'snapshot',
+      targetId: 'snapshot_1',
+    }))
+  })
 })

@@ -165,6 +165,32 @@ export function cancelAgentTask(input: {
   }))
 }
 
+function addToolEvent(input: {
+  type: 'tool.started' | 'tool.completed' | 'tool.failed'
+  task: AgentTaskRecord
+  toolName: string
+  title: string
+  summary: string
+  payload?: Record<string, unknown>
+  now: string
+  events: EventRepository
+}) {
+  input.events.addEvent(buildAgentEvent({
+    id: `event_${nanoid()}`,
+    agentId: input.task.agentId,
+    type: input.type,
+    title: input.title,
+    summary: input.summary,
+    targetType: 'tool',
+    targetId: input.toolName,
+    payload: {
+      taskId: input.task.id,
+      ...(input.payload ?? {}),
+    },
+    createdAt: input.now,
+  }))
+}
+
 function mergePolicy(policy: Partial<AgentPolicy>): AgentPolicy {
   return {
     ...defaultAgentPolicy,
@@ -257,12 +283,37 @@ export async function runAgentTask(input: {
     events: input.events,
   })
 
-  const result: AgentToolResult = await input.registry.execute(toolName, toolInput)
+  addToolEvent({
+    type: 'tool.started',
+    task: input.task,
+    toolName,
+    title: '工具开始',
+    summary: `开始执行 ${toolName}。`,
+    now: input.now,
+    events: input.events,
+  })
 
-  if (!result.ok) {
+  let result: AgentToolResult
+
+  try {
+    result = await input.registry.execute(toolName, toolInput)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : 'Agent tool failed'
+
+    addToolEvent({
+      type: 'tool.failed',
+      task: input.task,
+      toolName,
+      title: '工具失败',
+      summary: message,
+      payload: { error: message },
+      now: input.now,
+      events: input.events,
+    })
     failAgentTask({
       task: input.task,
-      error: result.error ?? 'Agent tool failed',
+      error: message,
       now: input.now,
       tasks: input.tasks,
       events: input.events,
@@ -270,6 +321,39 @@ export async function runAgentTask(input: {
     return
   }
 
+  if (!result.ok) {
+    const message = result.error ?? 'Agent tool failed'
+
+    addToolEvent({
+      type: 'tool.failed',
+      task: input.task,
+      toolName,
+      title: '工具失败',
+      summary: message,
+      payload: { error: message },
+      now: input.now,
+      events: input.events,
+    })
+    failAgentTask({
+      task: input.task,
+      error: message,
+      now: input.now,
+      tasks: input.tasks,
+      events: input.events,
+    })
+    return
+  }
+
+  addToolEvent({
+    type: 'tool.completed',
+    task: input.task,
+    toolName,
+    title: '工具完成',
+    summary: `完成执行 ${toolName}。`,
+    payload: { output: result.output ?? {} },
+    now: input.now,
+    events: input.events,
+  })
   completeAgentTask({
     task: input.task,
     result: result.output ?? {},

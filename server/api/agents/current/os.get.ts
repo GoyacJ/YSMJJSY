@@ -4,6 +4,7 @@ import {
   createAgentEvolutionRepository,
   createAgentInstanceRepository,
   createAgentSleepRepository,
+  createAgentSnapshotRepository,
   createAgentTaskRepository,
   createAgentWorkRepository,
 } from '../../../db/sqlite'
@@ -19,6 +20,7 @@ export function buildCurrentAgentOsResponse(input: {
   proposals: Pick<ReturnType<typeof createAgentEvolutionRepository>, 'listProposalsByKey'>
   works: Pick<ReturnType<typeof createAgentWorkRepository>, 'listWorksByKey'>
   sleeps?: Pick<ReturnType<typeof createAgentSleepRepository>, 'getLatestSleepRunByKey'>
+  snapshots?: Pick<ReturnType<typeof createAgentSnapshotRepository>, 'listSnapshotsByKey'>
 }) {
   const agent = input.agents.getOrCreateAgentForOwner({
     ownerType: 'key',
@@ -36,6 +38,7 @@ export function buildCurrentAgentOsResponse(input: {
       .listWorksByKey(input.keyId)
       .filter(work => work.visibility === 'private'),
     latestSleepRun: input.sleeps?.getLatestSleepRunByKey(input.keyId),
+    rollbackCandidates: input.snapshots?.listSnapshotsByKey(input.keyId, 12),
   })
 }
 
@@ -52,5 +55,6 @@ export default defineEventHandler((event) => {
     proposals: createAgentEvolutionRepository(config.sqlitePath),
     works: createAgentWorkRepository(config.sqlitePath),
     sleeps: createAgentSleepRepository(config.sqlitePath),
+    snapshots: createAgentSnapshotRepository(config.sqlitePath),
   })
 })

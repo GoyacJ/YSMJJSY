@@ -11,7 +11,7 @@ import type {
   MemoryRecord,
 } from '../db/sqlite'
 
-type StarAgentToolContext = {
+export type StarAgentToolContext = {
   keyId?: string
   now?: string
   provider?: Pick<NamedAgentModelProvider, 'generateDesignPatch'>

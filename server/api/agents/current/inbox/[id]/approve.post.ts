@@ -26,13 +26,15 @@ import {
 } from '../../../../../db/sqlite'
 import { applyAgentProposalAction } from '../../../../agent/proposals/[id].put'
 import { updateAgentWorkVisibilityAction } from '../../../../agent/works/[id].put'
+import { restoreAgentSnapshotAction } from '../../../../agent/snapshots/[id]/restore.post'
 import { requireAgentKey } from '../../../../agent/core.get'
 import { buildAgentEvent } from '../../../../../services/agent-events'
 import { applyMemoryGovernanceAction } from '../../../../agent/memories/[id].put'
 import { defaultAgentPolicy } from '../../../../../services/agent-policy'
-import { cancelAgentTask, runAgentTask } from '../../../../../services/agent-task-queue'
+import { cancelAgentTask } from '../../../../../services/agent-task-queue'
+import { createAgentLoop } from '../../../../../services/agent-loop'
 import { createAgentToolRegistry, type AgentToolRegistry } from '../../../../../services/agent-runtime'
-import { registerStarAgentTools } from '../../../../../services/star-agent-tools'
+import { registerDefaultStarAgentTools } from '../../../../../services/star-agent-runtime'
 
 export type InboxActionInput = {
   itemId: string
@@ -50,6 +52,7 @@ export type InboxActionInput = {
   }
   snapshots: {
     addSnapshot: (record: AgentStateSnapshotRecord) => void
+    getSnapshotByKey?: (keyId: string, id: string) => AgentStateSnapshotRecord | undefined
   }
   states: {
     updateAgentState: (keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) => void
@@ -235,15 +238,13 @@ export function approveAgentInboxItem(input: InboxActionInput) {
       throw createError({ statusCode: 404, statusMessage: 'Task not found' })
     }
 
-    return runAgentTask({
-      task,
+    return createAgentLoop({
       now: input.now,
       tasks: input.tasks,
       events: input.events,
       registry: input.registry,
       policy: defaultAgentPolicy,
-      approvalGranted: true,
-    }).then(() => {
+    }).runTask(task, { approvalGranted: true }).then(() => {
       addApprovalEvent(input, parsed, true)
 
       return {
@@ -252,6 +253,34 @@ export function approveAgentInboxItem(input: InboxActionInput) {
         status: 'approved',
       }
     })
+  }
+
+  if (parsed.type === 'rollback') {
+    if (!input.snapshots.getSnapshotByKey) {
+      throw createError({ statusCode: 400, statusMessage: 'Rollback action unavailable' })
+    }
+
+    const result = restoreAgentSnapshotAction({
+      keyId: input.keyId,
+      snapshotId: parsed.id,
+      snapshots: {
+        getSnapshotByKey: input.snapshots.getSnapshotByKey,
+      },
+      states: input.states,
+      now: input.now,
+    })
+
+    if (!result.restored) {
+      throw createError({ statusCode: 404, statusMessage: 'Snapshot not restorable' })
+    }
+
+    addApprovalEvent(input, parsed, true)
+
+    return {
+      id: parsed.id,
+      type: parsed.type,
+      status: 'restored',
+    }
   }
 
   addApprovalEvent(input, parsed, true)
@@ -363,9 +392,13 @@ export default defineEventHandler((event) => {
   const input = buildRouteInput(event, itemId)
 
   if (input.registry) {
-    registerStarAgentTools(input.registry as AgentToolRegistry, {
+    const config = useRuntimeConfig(event)
+
+    registerDefaultStarAgentTools(input.registry as AgentToolRegistry, {
       keyId: input.keyId,
       now: input.now,
+      minimaxApiKey: config.minimaxApiKey,
+      minimaxGroupId: config.minimaxGroupId,
       works: input.works,
       memories: input.memories.getMemoryByKey
         ? {

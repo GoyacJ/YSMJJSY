@@ -3,6 +3,7 @@ import type {
   AgentEvolutionProposalRecord,
   AgentForOwnerRecord,
   AgentSleepRunRecord,
+  AgentStateSnapshotRecord,
   AgentTaskRecord,
   AgentWorkRecord,
 } from '../db/sqlite'
@@ -122,7 +123,37 @@ export function buildAgentInbox(input: {
   ]
 }
 
-export function parseMemoryActionCandidatesFromSleepRun(run?: AgentSleepRunRecord | null): AgentMemoryActionCandidate[] {
+function parseHandledInboxItemIds(events: AgentEventRecord[], since?: string | null) {
+  const handled = new Set<string>()
+
+  for (const event of events) {
+    if (event.type !== 'approval.approved' && event.type !== 'approval.rejected') {
+      continue
+    }
+
+    if (since && event.createdAt < since) {
+      continue
+    }
+
+    try {
+      const payload = JSON.parse(event.payloadJson) as { itemId?: unknown }
+
+      if (typeof payload.itemId === 'string') {
+        handled.add(payload.itemId)
+      }
+    }
+    catch {
+      // Ignore malformed private event payloads.
+    }
+  }
+
+  return handled
+}
+
+export function parseMemoryActionCandidatesFromSleepRun(
+  run?: AgentSleepRunRecord | null,
+  events: AgentEventRecord[] = [],
+): AgentMemoryActionCandidate[] {
   if (!run?.memoryActionsJson || run.status !== 'completed') {
     return []
   }
@@ -135,6 +166,7 @@ export function parseMemoryActionCandidatesFromSleepRun(run?: AgentSleepRunRecor
     }
 
     const seen = new Set<string>()
+    const handled = parseHandledInboxItemIds(events, run.completedAt ?? run.startedAt)
 
     return parsed.flatMap((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
@@ -148,8 +180,9 @@ export function parseMemoryActionCandidatesFromSleepRun(run?: AgentSleepRunRecor
       }
 
       const key = `${record.memoryId}:${record.action}`
+      const itemId = `memory_governance:${record.memoryId}:${record.action}`
 
-      if (seen.has(key)) {
+      if (seen.has(key) || handled.has(itemId)) {
         return []
       }
 
@@ -175,6 +208,12 @@ export function buildAgentOsResponse(input: {
   pendingProposals: AgentEvolutionProposalRecord[]
   publicWorkCandidates: AgentWorkRecord[]
   latestSleepRun?: AgentSleepRunRecord | null
+  rollbackCandidates?: Array<Pick<AgentStateSnapshotRecord, 'id' | 'proposalId' | 'createdAt'> | {
+    snapshotId: string
+    title: string
+    summary: string
+    createdAt: string
+  }>
 }): AgentOsResponse {
   return {
     agent: {
@@ -187,8 +226,22 @@ export function buildAgentOsResponse(input: {
     inbox: buildAgentInbox({
       pendingProposals: input.pendingProposals,
       publicWorkCandidates: input.publicWorkCandidates,
-      memoryActionCandidates: parseMemoryActionCandidatesFromSleepRun(input.latestSleepRun),
+      memoryActionCandidates: parseMemoryActionCandidatesFromSleepRun(input.latestSleepRun, input.events),
       waitingApprovalTasks: input.tasks.filter(task => task.status === 'waiting_approval'),
+      rollbackCandidates: (input.rollbackCandidates ?? []).map((snapshot) => {
+        if ('snapshotId' in snapshot) {
+          return snapshot
+        }
+
+        return {
+          snapshotId: snapshot.id,
+          title: '回滚状态快照',
+          summary: snapshot.proposalId
+            ? `恢复提案 ${snapshot.proposalId} 之前的状态。`
+            : '恢复历史状态快照。',
+          createdAt: snapshot.createdAt,
+        }
+      }),
     }),
     tasks: input.tasks.map(task => ({
       id: task.id,

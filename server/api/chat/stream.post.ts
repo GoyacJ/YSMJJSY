@@ -35,7 +35,7 @@ import { resolveChatIntent } from '../../services/chat-intent'
 import { createIpHash } from '../../services/key-access'
 import { markKeyActivity } from '../../services/key-activity'
 import { createMiniMaxClient } from '../../services/minimax'
-import { createDefaultAgentModelProvider } from '../../services/agent-providers'
+import { createDefaultAgentProviderRegistry } from '../../services/agent-providers'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
 import {
   buildAgentReflectionMessages,
@@ -382,10 +382,11 @@ export default defineEventHandler(async (event) => {
     apiKey: config.minimaxApiKey,
     groupId: config.minimaxGroupId,
   })
-  const agentModelProvider = createDefaultAgentModelProvider({
+  const agentProviderRegistry = createDefaultAgentProviderRegistry({
     minimaxApiKey: config.minimaxApiKey,
     minimaxGroupId: config.minimaxGroupId,
   })
+  const agentModelProvider = agentProviderRegistry.getDefault()
   const today = new Date().toISOString().slice(0, 10)
   const currentUsage = usage.getUsage(keyId, today)
 
