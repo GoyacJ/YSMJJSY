@@ -96,6 +96,24 @@ describe('agent os api helpers', () => {
     expect(addEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'task.queued' }))
   })
 
+  it('normalizes UI task intent before enqueueing', () => {
+    const addTask = vi.fn()
+    const addEvent = vi.fn()
+
+    const result = enqueueCurrentAgentTask({
+      agentId: 'agent_1',
+      now: '2026-05-18T00:00:00.000Z',
+      body: { type: 'publish_artifact', input: { workId: 'work_1' } },
+      tasks: { addTask },
+      events: { addEvent },
+    } as any)
+
+    expect(result.task.type).toBe('publish_artifact')
+    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
+      inputJson: JSON.stringify({ toolName: 'star.publishWork', input: { workId: 'work_1' } }),
+    }))
+  })
+
   it('runs task update actions', async () => {
     const updateTask = vi.fn()
     const task = {

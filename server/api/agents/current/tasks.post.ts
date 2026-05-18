@@ -7,6 +7,7 @@ import {
   type AgentTaskType,
 } from '../../../db/sqlite'
 import { enqueueAgentTask } from '../../../services/agent-task-queue'
+import { buildAgentTaskInputFromIntent } from '../../../services/agent-task-intents'
 import { sanitizeAgentResponseValue } from '../../../services/agent-privacy'
 import { requireAgentKey } from '../../agent/core.get'
 
@@ -79,12 +80,13 @@ export function enqueueCurrentAgentTask(input: {
 }) {
   const body = parseTaskCreateBody(input.body)
   const labels = taskLabels[body.type]
+  const taskInput = buildAgentTaskInputFromIntent(body)
   const task = enqueueAgentTask({
     agentId: input.agentId,
     type: body.type,
     title: labels.title,
     summary: labels.summary,
-    input: body.input,
+    input: taskInput,
     now: input.now,
     tasks: input.tasks,
     events: input.events,
