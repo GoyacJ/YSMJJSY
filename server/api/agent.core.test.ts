@@ -13,6 +13,12 @@ describe('agent core api helpers', () => {
     'data:image',
     'data:audio',
     'rawProviderBody',
+    'messageJson',
+    'profileJson',
+    'schemaJson',
+    'dataUrl',
+    'base64',
+    'providerTaskId',
   ]
 
   function expectNoForbiddenCoreSubstrings(value: unknown) {

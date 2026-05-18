@@ -12,6 +12,12 @@ describe('public stars api helpers', () => {
     'data:audio',
     'sourceConversationId',
     'rawProviderBody',
+    'messageJson',
+    'profileJson',
+    'schemaJson',
+    'dataUrl',
+    'base64',
+    'providerTaskId',
   ]
 
   function expectNoForbiddenPublicSubstrings(value: unknown) {

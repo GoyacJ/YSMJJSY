@@ -4,6 +4,12 @@ const sensitiveResponseKeys = new Set([
   'payloadJson',
   'rawJson',
   'rawProviderBody',
+  'messageJson',
+  'profileJson',
+  'schemaJson',
+  'dataUrl',
+  'base64',
+  'providerTaskId',
 ])
 
 function isSensitiveKey(key: string) {

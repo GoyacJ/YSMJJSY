@@ -11,6 +11,12 @@ describe('agent os service', () => {
     'data:image',
     'data:audio',
     'rawProviderBody',
+    'messageJson',
+    'profileJson',
+    'schemaJson',
+    'dataUrl',
+    'base64',
+    'providerTaskId',
   ]
 
   function expectNoForbiddenResponseSubstrings(value: unknown) {
@@ -111,6 +117,12 @@ describe('agent os service', () => {
             keyLookupHash: 'lookup',
             rawJson: { provider: true },
             rawProviderBody: 'provider body',
+            messageJson: '{"raw":true}',
+            profileJson: '{"raw":true}',
+            schemaJson: '{"raw":true}',
+            dataUrl: 'data:image/png;base64,abc',
+            base64: 'abc',
+            providerTaskId: 'provider_task_1',
             previewUrl: 'data:image/png;base64,abc',
             audioUrl: 'data:audio/mpeg;base64,abc',
           }),
