@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  createAgentInstanceRepository,
   createAgentEvolutionRepository,
   createAgentReflectionRepository,
   createAgentSnapshotRepository,
@@ -18,6 +19,38 @@ import {
 } from './sqlite'
 
 describe('sqlite repositories', () => {
+  it('creates and reuses an agent instance for a key binding', () => {
+    const repo = createAgentInstanceRepository(':memory:')
+    const now = '2026-05-18T00:00:00.000Z'
+
+    const first = repo.getOrCreateAgentForOwner({
+      ownerType: 'key',
+      ownerId: 'key_1',
+      domain: 'star',
+      now,
+    })
+    const second = repo.getOrCreateAgentForOwner({
+      ownerType: 'key',
+      ownerId: 'key_1',
+      domain: 'star',
+      now: '2026-05-18T00:01:00.000Z',
+    })
+
+    expect(first.id).toBe(second.id)
+    expect(first.status).toBe('active')
+    expect(second.ownerId).toBe('key_1')
+  })
+
+  it('keeps separate agent bindings for separate keys', () => {
+    const repo = createAgentInstanceRepository(':memory:')
+    const now = '2026-05-18T00:00:00.000Z'
+
+    const one = repo.getOrCreateAgentForOwner({ ownerType: 'key', ownerId: 'key_1', domain: 'star', now })
+    const two = repo.getOrCreateAgentForOwner({ ownerType: 'key', ownerId: 'key_2', domain: 'star', now })
+
+    expect(one.id).not.toBe(two.id)
+  })
+
   it('creates a default agent state for a key', () => {
     const repo = createAgentStateRepository(':memory:')
 

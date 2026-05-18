@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { dirname } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { schemaStatements } from './schema'
 
 export type ConversationRecord = {
@@ -59,6 +60,32 @@ export type AgentEvolutionProposalRecord = {
   status: 'pending' | 'accepted' | 'rejected' | 'applied'
   createdAt: string
   updatedAt: string
+}
+
+export type AgentOwnerType = 'key' | 'universe' | 'project'
+export type AgentDomain = 'star'
+
+export type AgentInstanceRecord = {
+  id: string
+  status: 'active' | 'paused' | 'archived'
+  createdAt: string
+  updatedAt: string
+}
+
+export type AgentBindingRecord = {
+  id: string
+  agentId: string
+  ownerType: AgentOwnerType
+  ownerId: string
+  domain: AgentDomain
+  createdAt: string
+}
+
+export type AgentForOwnerRecord = AgentInstanceRecord & {
+  bindingId: string
+  ownerType: AgentOwnerType
+  ownerId: string
+  domain: AgentDomain
 }
 
 export type AgentStateSnapshotRecord = {
@@ -470,6 +497,62 @@ export function createMemoryEventRepository(path: string) {
         WHERE memory_id = ?
         ORDER BY created_at DESC
       `).all(memoryId) as MemoryEventRecord[]
+    },
+  }
+}
+
+export function createAgentInstanceRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    getOrCreateAgentForOwner(input: {
+      ownerType: AgentOwnerType
+      ownerId: string
+      domain: AgentDomain
+      now: string
+    }): AgentForOwnerRecord {
+      const existing = db.prepare(`
+        SELECT
+          ai.id,
+          ai.status,
+          ai.created_at AS createdAt,
+          ai.updated_at AS updatedAt,
+          ab.id AS bindingId,
+          ab.owner_type AS ownerType,
+          ab.owner_id AS ownerId,
+          ab.domain AS domain
+        FROM agent_bindings ab
+        JOIN agent_instances ai ON ai.id = ab.agent_id
+        WHERE ab.owner_type = ? AND ab.owner_id = ? AND ab.domain = ?
+      `).get(input.ownerType, input.ownerId, input.domain) as AgentForOwnerRecord | undefined
+
+      if (existing) {
+        return existing
+      }
+
+      const agentId = `agent_${randomUUID()}`
+      const bindingId = `binding_${randomUUID()}`
+
+      db.prepare(`
+        INSERT INTO agent_instances (id, status, created_at, updated_at)
+        VALUES (?, 'active', ?, ?)
+      `).run(agentId, input.now, input.now)
+
+      db.prepare(`
+        INSERT INTO agent_bindings (id, agent_id, owner_type, owner_id, domain, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(bindingId, agentId, input.ownerType, input.ownerId, input.domain, input.now)
+
+      return {
+        id: agentId,
+        status: 'active',
+        createdAt: input.now,
+        updatedAt: input.now,
+        bindingId,
+        ownerType: input.ownerType,
+        ownerId: input.ownerId,
+        domain: input.domain,
+      }
     },
   }
 }

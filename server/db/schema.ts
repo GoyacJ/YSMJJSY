@@ -50,6 +50,21 @@ export const schemaStatements = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_instances (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS agent_bindings (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    owner_type TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(owner_type, owner_id, domain)
+  )`,
   `CREATE TABLE IF NOT EXISTS agent_state_snapshots (
     id TEXT PRIMARY KEY,
     key_id TEXT NOT NULL,
