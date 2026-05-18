@@ -86,4 +86,29 @@ describe('agent os service', () => {
       { id: 'work_visibility:work_1', type: 'work_visibility', action: 'publish' },
     ])
   })
+
+  it('builds inbox items from sleep memory actions and waiting approval tasks', () => {
+    const result = buildAgentInbox({
+      pendingProposals: [],
+      publicWorkCandidates: [],
+      memoryActionCandidates: [
+        { memoryId: 'm1', action: 'archive', reason: '过期。', createdAt: '2026-05-18T00:00:00.000Z' },
+      ],
+      waitingApprovalTasks: [
+        {
+          id: 'task_1',
+          type: 'publish_artifact',
+          status: 'waiting_approval',
+          title: '公开作品',
+          summary: '公开月光图。',
+          createdAt: '2026-05-18T00:00:00.000Z',
+        },
+      ],
+    } as any)
+
+    expect(result.map(item => item.id)).toEqual([
+      'memory_governance:m1:archive',
+      'task_approval:task_1',
+    ])
+  })
 })

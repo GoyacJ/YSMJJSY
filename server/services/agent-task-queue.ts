@@ -179,6 +179,7 @@ export async function runAgentTask(input: {
   events: EventRepository
   registry: Pick<AgentToolRegistry, 'get' | 'execute'>
   policy: Partial<AgentPolicy>
+  approvalGranted?: boolean
 }) {
   const taskInput = parseTaskInputJson(input.task.inputJson)
   const toolName = typeof taskInput.toolName === 'string' ? taskInput.toolName : undefined
@@ -230,7 +231,7 @@ export async function runAgentTask(input: {
     return
   }
 
-  if (decision.approvalRequired) {
+  if (decision.approvalRequired && !input.approvalGranted) {
     input.tasks.updateTask(input.task.id, {
       status: 'waiting_approval',
       updatedAt: input.now,

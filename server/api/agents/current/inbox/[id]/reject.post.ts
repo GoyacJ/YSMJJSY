@@ -2,6 +2,7 @@ import { createError, defineEventHandler, getRouterParam } from 'h3'
 import {
   addApprovalEvent,
   buildAgentInboxActionRouteInput,
+  cancelTaskApproval,
   parseInboxItemId,
   type InboxActionInput,
 } from './approve.post'
@@ -37,6 +38,17 @@ export function rejectAgentInboxItem(input: InboxActionInput) {
       id: result.id,
       type: parsed.type,
       status: result.status,
+    }
+  }
+
+  if (parsed.type === 'task_approval') {
+    cancelTaskApproval(input, parsed)
+    addApprovalEvent(input, parsed, false)
+
+    return {
+      id: parsed.id,
+      type: parsed.type,
+      status: 'cancelled',
     }
   }
 

@@ -2,10 +2,10 @@ import { readonly, ref } from 'vue'
 
 export type AgentOsInboxItem = {
   id: string
-  type: 'proposal' | 'work_visibility'
+  type: 'proposal' | 'work_visibility' | 'memory_governance' | 'task_approval' | 'rollback'
   title: string
   summary: string
-  action: 'approve' | 'publish'
+  action: 'approve' | 'publish' | 'execute' | 'rollback'
   createdAt: string
 }
 

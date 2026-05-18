@@ -247,6 +247,13 @@ function getWorkIdeaTitle(idea: Record<string, unknown>) {
   return readText(idea.title) || readText(idea.summary) || '未命名想法'
 }
 
+function getInboxApproveLabel(item: AgentOsInboxItem) {
+  if (item.type === 'work_visibility') return '公开'
+  if (item.type === 'memory_governance') return '执行'
+  if (item.type === 'rollback') return '回滚'
+  return '批准'
+}
+
 onMounted(() => {
   if (props.embedded) {
     void loadPanel()
@@ -305,7 +312,7 @@ onMounted(() => {
                   :disabled="pending"
                   @click="approveInbox(item)"
                 >
-                  {{ item.action === 'publish' ? '公开' : '批准' }}
+                  {{ getInboxApproveLabel(item) }}
                 </button>
                 <button
                   type="button"
