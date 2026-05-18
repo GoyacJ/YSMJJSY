@@ -4,8 +4,97 @@ import { applyAgentProposalAction } from './agent/proposals/[id].put'
 import { restoreAgentSnapshotAction } from './agent/snapshots/[id]/restore.post'
 
 describe('agent core api helpers', () => {
+  const forbiddenCoreSubstrings = [
+    'keyLookupHash',
+    'createdIpHash',
+    'session',
+    'payloadJson',
+    'rawJson',
+    'data:image',
+    'data:audio',
+    'rawProviderBody',
+  ]
+
+  function expectNoForbiddenCoreSubstrings(value: unknown) {
+    const serialized = JSON.stringify(value)
+
+    for (const forbidden of forbiddenCoreSubstrings) {
+      expect(serialized).not.toContain(forbidden)
+    }
+  }
+
   it('rejects unauthenticated requests', () => {
     expect(() => requireAgentKey({ context: {} } as any)).toThrow()
+  })
+
+  it('builds core responses without raw provider or media payload fields', () => {
+    const result = buildAgentCoreResponse({
+      profile: {
+        id: 'key_1',
+        keyLookupHash: 'lookup',
+        assistantName: '阿月',
+        mbti: 'INTJ',
+        configuredAt: '2026-05-17T00:00:00.000Z',
+        createdIpHash: 'ip',
+        createdAt: '2026-05-17T00:00:00.000Z',
+        updatedAt: '2026-05-17T00:00:00.000Z',
+      },
+      agentState: {
+        keyId: 'key_1',
+        tone: '更短',
+        relationshipRole: '长期记忆守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+        lastSleepAt: null,
+        nextSleepAt: null,
+        updatedAt: '2026-05-17T00:00:00.000Z',
+      },
+      memories: [],
+      reflections: [
+        {
+          id: 'r1',
+          keyId: 'key_1',
+          conversationId: 'c1',
+          summary: '用户喜欢短句。',
+          rawJson: '{"raw":true}',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      proposals: [
+        {
+          id: 'p1',
+          keyId: 'key_1',
+          type: 'page_design',
+          title: '页面设计',
+          summary: '调整页面。',
+          payloadJson: JSON.stringify({
+            instruction: '更像星空',
+            rawJson: { provider: true },
+            rawProviderBody: 'provider body',
+            previewUrl: 'data:image/png;base64,abc',
+          }),
+          status: 'pending',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      latestSleepRun: {
+        id: 'sleep_1',
+        keyId: 'key_1',
+        status: 'completed',
+        summary: '整理完成。',
+        rawJson: '{"provider":true}',
+        memoryActionsJson: '[{"memoryId":"m1","action":"confirm","reason":"明确表达","rawProviderBody":"provider body"}]',
+        workIdeasJson: '[{"type":"image","title":"月光图","previewUrl":"data:image/png;base64,abc"}]',
+        nextConversationHintsJson: '["承接短句偏好"]',
+        startedAt: '2026-05-17T00:05:00.000Z',
+        completedAt: '2026-05-17T00:06:00.000Z',
+        error: null,
+      },
+    })
+
+    expect(result.proposals.pending[0].payload).toMatchObject({ instruction: '更像星空' })
+    expectNoForbiddenCoreSubstrings(result)
   })
 
   it('builds core response with profile state, active memories, reflections, and proposal groups', () => {

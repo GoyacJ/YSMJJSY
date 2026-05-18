@@ -19,6 +19,7 @@ import {
   type MemoryEventRecord,
   type MemoryRecord,
 } from '../../db/sqlite'
+import { sanitizeAgentResponseValue } from '../../services/agent-privacy'
 
 type AgentCoreInput = {
   profile: KeyProfileRecord
@@ -48,7 +49,9 @@ export function requireAgentKey(event: { context: { keyId?: string } }) {
 function parsePayload(payloadJson: string) {
   try {
     const parsed = JSON.parse(payloadJson)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    const sanitized = sanitizeAgentResponseValue(parsed)
+
+    return sanitized && typeof sanitized === 'object' && !Array.isArray(sanitized) ? sanitized : {}
   }
   catch {
     return {}
@@ -62,7 +65,7 @@ function parseJsonArray(value?: string | null) {
 
   try {
     const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : []
+    return Array.isArray(parsed) ? sanitizeAgentResponseValue(parsed) : []
   }
   catch {
     return []

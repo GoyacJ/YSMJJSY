@@ -9,6 +9,25 @@ import { buildAgentTasksResponse, enqueueCurrentAgentTask } from './agents/curre
 import { updateCurrentAgentTask } from './agents/current/tasks/[id].put'
 
 describe('agent os api helpers', () => {
+  const forbiddenResponseSubstrings = [
+    'keyLookupHash',
+    'createdIpHash',
+    'session',
+    'payloadJson',
+    'rawJson',
+    'data:image',
+    'data:audio',
+    'rawProviderBody',
+  ]
+
+  function expectNoForbiddenResponseSubstrings(value: unknown) {
+    const serialized = JSON.stringify(value)
+
+    for (const forbidden of forbiddenResponseSubstrings) {
+      expect(serialized).not.toContain(forbidden)
+    }
+  }
+
   it('builds current agent metadata responses', () => {
     const result = buildCurrentAgentResponse({
       keyId: 'key_1',
@@ -41,7 +60,13 @@ describe('agent os api helpers', () => {
           title: '睡眠整理',
           summary: '整理。',
           inputJson: '{"secret":true}',
-          resultJson: null,
+          resultJson: JSON.stringify({
+            title: '整理完成',
+            keyLookupHash: 'lookup',
+            rawJson: { provider: true },
+            rawProviderBody: 'provider body',
+            previewUrl: 'data:image/png;base64,abc',
+          }),
           error: null,
           createdAt: '2026-05-18T00:00:00.000Z',
           updatedAt: '2026-05-18T00:00:00.000Z',
@@ -51,6 +76,7 @@ describe('agent os api helpers', () => {
     })
 
     expect(JSON.stringify(result)).not.toContain('secret')
+    expectNoForbiddenResponseSubstrings(result)
     expect(result.tasks[0]).toMatchObject({ id: 'task_1', status: 'queued' })
   })
 
@@ -120,6 +146,7 @@ describe('agent os api helpers', () => {
 
     expect(result.inbox).toMatchObject([{ id: 'work_visibility:work_1' }])
     expect(JSON.stringify(result)).not.toContain('raw')
+    expectNoForbiddenResponseSubstrings(result)
   })
 
   it('builds safe agent event list responses without payload json', () => {
@@ -140,6 +167,7 @@ describe('agent os api helpers', () => {
     })
 
     expect(JSON.stringify(result)).not.toContain('secret')
+    expectNoForbiddenResponseSubstrings(result)
   })
 
   it('returns os state for the current key agent', () => {
@@ -165,6 +193,7 @@ describe('agent os api helpers', () => {
     })
 
     expect(result.agent).toMatchObject({ id: 'agent_1', ownerId: 'key_1' })
+    expectNoForbiddenResponseSubstrings(result)
   })
 
   it('approves proposal inbox items through proposal actions and writes an event', () => {

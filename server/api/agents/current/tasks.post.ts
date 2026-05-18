@@ -7,6 +7,7 @@ import {
   type AgentTaskType,
 } from '../../../db/sqlite'
 import { enqueueAgentTask } from '../../../services/agent-task-queue'
+import { sanitizeAgentResponseValue } from '../../../services/agent-privacy'
 import { requireAgentKey } from '../../agent/core.get'
 
 const taskLabels: Record<AgentTaskType, { title: string, summary: string }> = {
@@ -53,7 +54,7 @@ export function serializeAgentTaskForOs(task: AgentTaskRecord) {
     status: task.status,
     title: task.title,
     summary: task.summary,
-    result: task.resultJson ? JSON.parse(task.resultJson) as unknown : undefined,
+    result: task.resultJson ? sanitizeAgentResponseValue(JSON.parse(task.resultJson) as unknown) : undefined,
     error: task.error ?? null,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
