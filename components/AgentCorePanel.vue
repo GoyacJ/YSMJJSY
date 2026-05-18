@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useAgentCore, type AgentCore, type AgentCoreProposal, type AgentCoreProposalAction } from '../composables/useAgentCore'
-import { useAgentOs, type AgentOsInboxItem, type AgentOsState, type AgentOsTaskItem, type AgentTaskCreateInput } from '../composables/useAgentOs'
+import { useAgentOs, type AgentOsInboxItem, type AgentOsPlannedTaskItem, type AgentOsState, type AgentOsTaskItem, type AgentTaskCreateInput } from '../composables/useAgentOs'
 
 const props = defineProps<{
   embedded?: boolean
@@ -32,6 +32,7 @@ const panelOpen = computed(() => props.embedded || open.value)
 const inboxItems = computed(() => loadedOs.value?.inbox ?? [])
 const osTasks = computed(() => loadedOs.value?.tasks ?? [])
 const osEvents = computed(() => loadedOs.value?.events ?? [])
+const plannedTasks = computed(() => loadedOs.value?.plannedTasks ?? [])
 const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
 const pendingProposalLabel = computed(() => inboxItems.value.length ? '进化细节' : '待确认进化')
 const proposalHistory = computed(() => core.value?.proposals.history ?? [])
@@ -175,6 +176,16 @@ async function createImageTask() {
 
   if (created) {
     taskPrompt.value = ''
+    await loadPanel()
+  }
+}
+
+async function createPlannedTask(task: AgentOsPlannedTaskItem) {
+  const created = props.enqueueTask
+    ? await props.enqueueTask({ type: task.type, input: task.input ?? {} })
+    : await agentOs.enqueueTask({ type: task.type, input: task.input ?? {} })
+
+  if (created) {
     await loadPanel()
   }
 }
@@ -408,6 +419,20 @@ onMounted(() => {
               图片任务
             </button>
           </div>
+          <ul v-if="plannedTasks.length" class="agent-core-panel__planned-tasks">
+            <li v-for="planned in plannedTasks" :key="`${planned.type}:${planned.title}`">
+              <strong>{{ planned.title }}</strong>
+              <span>{{ planned.summary }}</span>
+              <button
+                type="button"
+                aria-label="创建计划任务"
+                :disabled="pending"
+                @click="createPlannedTask(planned)"
+              >
+                创建任务
+              </button>
+            </li>
+          </ul>
           <ul v-if="osTasks.length">
             <li v-for="task in osTasks" :key="task.id" class="agent-core-panel__task">
               <strong>{{ task.title }}</strong>

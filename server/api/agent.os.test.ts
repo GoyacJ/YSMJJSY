@@ -214,6 +214,38 @@ describe('agent os api helpers', () => {
     expectNoForbiddenResponseSubstrings(result)
   })
 
+  it('includes planned tasks from recent observations without executing them', () => {
+    const result = buildCurrentAgentOsResponse({
+      keyId: 'key_1',
+      now: '2026-05-18T00:00:00.000Z',
+      agents: {
+        getOrCreateAgentForOwner: () => ({
+          id: 'agent_1',
+          status: 'active',
+          createdAt: '2026-05-18T00:00:00.000Z',
+          updatedAt: '2026-05-18T00:00:00.000Z',
+          bindingId: 'binding_1',
+          ownerType: 'key',
+          ownerId: 'key_1',
+          domain: 'star',
+        }),
+      },
+      tasks: { listTasksByAgent: () => [] },
+      events: { listEventsByAgent: () => [] },
+      proposals: { listProposalsByKey: () => [] },
+      works: { listWorksByKey: () => [] },
+      observations: {
+        listObservationsByAgent: () => [
+          { sourceType: 'chat', summary: '1', createdAt: '2026-05-18T00:00:00.000Z' },
+          { sourceType: 'chat', summary: '2', createdAt: '2026-05-18T00:01:00.000Z' },
+          { sourceType: 'chat', summary: '3', createdAt: '2026-05-18T00:02:00.000Z' },
+        ],
+      },
+    } as any)
+
+    expect(result.plannedTasks).toMatchObject([{ type: 'sleep' }])
+  })
+
   it('approves proposal inbox items through proposal actions and writes an event', () => {
     const updateProposal = vi.fn()
     const addEvent = vi.fn()

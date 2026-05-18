@@ -31,6 +31,13 @@ export type AgentOsEventItem = {
   createdAt: string
 }
 
+export type AgentOsPlannedTaskItem = {
+  type: string
+  title: string
+  summary: string
+  input?: Record<string, unknown>
+}
+
 export type AgentOsState = {
   agent: {
     id: string
@@ -42,6 +49,7 @@ export type AgentOsState = {
   inbox: AgentOsInboxItem[]
   tasks: AgentOsTaskItem[]
   events: AgentOsEventItem[]
+  plannedTasks?: AgentOsPlannedTaskItem[]
 }
 
 export type AgentTaskCreateInput = {

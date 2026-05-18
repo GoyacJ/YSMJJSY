@@ -55,6 +55,12 @@ export type AgentOsResponse = {
     targetId?: string | null
     createdAt: string
   }>
+  plannedTasks?: Array<{
+    type: string
+    title: string
+    summary: string
+    input?: Record<string, unknown>
+  }>
 }
 
 export function parseJsonObject(value?: string | null): Record<string, unknown> | undefined {
@@ -214,6 +220,12 @@ export function buildAgentOsResponse(input: {
     summary: string
     createdAt: string
   }>
+  plannedTasks?: Array<{
+    type: string
+    title: string
+    summary: string
+    input?: Record<string, unknown>
+  }>
 }): AgentOsResponse {
   return {
     agent: {
@@ -255,5 +267,11 @@ export function buildAgentOsResponse(input: {
       updatedAt: task.updatedAt,
     })),
     events: input.events.map(serializeAgentEventForOs),
+    plannedTasks: input.plannedTasks?.map(task => ({
+      type: task.type,
+      title: task.title,
+      summary: task.summary,
+      input: task.input ? sanitizeAgentResponseValue(task.input) as Record<string, unknown> : undefined,
+    })),
   }
 }

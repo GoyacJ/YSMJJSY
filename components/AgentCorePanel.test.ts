@@ -286,6 +286,39 @@ describe('AgentCorePanel', () => {
     })
   })
 
+  it('creates a task from an observation-based plan', async () => {
+    const enqueueTask = vi.fn(async () => ({ id: 'task_1' }))
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        embedded: true,
+        loadCore: async () => core,
+        loadOs: async () => ({
+          agent: { id: 'agent_1', status: 'active', ownerType: 'key', ownerId: 'key_1', domain: 'star' },
+          inbox: [],
+          tasks: [],
+          events: [],
+          plannedTasks: [
+            {
+              type: 'sleep',
+              title: '睡眠整理',
+              summary: '根据最近观察整理记忆和提案。',
+              input: { toolName: 'star.sleep', input: {} },
+            },
+          ],
+        }),
+        enqueueTask,
+      },
+    })
+
+    await flushPromises()
+    await wrapper.get('[aria-label="创建计划任务"]').trigger('click')
+
+    expect(enqueueTask).toHaveBeenCalledWith({
+      type: 'sleep',
+      input: { toolName: 'star.sleep', input: {} },
+    })
+  })
+
   it('accept button calls proposal update', async () => {
     const applyProposal = vi.fn(async () => true)
     const wrapper = mount(AgentCorePanel, {

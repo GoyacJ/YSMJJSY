@@ -3,11 +3,13 @@ import {
   createAgentEventRepository,
   createAgentEvolutionRepository,
   createAgentInstanceRepository,
+  createAgentObservationRepository,
   createAgentSleepRepository,
   createAgentSnapshotRepository,
   createAgentTaskRepository,
   createAgentWorkRepository,
 } from '../../../db/sqlite'
+import { createAgentLoop } from '../../../services/agent-loop'
 import { buildAgentOsResponse } from '../../../services/agent-os'
 import { requireAgentKey } from '../../agent/core.get'
 
@@ -21,6 +23,7 @@ export function buildCurrentAgentOsResponse(input: {
   works: Pick<ReturnType<typeof createAgentWorkRepository>, 'listWorksByKey'>
   sleeps?: Pick<ReturnType<typeof createAgentSleepRepository>, 'getLatestSleepRunByKey'>
   snapshots?: Pick<ReturnType<typeof createAgentSnapshotRepository>, 'listSnapshotsByKey'>
+  observations?: Pick<ReturnType<typeof createAgentObservationRepository>, 'listObservationsByAgent'>
 }) {
   const agent = input.agents.getOrCreateAgentForOwner({
     ownerType: 'key',
@@ -28,17 +31,32 @@ export function buildCurrentAgentOsResponse(input: {
     domain: 'star',
     now: input.now,
   })
+  const tasks = input.tasks.listTasksByAgent(agent.id)
+  const events = input.events.listEventsByAgent(agent.id)
+  const plannedTasks = input.observations
+    ? createAgentLoop({
+        now: input.now,
+        tasks: { updateTask: () => {} },
+        events: { addEvent: () => {} },
+        registry: { get: () => undefined, execute: async () => ({ ok: false }) },
+        policy: {},
+      }).planTasks({
+        observations: input.observations.listObservationsByAgent(agent.id),
+        existingTasks: tasks,
+      })
+    : undefined
 
   return buildAgentOsResponse({
     agent,
-    tasks: input.tasks.listTasksByAgent(agent.id),
-    events: input.events.listEventsByAgent(agent.id),
+    tasks,
+    events,
     pendingProposals: input.proposals.listProposalsByKey(input.keyId, 'pending'),
     publicWorkCandidates: input.works
       .listWorksByKey(input.keyId)
       .filter(work => work.visibility === 'private'),
     latestSleepRun: input.sleeps?.getLatestSleepRunByKey(input.keyId),
     rollbackCandidates: input.snapshots?.listSnapshotsByKey(input.keyId, 12),
+    plannedTasks,
   })
 }
 
@@ -56,5 +74,6 @@ export default defineEventHandler((event) => {
     works: createAgentWorkRepository(config.sqlitePath),
     sleeps: createAgentSleepRepository(config.sqlitePath),
     snapshots: createAgentSnapshotRepository(config.sqlitePath),
+    observations: createAgentObservationRepository(config.sqlitePath),
   })
 })
