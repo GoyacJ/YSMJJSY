@@ -38,4 +38,23 @@ describe('agent loop', () => {
     expect(updateTask).toHaveBeenCalledWith('task_1', expect.objectContaining({ status: 'completed' }))
     expect(addEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'tool.completed' }))
   })
+
+  it('plans tasks through the loop planner', () => {
+    const loop = createAgentLoop({
+      now: '2026-05-18T00:00:00.000Z',
+      tasks: { updateTask: vi.fn() },
+      events: { addEvent: vi.fn() },
+      registry: { get: vi.fn(), execute: vi.fn() },
+      policy: {},
+    } as any)
+
+    expect(loop.planTasks({
+      observations: [
+        { sourceType: 'chat', summary: '1', createdAt: '2026-05-18T00:00:00.000Z' },
+        { sourceType: 'chat', summary: '2', createdAt: '2026-05-18T00:01:00.000Z' },
+        { sourceType: 'chat', summary: '3', createdAt: '2026-05-18T00:02:00.000Z' },
+      ],
+      existingTasks: [],
+    })).toMatchObject([{ type: 'sleep' }])
+  })
 })

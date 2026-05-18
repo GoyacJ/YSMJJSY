@@ -1,5 +1,7 @@
 import type { AgentEventRecord, AgentTaskRecord } from '../db/sqlite'
 import type { AgentPolicy } from './agent-policy'
+import { planAgentTasksFromObservations } from './agent-loop-planner'
+import type { PlannedAgentTask } from './agent-loop-planner'
 import { runAgentTask } from './agent-task-queue'
 import type { AgentToolRegistry } from './agent-runtime'
 
@@ -13,6 +15,11 @@ type EventRepository = {
 
 export type AgentLoop = {
   runTask: (task: AgentTaskRecord, options?: { approvalGranted?: boolean }) => Promise<void>
+  planTasks: (input: {
+    observations: Parameters<typeof planAgentTasksFromObservations>[0]['observations']
+    existingTasks: Parameters<typeof planAgentTasksFromObservations>[0]['existingTasks']
+  }) => PlannedAgentTask[]
+  recoverTasks: (tasks: AgentTaskRecord[]) => AgentTaskRecord[]
 }
 
 export function createAgentLoop(input: {
@@ -33,6 +40,12 @@ export function createAgentLoop(input: {
         policy: input.policy,
         approvalGranted: options?.approvalGranted,
       })
+    },
+    planTasks(planInput) {
+      return planAgentTasksFromObservations({ ...planInput, threshold: 3 })
+    },
+    recoverTasks(tasks) {
+      return tasks.filter(task => task.status === 'running')
     },
   }
 }
