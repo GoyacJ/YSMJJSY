@@ -1,5 +1,17 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
-import { createAgentWorkRepository, type AgentWorkRecord, type AgentWorkVisibility } from '../../../db/sqlite'
+import {
+  createAgentEventRepository,
+  createAgentInstanceRepository,
+  createAgentTaskRepository,
+  createAgentWorkRepository,
+  type AgentEventRecord,
+  type AgentTaskRecord,
+  type AgentWorkRecord,
+  type AgentWorkVisibility,
+} from '../../../db/sqlite'
+import { createAgentLoop } from '../../../services/agent-loop'
+import { defaultAgentPolicy } from '../../../services/agent-policy'
+import { enqueueAgentTask } from '../../../services/agent-task-queue'
 import { createAgentToolRegistry, type AgentToolRegistry } from '../../../services/agent-runtime'
 import { registerStarAgentTools } from '../../../services/star-agent-tools'
 import { requireAgentKey } from '../core.get'
@@ -48,6 +60,61 @@ export async function publishWorkWithTool(input: {
   return result.output as { id: string, visibility: AgentWorkVisibility }
 }
 
+export async function publishWorkActionOrTask(input: {
+  keyId: string
+  agentId: string
+  workId: string
+  visibility: AgentWorkVisibility
+  now: string
+  works: {
+    getWorkByKey: (keyId: string, id: string) => AgentWorkRecord | undefined
+    updateWorkVisibility: (keyId: string, id: string, visibility: AgentWorkVisibility, updatedAt: string) => void
+  }
+  tasks: {
+    addTask: (record: AgentTaskRecord) => void
+    updateTask: (id: string, updates: Partial<Pick<AgentTaskRecord, 'status' | 'resultJson' | 'error' | 'updatedAt'>>) => void
+  }
+  events: { addEvent: (record: AgentEventRecord) => void }
+  registry: Pick<AgentToolRegistry, 'get' | 'execute'>
+}) {
+  if (input.visibility !== 'public') {
+    return updateAgentWorkVisibilityAction({
+      keyId: input.keyId,
+      workId: input.workId,
+      visibility: input.visibility,
+      now: input.now,
+      works: input.works,
+    })
+  }
+
+  const task = enqueueAgentTask({
+    agentId: input.agentId,
+    type: 'publish_artifact',
+    title: '公开作品',
+    summary: '公开一个作品。',
+    input: {
+      toolName: 'star.publishWork',
+      input: { workId: input.workId },
+    },
+    now: input.now,
+    tasks: input.tasks,
+    events: input.events,
+  })
+
+  await createAgentLoop({
+    now: input.now,
+    tasks: input.tasks,
+    events: input.events,
+    registry: input.registry,
+    policy: defaultAgentPolicy,
+  }).runTask(task)
+
+  return {
+    status: 'waiting_approval',
+    taskId: task.id,
+  }
+}
+
 function parseWorkVisibilityBody(body: unknown): AgentWorkVisibility {
   if (body && typeof body === 'object') {
     const visibility = (body as { visibility?: unknown }).visibility
@@ -78,8 +145,15 @@ export default defineEventHandler(async (event) => {
   const visibility = parseWorkVisibilityBody(await readBody(event))
   const now = new Date().toISOString()
 
+  const works = createAgentWorkRepository(config.sqlitePath)
+
   if (visibility === 'public') {
-    const works = createAgentWorkRepository(config.sqlitePath)
+    const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+      ownerType: 'key',
+      ownerId: keyId,
+      domain: 'star',
+      now,
+    })
     const registry = createAgentToolRegistry()
 
     registerStarAgentTools(registry, {
@@ -88,9 +162,15 @@ export default defineEventHandler(async (event) => {
       works,
     })
 
-    return publishWorkWithTool({
-      toolName: 'star.publishWork',
+    return publishWorkActionOrTask({
+      keyId,
+      agentId: agent.id,
       workId,
+      visibility,
+      now,
+      works,
+      tasks: createAgentTaskRepository(config.sqlitePath),
+      events: createAgentEventRepository(config.sqlitePath),
       registry,
     })
   }
@@ -100,6 +180,6 @@ export default defineEventHandler(async (event) => {
     workId,
     visibility,
     now,
-    works: createAgentWorkRepository(config.sqlitePath),
+    works,
   })
 })

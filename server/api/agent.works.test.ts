@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createAgentToolRegistry } from '../services/agent-runtime'
+import { registerStarAgentTools } from '../services/star-agent-tools'
 import { buildAgentWorksResponse } from './agent/works.get'
-import { publishWorkWithTool, updateAgentWorkVisibilityAction } from './agent/works/[id].put'
+import { publishWorkActionOrTask, publishWorkWithTool, updateAgentWorkVisibilityAction } from './agent/works/[id].put'
 
 describe('agent works api helpers', () => {
   it('returns only current key works', () => {
@@ -75,5 +77,46 @@ describe('agent works api helpers', () => {
 
     expect(result.visibility).toBe('public')
     expect(execute).toHaveBeenCalledWith('star.publishWork', { workId: 'work_1' })
+  })
+
+  it('creates a waiting approval task for public work publishing', async () => {
+    const updateWorkVisibility = vi.fn()
+    const updateTask = vi.fn()
+    const addTask = vi.fn()
+    const addEvent = vi.fn()
+    const registry = createAgentToolRegistry()
+
+    registerStarAgentTools(registry, {
+      keyId: 'key_1',
+      now: '2026-05-18T00:00:00.000Z',
+      works: {
+        getWorkByKey: () => ({
+          id: 'work_1',
+          visibility: 'private',
+        }),
+        updateWorkVisibility,
+      },
+    })
+
+    const result = await publishWorkActionOrTask({
+      keyId: 'key_1',
+      agentId: 'agent_1',
+      workId: 'work_1',
+      visibility: 'public',
+      now: '2026-05-18T00:00:00.000Z',
+      works: {
+        getWorkByKey: vi.fn(),
+        updateWorkVisibility,
+      },
+      tasks: { addTask, updateTask },
+      events: { addEvent },
+      registry,
+    })
+
+    expect(result.status).toBe('waiting_approval')
+    expect(updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'waiting_approval',
+    }))
+    expect(updateWorkVisibility).not.toHaveBeenCalled()
   })
 })

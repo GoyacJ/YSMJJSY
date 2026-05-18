@@ -4,15 +4,20 @@ import {
   createAgentEventRepository,
   createAgentInstanceRepository,
   createAgentObservationRepository,
+  createAgentTaskRepository,
   createMemoryEventRepository,
   createMemoryRepository,
   type AgentEventRecord,
   type AgentObservationRecord,
+  type AgentTaskRecord,
   type MemoryEventRecord,
   type MemoryGovernanceAction,
   type MemoryRecord,
 } from '../../../db/sqlite'
 import { buildAgentEvent } from '../../../services/agent-events'
+import { createAgentLoop } from '../../../services/agent-loop'
+import { defaultAgentPolicy } from '../../../services/agent-policy'
+import { enqueueAgentTask } from '../../../services/agent-task-queue'
 import { createAgentToolRegistry, type AgentToolRegistry } from '../../../services/agent-runtime'
 import { registerStarAgentTools } from '../../../services/star-agent-tools'
 import { requireAgentKey } from '../core.get'
@@ -148,6 +153,57 @@ export async function governMemoryWithTool(input: {
   return result.output as { id: string, status: string, importance?: number }
 }
 
+export async function governMemoryActionOrTask(input: MemoryGovernanceInput & {
+  agentId: string
+  tasks: {
+    addTask: (record: AgentTaskRecord) => void
+    updateTask: (id: string, updates: Partial<Pick<AgentTaskRecord, 'status' | 'resultJson' | 'error' | 'updatedAt'>>) => void
+  }
+  events: { addEvent: (record: AgentEventRecord) => void }
+  registry: Pick<AgentToolRegistry, 'get' | 'execute'>
+}) {
+  if (input.action === 'archive' || input.action === 'reject') {
+    const task = enqueueAgentTask({
+      agentId: input.agentId,
+      type: 'govern_memory',
+      title: '治理记忆',
+      summary: '执行记忆治理。',
+      input: {
+        toolName: 'star.governMemory',
+        input: {
+          memoryId: input.memoryId,
+          action: input.action,
+          reason: input.reason,
+        },
+      },
+      now: input.now,
+      tasks: input.tasks,
+      events: input.events,
+    })
+
+    await createAgentLoop({
+      now: input.now,
+      tasks: input.tasks,
+      events: input.events,
+      registry: input.registry,
+      policy: defaultAgentPolicy,
+    }).runTask(task)
+
+    return {
+      status: 'waiting_approval',
+      taskId: task.id,
+    }
+  }
+
+  return governMemoryWithTool({
+    toolName: 'star.governMemory',
+    memoryId: input.memoryId,
+    action: input.action,
+    reason: input.reason,
+    registry: input.registry,
+  })
+}
+
 function parseMemoryGovernanceBody(body: unknown) {
   if (body && typeof body === 'object') {
     const input = body as { action?: unknown, reason?: unknown }
@@ -188,6 +244,13 @@ export default defineEventHandler(async (event) => {
 
   const memories = createMemoryRepository(config.sqlitePath)
   const memoryEvents = createMemoryEventRepository(config.sqlitePath)
+  const agentEvents = createAgentEventRepository(config.sqlitePath)
+  const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+    ownerType: 'key',
+    ownerId: keyId,
+    domain: 'star',
+    now,
+  })
   const registry = createAgentToolRegistry()
 
   registerStarAgentTools(registry, {
@@ -197,30 +260,31 @@ export default defineEventHandler(async (event) => {
     memoryEvents,
   })
 
-  const result = await governMemoryWithTool({
-    toolName: 'star.governMemory',
+  const result = await governMemoryActionOrTask({
+    keyId,
+    agentId: agent.id,
     memoryId,
     action: body.action,
     reason: body.reason,
+    now,
+    memories,
+    memoryEvents,
+    tasks: createAgentTaskRepository(config.sqlitePath),
+    events: agentEvents,
     registry,
   })
 
   try {
-    const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
-      ownerType: 'key',
-      ownerId: keyId,
-      domain: 'star',
-      now,
-    })
-
-    recordMemoryGovernanceObservation({
-      agentId: agent.id,
-      memoryId,
-      action: body.action,
-      now,
-      observations: createAgentObservationRepository(config.sqlitePath),
-      events: createAgentEventRepository(config.sqlitePath),
-    })
+    if (!('taskId' in result)) {
+      recordMemoryGovernanceObservation({
+        agentId: agent.id,
+        memoryId,
+        action: body.action,
+        now,
+        observations: createAgentObservationRepository(config.sqlitePath),
+        events: agentEvents,
+      })
+    }
   }
   catch {
     // Observation capture is secondary.
