@@ -1,17 +1,22 @@
 import { nanoid } from 'nanoid'
 import { createError, defineEventHandler } from 'h3'
 import {
+  createAgentEventRepository,
   createAgentEvolutionRepository,
+  createAgentInstanceRepository,
   createAgentReflectionRepository,
   createAgentSleepRepository,
   createAgentStateRepository,
+  createAgentTaskRepository,
   createConversationRepository,
   createKeyProfileRepository,
   createMemoryRepository,
+  type AgentEventRecord,
   type AgentEvolutionProposalRecord,
   type AgentReflectionRecord,
   type AgentSleepRunRecord,
   type AgentStateRecord,
+  type AgentTaskRecord,
   type ConversationRecord,
   type KeyProfileRecord,
   type MemoryRecord,
@@ -23,6 +28,9 @@ import { requireAgentKey } from './core.get'
 export type ManualAgentSleepInput = {
   keyId: string
   now: string
+  agent?: {
+    id: string
+  }
   client: {
     reflectAgent: (messages: ReturnType<typeof buildAgentSleepMessages>) => Promise<string>
   }
@@ -48,11 +56,20 @@ export type ManualAgentSleepInput = {
   states: {
     updateAgentState: (keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) => void
   }
+  tasks?: {
+    addTask: (record: AgentTaskRecord) => void
+    updateTask: (id: string, updates: Partial<Pick<AgentTaskRecord, 'status' | 'resultJson' | 'error' | 'updatedAt'>>) => void
+  }
+  events?: {
+    addEvent: (record: AgentEventRecord) => void
+  }
 }
 
 export async function runManualAgentSleep(input: ManualAgentSleepInput) {
   const runId = nanoid()
   const reflectionId = nanoid()
+  const taskId = `task_${nanoid()}`
+  const hasAgentOs = Boolean(input.agent && input.tasks && input.events)
 
   input.sleeps.addSleepRun({
     id: runId,
@@ -64,6 +81,34 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
     completedAt: null,
     error: null,
   })
+
+  if (hasAgentOs && input.agent && input.tasks && input.events) {
+    input.tasks.addTask({
+      id: taskId,
+      agentId: input.agent.id,
+      type: 'sleep',
+      status: 'running',
+      title: '睡眠整理',
+      summary: '整理最近记忆、反思和提案。',
+      inputJson: JSON.stringify({ keyId: input.keyId }),
+      resultJson: null,
+      error: null,
+      createdAt: input.now,
+      updatedAt: input.now,
+    })
+    input.events.addEvent({
+      id: `event_${nanoid()}`,
+      agentId: input.agent.id,
+      type: 'task.started',
+      title: '任务开始',
+      summary: '睡眠整理开始。',
+      targetType: 'task',
+      targetId: taskId,
+      payloadJson: '{}',
+      visibility: 'private',
+      createdAt: input.now,
+    })
+  }
 
   try {
     const memories = input.memories.listMemoriesByKey(input.keyId)
@@ -125,6 +170,32 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
       completedAt: input.now,
       error: null,
     })
+    if (hasAgentOs && input.agent && input.tasks && input.events) {
+      input.tasks.updateTask(taskId, {
+        status: 'completed',
+        resultJson: JSON.stringify({
+          dailySummary: parsed.dailySummary,
+          memoryActions: parsed.memoryActions,
+          workIdeas: parsed.workIdeas,
+          nextConversationHints: parsed.nextConversationHints,
+          proposalIds: createdProposals.map(proposal => proposal.id),
+        }),
+        error: null,
+        updatedAt: input.now,
+      })
+      input.events.addEvent({
+        id: `event_${nanoid()}`,
+        agentId: input.agent.id,
+        type: 'task.completed',
+        title: '任务完成',
+        summary: parsed.dailySummary,
+        targetType: 'task',
+        targetId: taskId,
+        payloadJson: JSON.stringify({ runId, proposalIds: createdProposals.map(proposal => proposal.id) }),
+        visibility: 'private',
+        createdAt: input.now,
+      })
+    }
     input.states.updateAgentState(input.keyId, {
       lastSleepAt: input.now,
       nextSleepAt: calculateNextSleepAt(input.now),
@@ -159,6 +230,25 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
       completedAt: input.now,
       error: message,
     })
+    if (hasAgentOs && input.agent && input.tasks && input.events) {
+      input.tasks.updateTask(taskId, {
+        status: 'failed',
+        error: message,
+        updatedAt: input.now,
+      })
+      input.events.addEvent({
+        id: `event_${nanoid()}`,
+        agentId: input.agent.id,
+        type: 'task.failed',
+        title: '任务失败',
+        summary: message,
+        targetType: 'task',
+        targetId: taskId,
+        payloadJson: JSON.stringify({ runId }),
+        visibility: 'private',
+        createdAt: input.now,
+      })
+    }
 
     throw createError({
       statusCode: 502,
@@ -185,10 +275,17 @@ export default defineEventHandler(async (event) => {
   })
   const states = createAgentStateRepository(config.sqlitePath)
   const now = new Date().toISOString()
+  const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+    ownerType: 'key',
+    ownerId: keyId,
+    domain: 'star',
+    now,
+  })
 
   return runManualAgentSleep({
     keyId,
     now,
+    agent,
     client,
     profile,
     agentState: states.getOrCreateAgentState(keyId, now),
@@ -198,5 +295,7 @@ export default defineEventHandler(async (event) => {
     proposals: createAgentEvolutionRepository(config.sqlitePath),
     sleeps: createAgentSleepRepository(config.sqlitePath),
     states,
+    tasks: createAgentTaskRepository(config.sqlitePath),
+    events: createAgentEventRepository(config.sqlitePath),
   })
 })

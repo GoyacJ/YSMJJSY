@@ -69,4 +69,72 @@ describe('agent sleep api helpers', () => {
       updatedAt: '2026-05-17T00:00:00.000Z',
     })
   })
+
+  it('records sleep task and events when agent os repositories are provided', async () => {
+    const tasks = {
+      addTask: vi.fn(),
+      updateTask: vi.fn(),
+    }
+    const events = {
+      addEvent: vi.fn(),
+    }
+
+    await runManualAgentSleep({
+      keyId: 'key_1',
+      now: '2026-05-18T00:00:00.000Z',
+      agent: { id: 'agent_1' },
+      client: {
+        reflectAgent: vi.fn(async () => JSON.stringify({
+          dailySummary: '整理完成。',
+          memoryActions: [],
+          proposals: [],
+          workIdeas: [],
+          nextConversationHints: [],
+        })),
+      },
+      profile: { assistantName: '月光', mbti: 'INTJ' },
+      agentState: {
+        keyId: 'key_1',
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+        updatedAt: '2026-05-18T00:00:00.000Z',
+      },
+      memories: {
+        listMemoriesByKey: () => [],
+      },
+      conversations: {
+        listRecentConversationsByKey: () => [],
+      },
+      reflections: {
+        listReflectionsByKey: () => [],
+        addReflection: vi.fn(),
+      },
+      proposals: {
+        addProposal: vi.fn(),
+      },
+      sleeps: {
+        addSleepRun: vi.fn(),
+        updateSleepRun: vi.fn(),
+      },
+      states: {
+        updateAgentState: vi.fn(),
+      },
+      tasks,
+      events,
+    })
+
+    expect(tasks.addTask).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'sleep',
+      status: 'running',
+    }))
+    expect(tasks.updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'completed',
+    }))
+    expect(events.addEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'task.completed',
+      targetType: 'task',
+    }))
+  })
 })
