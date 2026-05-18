@@ -19,6 +19,7 @@ import {
 import { applyAgentProposalAction } from '../../../../agent/proposals/[id].put'
 import { updateAgentWorkVisibilityAction } from '../../../../agent/works/[id].put'
 import { requireAgentKey } from '../../../../agent/core.get'
+import { buildAgentEvent } from '../../../../../services/agent-events'
 
 export type InboxActionInput = {
   itemId: string
@@ -81,7 +82,7 @@ export function parseInboxItemId(itemId: string): ParsedInboxItem {
 }
 
 export function addApprovalEvent(input: InboxActionInput, parsed: ParsedInboxItem, approved: boolean) {
-  input.events.addEvent({
+  input.events.addEvent(buildAgentEvent({
     id: `event_${nanoid()}`,
     agentId: input.agentId,
     type: approved ? 'approval.approved' : 'approval.rejected',
@@ -89,10 +90,9 @@ export function addApprovalEvent(input: InboxActionInput, parsed: ParsedInboxIte
     summary: approved ? '待办已通过。' : '待办已拒绝。',
     targetType: parsed.type === 'proposal' ? 'proposal' : 'work',
     targetId: parsed.id,
-    payloadJson: JSON.stringify({ itemId: input.itemId }),
-    visibility: 'private',
+    payload: { itemId: input.itemId },
     createdAt: input.now,
-  })
+  }))
 }
 
 export function approveAgentInboxItem(input: InboxActionInput) {

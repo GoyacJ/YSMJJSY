@@ -5,6 +5,7 @@ import type {
   AgentTaskRecord,
   AgentWorkRecord,
 } from '../db/sqlite'
+import { serializeAgentEventForOs } from './agent-events'
 
 export type AgentOsInboxItem = {
   id: string
@@ -115,14 +116,6 @@ export function buildAgentOsResponse(input: {
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     })),
-    events: input.events.map(event => ({
-      id: event.id,
-      type: event.type,
-      title: event.title,
-      summary: event.summary,
-      targetType: event.targetType ?? null,
-      targetId: event.targetId ?? null,
-      createdAt: event.createdAt,
-    })),
+    events: input.events.map(serializeAgentEventForOs),
   }
 }
