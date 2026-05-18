@@ -23,6 +23,12 @@ import {
 } from '../../db/sqlite'
 import { buildAgentSleepMessages, calculateNextSleepAt, parseAgentSleepResult } from '../../services/agent-learning'
 import { createDefaultAgentModelProvider } from '../../services/agent-providers'
+import {
+  completeAgentTask,
+  enqueueAgentTask,
+  failAgentTask,
+  startAgentTask,
+} from '../../services/agent-task-queue'
 import { requireAgentKey } from './core.get'
 
 export type ManualAgentSleepInput = {
@@ -69,8 +75,8 @@ export type ManualAgentSleepInput = {
 export async function runManualAgentSleep(input: ManualAgentSleepInput) {
   const runId = nanoid()
   const reflectionId = nanoid()
-  const taskId = `task_${nanoid()}`
   const hasAgentOs = Boolean(input.agent && input.tasks && input.events)
+  let task: AgentTaskRecord | undefined
 
   input.sleeps.addSleepRun({
     id: runId,
@@ -84,30 +90,21 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
   })
 
   if (hasAgentOs && input.agent && input.tasks && input.events) {
-    input.tasks.addTask({
-      id: taskId,
+    task = enqueueAgentTask({
       agentId: input.agent.id,
       type: 'sleep',
-      status: 'running',
       title: '睡眠整理',
       summary: '整理最近记忆、反思和提案。',
-      inputJson: JSON.stringify({ keyId: input.keyId }),
-      resultJson: null,
-      error: null,
-      createdAt: input.now,
-      updatedAt: input.now,
+      input: { keyId: input.keyId, runId },
+      now: input.now,
+      tasks: input.tasks,
+      events: input.events,
     })
-    input.events.addEvent({
-      id: `event_${nanoid()}`,
-      agentId: input.agent.id,
-      type: 'task.started',
-      title: '任务开始',
-      summary: '睡眠整理开始。',
-      targetType: 'task',
-      targetId: taskId,
-      payloadJson: '{}',
-      visibility: 'private',
-      createdAt: input.now,
+    startAgentTask({
+      task,
+      now: input.now,
+      tasks: input.tasks,
+      events: input.events,
     })
   }
 
@@ -177,30 +174,20 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
       completedAt: input.now,
       error: null,
     })
-    if (hasAgentOs && input.agent && input.tasks && input.events) {
-      input.tasks.updateTask(taskId, {
-        status: 'completed',
-        resultJson: JSON.stringify({
+    if (hasAgentOs && input.tasks && input.events && task) {
+      completeAgentTask({
+        task,
+        result: {
           dailySummary: parsed.dailySummary,
           memoryActions: parsed.memoryActions,
           workIdeas: parsed.workIdeas,
           nextConversationHints: parsed.nextConversationHints,
           proposalIds: createdProposals.map(proposal => proposal.id),
-        }),
-        error: null,
-        updatedAt: input.now,
-      })
-      input.events.addEvent({
-        id: `event_${nanoid()}`,
-        agentId: input.agent.id,
-        type: 'task.completed',
-        title: '任务完成',
+        },
         summary: parsed.dailySummary,
-        targetType: 'task',
-        targetId: taskId,
-        payloadJson: JSON.stringify({ runId, proposalIds: createdProposals.map(proposal => proposal.id) }),
-        visibility: 'private',
-        createdAt: input.now,
+        now: input.now,
+        tasks: input.tasks,
+        events: input.events,
       })
     }
     input.states.updateAgentState(input.keyId, {
@@ -237,23 +224,13 @@ export async function runManualAgentSleep(input: ManualAgentSleepInput) {
       completedAt: input.now,
       error: message,
     })
-    if (hasAgentOs && input.agent && input.tasks && input.events) {
-      input.tasks.updateTask(taskId, {
-        status: 'failed',
+    if (hasAgentOs && input.tasks && input.events && task) {
+      failAgentTask({
+        task,
         error: message,
-        updatedAt: input.now,
-      })
-      input.events.addEvent({
-        id: `event_${nanoid()}`,
-        agentId: input.agent.id,
-        type: 'task.failed',
-        title: '任务失败',
-        summary: message,
-        targetType: 'task',
-        targetId: taskId,
-        payloadJson: JSON.stringify({ runId }),
-        visibility: 'private',
-        createdAt: input.now,
+        now: input.now,
+        tasks: input.tasks,
+        events: input.events,
       })
     }
 

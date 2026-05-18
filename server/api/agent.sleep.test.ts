@@ -127,10 +127,17 @@ describe('agent sleep api helpers', () => {
 
     expect(tasks.addTask).toHaveBeenCalledWith(expect.objectContaining({
       type: 'sleep',
+      status: 'queued',
+    }))
+    expect(tasks.updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       status: 'running',
     }))
     expect(tasks.updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       status: 'completed',
+    }))
+    expect(events.addEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'task.started',
+      targetType: 'task',
     }))
     expect(events.addEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'task.completed',
