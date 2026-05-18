@@ -13,9 +13,8 @@ import { withMiniMaxErrorBoundary } from '../../services/api-errors'
 import { buildAgentEvent } from '../../services/agent-events'
 import { markKeyActivity } from '../../services/key-activity'
 import { normalizeMediaPrompt } from '../../services/media'
-import { createMiniMaxClient } from '../../services/minimax'
 import { createAgentToolRegistry } from '../../services/agent-runtime'
-import { registerStarAgentTools } from '../../services/star-agent-tools'
+import { registerDefaultStarAgentTools } from '../../services/star-agent-runtime'
 
 const videoBodySchema = z.object({
   prompt: z.string().trim().min(1).max(1000),
@@ -68,19 +67,14 @@ export default defineEventHandler(async (event) => {
 
   const config = useRuntimeConfig(event)
   const repo = createMediaTaskRepository(config.sqlitePath)
-  const client = createMiniMaxClient({
-    apiKey: config.minimaxApiKey,
-    groupId: config.minimaxGroupId,
-  })
   const registry = createAgentToolRegistry()
   const now = new Date().toISOString()
   const id = nanoid()
   const prompt = normalizeMediaPrompt(body.data.prompt)
 
-  registerStarAgentTools(registry, {
-    media: {
-      createVideoTask: value => client.createVideoTask(value),
-    },
+  registerDefaultStarAgentTools(registry, {
+    minimaxApiKey: config.minimaxApiKey,
+    minimaxGroupId: config.minimaxGroupId,
   })
 
   repo.addMediaTask({

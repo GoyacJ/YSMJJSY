@@ -8,11 +8,9 @@ import {
 } from '../db/sqlite'
 import { withMiniMaxErrorBoundary } from '../services/api-errors'
 import { markKeyActivity } from '../services/key-activity'
-import { normalizeMediaPrompt } from '../services/media'
-import { createMiniMaxClient } from '../services/minimax'
 import { recordMediaObservation } from './video/tasks.post'
 import { createAgentToolRegistry, type AgentToolRegistry } from '../services/agent-runtime'
-import { registerStarAgentTools } from '../services/star-agent-tools'
+import { registerDefaultStarAgentTools } from '../services/star-agent-runtime'
 
 const imageBodySchema = z.object({
   prompt: z.string().trim().min(1).max(800),
@@ -44,16 +42,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig(event)
-  const client = createMiniMaxClient({
-    apiKey: config.minimaxApiKey,
-    groupId: config.minimaxGroupId,
-  })
   const registry = createAgentToolRegistry()
 
-  registerStarAgentTools(registry, {
-    media: {
-      generateImage: prompt => client.generateImage(normalizeMediaPrompt(prompt)),
-    },
+  registerDefaultStarAgentTools(registry, {
+    minimaxApiKey: config.minimaxApiKey,
+    minimaxGroupId: config.minimaxGroupId,
   })
 
   const result = await withMiniMaxErrorBoundary(

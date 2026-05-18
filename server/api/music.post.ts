@@ -9,10 +9,9 @@ import {
 import { withMiniMaxErrorBoundary } from '../services/api-errors'
 import { markKeyActivity } from '../services/key-activity'
 import { getDefaultMusicPrompt } from '../services/media'
-import { createMiniMaxClient } from '../services/minimax'
 import { recordMediaObservation } from './video/tasks.post'
 import { createAgentToolRegistry } from '../services/agent-runtime'
-import { registerStarAgentTools } from '../services/star-agent-tools'
+import { registerDefaultStarAgentTools } from '../services/star-agent-runtime'
 import { generateMediaWithTool } from './image.post'
 
 const musicBodySchema = z.object({
@@ -28,17 +27,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig(event)
-  const client = createMiniMaxClient({
-    apiKey: config.minimaxApiKey,
-    groupId: config.minimaxGroupId,
-  })
   const registry = createAgentToolRegistry()
   const prompt = body.data.prompt || getDefaultMusicPrompt()
 
-  registerStarAgentTools(registry, {
-    media: {
-      generateMusic: value => client.generateMusic(value),
-    },
+  registerDefaultStarAgentTools(registry, {
+    minimaxApiKey: config.minimaxApiKey,
+    minimaxGroupId: config.minimaxGroupId,
   })
 
   const result = await withMiniMaxErrorBoundary(
