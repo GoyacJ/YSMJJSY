@@ -1,8 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildWorksFromAssistantMessage, runAgentLearning, scheduleAgentSleepAfterChat } from './chat/stream.post'
+import { buildWorksFromAssistantMessage, recordChatObservations, runAgentLearning, scheduleAgentSleepAfterChat } from './chat/stream.post'
 import { buildStarChatMessages, streamStarChatReply } from '../services/star-chat'
 
 describe('chat api helpers', () => {
+  it('records chat observations for user and assistant messages', () => {
+    const addObservation = vi.fn()
+    const addEvent = vi.fn()
+
+    recordChatObservations({
+      agentId: 'agent_1',
+      userConversationId: 'user_1',
+      assistantConversationId: 'assistant_1',
+      userSummary: '用户发送消息。',
+      assistantSummary: '助手完成回复。',
+      now: '2026-05-18T00:00:00.000Z',
+      observations: { addObservation },
+      events: { addEvent },
+    })
+
+    expect(addObservation).toHaveBeenCalledTimes(2)
+    expect(addEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'observation.created' }))
+  })
+
   it('maps assistant media message parts to agent works', () => {
     const works = buildWorksFromAssistantMessage({
       keyId: 'key_1',

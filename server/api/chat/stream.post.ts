@@ -10,6 +10,9 @@ import {
 } from '../../services/star-chat'
 import {
   createAgentEvolutionRepository,
+  createAgentEventRepository,
+  createAgentInstanceRepository,
+  createAgentObservationRepository,
   createAgentReflectionRepository,
   createAgentStateRepository,
   createAgentWorkRepository,
@@ -19,11 +22,14 @@ import {
   createMemoryRepository,
   createUsageLimitRepository,
   type AgentEvolutionProposalRecord,
+  type AgentEventRecord,
+  type AgentObservationRecord,
   type AgentReflectionRecord,
   type AgentStateRecord,
   type AgentWorkRecord,
   type MemoryRecord,
 } from '../../db/sqlite'
+import { buildAgentEvent } from '../../services/agent-events'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
 import { resolveChatIntent } from '../../services/chat-intent'
 import { createIpHash } from '../../services/key-access'
@@ -153,6 +159,54 @@ export function buildWorksFromAssistantMessage(input: {
   ]
 }
 
+export function recordChatObservations(input: {
+  agentId: string
+  userConversationId: string
+  assistantConversationId: string
+  userSummary: string
+  assistantSummary: string
+  now: string
+  observations: {
+    addObservation: (record: AgentObservationRecord) => void
+  }
+  events: {
+    addEvent: (record: AgentEventRecord) => void
+  }
+}) {
+  const userObservationId = `observation_${nanoid()}`
+  const assistantObservationId = `observation_${nanoid()}`
+
+  input.observations.addObservation({
+    id: userObservationId,
+    agentId: input.agentId,
+    sourceType: 'chat',
+    sourceId: input.userConversationId,
+    summary: input.userSummary,
+    payloadJson: JSON.stringify({ conversationId: input.userConversationId, role: 'user' }),
+    createdAt: input.now,
+  })
+  input.observations.addObservation({
+    id: assistantObservationId,
+    agentId: input.agentId,
+    sourceType: 'chat',
+    sourceId: input.assistantConversationId,
+    summary: input.assistantSummary,
+    payloadJson: JSON.stringify({ conversationId: input.assistantConversationId, role: 'assistant' }),
+    createdAt: input.now,
+  })
+  input.events.addEvent(buildAgentEvent({
+    id: `event_${nanoid()}`,
+    agentId: input.agentId,
+    type: 'observation.created',
+    title: '观察记录',
+    summary: '聊天输入流已记录。',
+    targetType: 'observation',
+    targetId: assistantObservationId,
+    payload: { observationIds: [userObservationId, assistantObservationId] },
+    createdAt: input.now,
+  }))
+}
+
 type AgentLearningInput = {
   keyId: string
   conversationId: string
@@ -178,6 +232,10 @@ type AgentLearningInput = {
   }
   proposals: {
     addProposal: (record: AgentEvolutionProposalRecord) => void
+  }
+  agentId?: string
+  events?: {
+    addEvent: (record: AgentEventRecord) => void
   }
 }
 
@@ -268,7 +326,22 @@ export async function runAgentLearning(input: AgentLearningInput) {
       })
     }
   }
-  catch {
+  catch (error) {
+    if (input.agentId && input.events) {
+      input.events.addEvent(buildAgentEvent({
+        id: `event_${nanoid()}`,
+        agentId: input.agentId,
+        type: 'provider.failed',
+        title: 'Provider failed',
+        summary: '学习反思失败。',
+        targetType: 'reflection',
+        targetId: input.conversationId,
+        payload: {
+          message: error instanceof Error ? error.message : 'unknown',
+        },
+        createdAt: new Date().toISOString(),
+      }))
+    }
     // Agent learning is secondary. A failed reflection should not hide the reply.
   }
 }
@@ -299,6 +372,9 @@ export default defineEventHandler(async (event) => {
   const states = createAgentStateRepository(config.sqlitePath)
   const agentState = states.getOrCreateAgentState(keyId, new Date().toISOString())
   const works = createAgentWorkRepository(config.sqlitePath)
+  const agentInstances = createAgentInstanceRepository(config.sqlitePath)
+  const observations = createAgentObservationRepository(config.sqlitePath)
+  const agentEvents = createAgentEventRepository(config.sqlitePath)
   const attachmentRepo = createAttachmentRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
   const usage = createUsageLimitRepository(config.sqlitePath)
@@ -431,6 +507,7 @@ export default defineEventHandler(async (event) => {
         const assistantConversationId = nanoid()
 
         const assistantCreatedAt = new Date().toISOString()
+        let currentAgentId: string | undefined
 
         conversations.addConversation({
           id: assistantConversationId,
@@ -440,6 +517,30 @@ export default defineEventHandler(async (event) => {
           messageJson: JSON.stringify(result.message),
           createdAt: assistantCreatedAt,
         })
+
+        try {
+          const agent = agentInstances.getOrCreateAgentForOwner({
+            ownerType: 'key',
+            ownerId: keyId,
+            domain: 'star',
+            now: assistantCreatedAt,
+          })
+          currentAgentId = agent.id
+
+          recordChatObservations({
+            agentId: agent.id,
+            userConversationId,
+            assistantConversationId,
+            userSummary: body.data.message ? '用户发送了一条聊天消息。' : '用户发送了一条附件消息。',
+            assistantSummary: '助手完成了一次回复。',
+            now: assistantCreatedAt,
+            observations,
+            events: agentEvents,
+          })
+        }
+        catch {
+          // Observation capture is secondary. A failed insert should not hide the reply.
+        }
 
         try {
           scheduleAgentSleepAfterChat({
@@ -494,6 +595,8 @@ export default defineEventHandler(async (event) => {
           reflections,
           memories,
           proposals,
+          agentId: currentAgentId,
+          events: agentEvents,
         })
       }
       catch {

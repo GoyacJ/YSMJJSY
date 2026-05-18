@@ -1,8 +1,16 @@
 import { nanoid } from 'nanoid'
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
-import { createMediaTaskRepository } from '../../db/sqlite'
+import {
+  createAgentEventRepository,
+  createAgentInstanceRepository,
+  createAgentObservationRepository,
+  createMediaTaskRepository,
+  type AgentEventRecord,
+  type AgentObservationRecord,
+} from '../../db/sqlite'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
+import { buildAgentEvent } from '../../services/agent-events'
 import { markKeyActivity } from '../../services/key-activity'
 import { normalizeMediaPrompt } from '../../services/media'
 import { createMiniMaxClient } from '../../services/minimax'
@@ -10,6 +18,39 @@ import { createMiniMaxClient } from '../../services/minimax'
 const videoBodySchema = z.object({
   prompt: z.string().trim().min(1).max(1000),
 })
+
+export function recordMediaObservation(input: {
+  agentId: string
+  taskId: string
+  mediaType: 'image' | 'music' | 'video'
+  summary: string
+  now: string
+  observations: { addObservation: (record: AgentObservationRecord) => void }
+  events: { addEvent: (record: AgentEventRecord) => void }
+}) {
+  const observationId = `observation_${nanoid()}`
+
+  input.observations.addObservation({
+    id: observationId,
+    agentId: input.agentId,
+    sourceType: 'media',
+    sourceId: input.taskId,
+    summary: input.summary,
+    payloadJson: JSON.stringify({ taskId: input.taskId, mediaType: input.mediaType }),
+    createdAt: input.now,
+  })
+  input.events.addEvent(buildAgentEvent({
+    id: `event_${nanoid()}`,
+    agentId: input.agentId,
+    type: 'observation.created',
+    title: '观察记录',
+    summary: '媒体任务已记录。',
+    targetType: 'observation',
+    targetId: observationId,
+    payload: { taskId: input.taskId, mediaType: input.mediaType },
+    createdAt: input.now,
+  }))
+}
 
 export default defineEventHandler(async (event) => {
   const keyId = event.context.keyId
@@ -59,6 +100,27 @@ export default defineEventHandler(async (event) => {
       updatedAt: new Date().toISOString(),
     })
     markKeyActivity(config.sqlitePath, keyId, 'media')
+    try {
+      const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+        ownerType: 'key',
+        ownerId: keyId,
+        domain: 'star',
+        now,
+      })
+
+      recordMediaObservation({
+        agentId: agent.id,
+        taskId: id,
+        mediaType: 'video',
+        summary: '视频生成任务已创建。',
+        now,
+        observations: createAgentObservationRepository(config.sqlitePath),
+        events: createAgentEventRepository(config.sqlitePath),
+      })
+    }
+    catch {
+      // Observation capture is secondary.
+    }
 
     return { taskId: id }
   }

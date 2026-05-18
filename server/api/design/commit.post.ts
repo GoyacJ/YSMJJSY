@@ -2,11 +2,16 @@ import { nanoid } from 'nanoid'
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
 import {
+  createAgentEventRepository,
   createAgentEvolutionRepository,
+  createAgentInstanceRepository,
+  createAgentObservationRepository,
   createAgentSnapshotRepository,
   createAgentWorkRepository,
   createKeyDesignRepository,
   createKeyProfileRepository,
+  type AgentEventRecord,
+  type AgentObservationRecord,
   type AgentStateSnapshotRecord,
   type AgentWorkRecord,
   type KeyDesignRecord,
@@ -14,6 +19,7 @@ import {
 import type { StarPageDesignSchema } from '../../../types/design-schema'
 import { parseDesignSchema } from '../../services/design-schema'
 import { markKeyActivity } from '../../services/key-activity'
+import { buildAgentEvent } from '../../services/agent-events'
 
 const commitBodySchema = z.object({
   schema: z.unknown(),
@@ -82,6 +88,38 @@ export function buildDesignProposalSnapshot(input: {
     }),
     createdAt: input.now,
   }
+}
+
+export function recordDesignObservation(input: {
+  agentId: string
+  version: number
+  prompt: string
+  now: string
+  observations: { addObservation: (record: AgentObservationRecord) => void }
+  events: { addEvent: (record: AgentEventRecord) => void }
+}) {
+  const observationId = `observation_${nanoid()}`
+
+  input.observations.addObservation({
+    id: observationId,
+    agentId: input.agentId,
+    sourceType: 'design',
+    sourceId: `design:${input.version}`,
+    summary: input.prompt || `保存页面设计 v${input.version}。`,
+    payloadJson: JSON.stringify({ version: input.version }),
+    createdAt: input.now,
+  })
+  input.events.addEvent(buildAgentEvent({
+    id: `event_${nanoid()}`,
+    agentId: input.agentId,
+    type: 'observation.created',
+    title: '观察记录',
+    summary: '页面设计变更已记录。',
+    targetType: 'observation',
+    targetId: observationId,
+    payload: { sourceType: 'design', version: input.version },
+    createdAt: input.now,
+  }))
 }
 
 export default defineEventHandler(async (event) => {
@@ -166,6 +204,27 @@ export default defineEventHandler(async (event) => {
   }
 
   markKeyActivity(config.sqlitePath, keyId, 'design')
+
+  try {
+    const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+      ownerType: 'key',
+      ownerId: keyId,
+      domain: 'star',
+      now,
+    })
+
+    recordDesignObservation({
+      agentId: agent.id,
+      version,
+      prompt: body.data.prompt,
+      now,
+      observations: createAgentObservationRepository(config.sqlitePath),
+      events: createAgentEventRepository(config.sqlitePath),
+    })
+  }
+  catch {
+    // Observation capture is secondary.
+  }
 
   return buildDesignCommitResponse(version)
 })

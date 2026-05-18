@@ -1,9 +1,16 @@
+import { nanoid } from 'nanoid'
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
+import {
+  createAgentEventRepository,
+  createAgentInstanceRepository,
+  createAgentObservationRepository,
+} from '../db/sqlite'
 import { withMiniMaxErrorBoundary } from '../services/api-errors'
 import { markKeyActivity } from '../services/key-activity'
 import { getDefaultMusicPrompt } from '../services/media'
 import { createMiniMaxClient } from '../services/minimax'
+import { recordMediaObservation } from './video/tasks.post'
 
 const musicBodySchema = z.object({
   prompt: z.string().trim().max(800).optional(),
@@ -27,6 +34,28 @@ export default defineEventHandler(async (event) => {
 
   if (keyId) {
     markKeyActivity(config.sqlitePath, keyId, 'media')
+    try {
+      const now = new Date().toISOString()
+      const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+        ownerType: 'key',
+        ownerId: keyId,
+        domain: 'star',
+        now,
+      })
+
+      recordMediaObservation({
+        agentId: agent.id,
+        taskId: `music_${nanoid()}`,
+        mediaType: 'music',
+        summary: '音乐生成已完成。',
+        now,
+        observations: createAgentObservationRepository(config.sqlitePath),
+        events: createAgentEventRepository(config.sqlitePath),
+      })
+    }
+    catch {
+      // Observation capture is secondary.
+    }
   }
 
   return result

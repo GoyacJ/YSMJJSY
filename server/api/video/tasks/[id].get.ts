@@ -1,7 +1,13 @@
 import { createError, defineEventHandler, getRouterParam } from 'h3'
-import { createMediaTaskRepository } from '../../../db/sqlite'
+import {
+  createAgentEventRepository,
+  createAgentInstanceRepository,
+  createAgentObservationRepository,
+  createMediaTaskRepository,
+} from '../../../db/sqlite'
 import { withMiniMaxErrorBoundary } from '../../../services/api-errors'
 import { createMiniMaxClient } from '../../../services/minimax'
+import { recordMediaObservation } from '../tasks.post'
 
 export default defineEventHandler(async (event) => {
   const keyId = event.context.keyId
@@ -37,11 +43,37 @@ export default defineEventHandler(async (event) => {
   })
   const status = await withMiniMaxErrorBoundary(() => client.getVideoTask(task.providerTaskId), 'Video task query failed')
 
+  const now = new Date().toISOString()
+
   repo.updateMediaTask(id, {
     status: status.status,
     resultUrl: status.url,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   })
+
+  if (status.status === 'succeeded') {
+    try {
+      const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+        ownerType: 'key',
+        ownerId: keyId,
+        domain: 'star',
+        now,
+      })
+
+      recordMediaObservation({
+        agentId: agent.id,
+        taskId: id,
+        mediaType: 'video',
+        summary: '视频生成任务已完成。',
+        now,
+        observations: createAgentObservationRepository(config.sqlitePath),
+        events: createAgentEventRepository(config.sqlitePath),
+      })
+    }
+    catch {
+      // Observation capture is secondary.
+    }
+  }
 
   return status
 })

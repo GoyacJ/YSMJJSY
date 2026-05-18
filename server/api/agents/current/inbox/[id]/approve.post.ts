@@ -4,6 +4,7 @@ import {
   createAgentEventRepository,
   createAgentEvolutionRepository,
   createAgentInstanceRepository,
+  createAgentObservationRepository,
   createAgentTaskRepository,
   createMemoryEventRepository,
   createAgentSnapshotRepository,
@@ -13,6 +14,7 @@ import {
   createMemoryRepository,
   type AgentEventRecord,
   type AgentEvolutionProposalRecord,
+  type AgentObservationRecord,
   type AgentStateRecord,
   type AgentStateSnapshotRecord,
   type AgentTaskRecord,
@@ -71,6 +73,9 @@ export type InboxActionInput = {
   events: {
     addEvent: (record: AgentEventRecord) => void
   }
+  observations?: {
+    addObservation: (record: AgentObservationRecord) => void
+  }
 }
 
 type ParsedInboxItem = {
@@ -111,6 +116,17 @@ export function parseInboxItemId(itemId: string): ParsedInboxItem {
 }
 
 export function addApprovalEvent(input: InboxActionInput, parsed: ParsedInboxItem, approved: boolean) {
+  const observationId = `observation_${nanoid()}`
+
+  input.observations?.addObservation({
+    id: observationId,
+    agentId: input.agentId,
+    sourceType: 'approval',
+    sourceId: input.itemId,
+    summary: approved ? '用户批准了 Agent OS 待办。' : '用户拒绝了 Agent OS 待办。',
+    payloadJson: JSON.stringify({ itemId: input.itemId, approved }),
+    createdAt: input.now,
+  })
   input.events.addEvent(buildAgentEvent({
     id: `event_${nanoid()}`,
     agentId: input.agentId,
@@ -127,7 +143,7 @@ export function addApprovalEvent(input: InboxActionInput, parsed: ParsedInboxIte
             ? 'snapshot'
             : 'memory',
     targetId: parsed.id,
-    payload: { itemId: input.itemId },
+    payload: { itemId: input.itemId, observationId },
     createdAt: input.now,
   }))
 }
@@ -322,6 +338,7 @@ function buildRouteInput(event: H3Event, itemId: string): InboxActionInput {
     works: createAgentWorkRepository(config.sqlitePath),
     tasks: createAgentTaskRepository(config.sqlitePath),
     events: createAgentEventRepository(config.sqlitePath),
+    observations: createAgentObservationRepository(config.sqlitePath),
     registry: createAgentToolRegistry(),
   }
 }

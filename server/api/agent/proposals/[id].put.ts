@@ -1,15 +1,21 @@
 import { nanoid } from 'nanoid'
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 import {
+  createAgentEventRepository,
   createAgentEvolutionRepository,
+  createAgentInstanceRepository,
+  createAgentObservationRepository,
   createAgentSnapshotRepository,
   createAgentStateRepository,
   createKeyProfileRepository,
   createMemoryRepository,
+  type AgentEventRecord,
   type AgentEvolutionProposalRecord,
+  type AgentObservationRecord,
   type AgentStateRecord,
   type AgentStateSnapshotRecord,
 } from '../../../db/sqlite'
+import { buildAgentEvent } from '../../../services/agent-events'
 import { requireAgentKey } from '../core.get'
 
 type ProposalAction = 'accept' | 'reject'
@@ -47,6 +53,38 @@ function parsePayload(payloadJson: string) {
   catch {
     return {}
   }
+}
+
+export function recordApprovalObservation(input: {
+  agentId: string
+  proposalId: string
+  action: ProposalAction
+  now: string
+  observations: { addObservation: (record: AgentObservationRecord) => void }
+  events: { addEvent: (record: AgentEventRecord) => void }
+}) {
+  const observationId = `observation_${nanoid()}`
+
+  input.observations.addObservation({
+    id: observationId,
+    agentId: input.agentId,
+    sourceType: 'approval',
+    sourceId: input.proposalId,
+    summary: input.action === 'accept' ? '用户接受了进化提案。' : '用户拒绝了进化提案。',
+    payloadJson: JSON.stringify({ proposalId: input.proposalId, action: input.action }),
+    createdAt: input.now,
+  })
+  input.events.addEvent(buildAgentEvent({
+    id: `event_${nanoid()}`,
+    agentId: input.agentId,
+    type: 'observation.created',
+    title: '观察记录',
+    summary: '审批动作已记录。',
+    targetType: 'observation',
+    targetId: observationId,
+    payload: { proposalId: input.proposalId, action: input.action },
+    createdAt: input.now,
+  }))
 }
 
 export function applyAgentProposalAction(input: ApplyAgentProposalActionInput) {
@@ -176,6 +214,7 @@ export default defineEventHandler(async (event) => {
   const action = parseProposalAction(await readBody(event))
   const config = useRuntimeConfig(event)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
+  const now = new Date().toISOString()
 
   if (!profile) {
     throw createError({
@@ -188,12 +227,12 @@ export default defineEventHandler(async (event) => {
     keyId,
     proposalId,
     action,
-    now: new Date().toISOString(),
+    now,
     profile: {
       assistantName: profile.assistantName,
       mbti: profile.mbti,
     },
-    agentState: createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, new Date().toISOString()),
+    agentState: createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, now),
     proposals: createAgentEvolutionRepository(config.sqlitePath),
     snapshots: createAgentSnapshotRepository(config.sqlitePath),
     states: createAgentStateRepository(config.sqlitePath),
@@ -205,6 +244,27 @@ export default defineEventHandler(async (event) => {
       statusCode: 404,
       statusMessage: 'Proposal not found',
     })
+  }
+
+  try {
+    const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+      ownerType: 'key',
+      ownerId: keyId,
+      domain: 'star',
+      now,
+    })
+
+    recordApprovalObservation({
+      agentId: agent.id,
+      proposalId,
+      action,
+      now,
+      observations: createAgentObservationRepository(config.sqlitePath),
+      events: createAgentEventRepository(config.sqlitePath),
+    })
+  }
+  catch {
+    // Observation capture is secondary.
   }
 
   return result
