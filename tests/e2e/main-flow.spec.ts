@@ -190,6 +190,57 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
     })
   })
 
+  await page.route('**/api/agents/current/os', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        agent: {
+          id: 'agent_1',
+          status: 'active',
+          ownerType: 'key',
+          ownerId: 'key_1',
+          domain: 'star',
+        },
+        inbox: [
+          {
+            id: 'proposal:proposal_1',
+            type: 'proposal',
+            title: '调整页面',
+            summary: '让页面更像星空。',
+            action: 'approve',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+        tasks: [
+          {
+            id: 'task_1',
+            type: 'sleep',
+            status: 'completed',
+            title: '睡眠整理',
+            summary: '整理完成。',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            updatedAt: '2026-05-17T00:01:00.000Z',
+          },
+        ],
+        events: [],
+      }),
+    })
+  })
+
+  await page.route('**/api/agents/current/inbox/*/approve', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    })
+  })
+
+  await page.route('**/api/agents/current/inbox/*/reject', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    })
+  })
+
   await page.route('**/api/agent/sleep', async (route) => {
     sleepCompleted = true
     await route.fulfill({
@@ -327,6 +378,9 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.getByRole('button', { name: '打开星AI' })).toBeVisible()
   await page.getByRole('button', { name: '打开星AI' }).click()
   await expect(page.getByLabel('星AI')).toBeVisible()
+  await expect(page.getByText('决策收件箱')).toBeVisible()
+  await expect(page.getByText('任务中心')).toBeVisible()
+  await expect(page.getByText('睡眠整理')).toBeVisible()
   await page.getByRole('button', { name: '生成设计预览' }).click()
   await expect(page.getByLabel('设计预览')).toBeVisible()
   await expect(page.getByText('银河信笺')).toBeVisible()
