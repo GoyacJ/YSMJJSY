@@ -11,10 +11,29 @@ import { markKeyActivity } from '../services/key-activity'
 import { normalizeMediaPrompt } from '../services/media'
 import { createMiniMaxClient } from '../services/minimax'
 import { recordMediaObservation } from './video/tasks.post'
+import { createAgentToolRegistry, type AgentToolRegistry } from '../services/agent-runtime'
+import { registerStarAgentTools } from '../services/star-agent-tools'
 
 const imageBodySchema = z.object({
   prompt: z.string().trim().min(1).max(800),
 })
+
+export async function generateMediaWithTool(input: {
+  toolName: 'star.generateImage' | 'star.generateMusic' | 'star.generateVideo'
+  prompt: string
+  registry: Pick<AgentToolRegistry, 'execute'>
+}) {
+  const result = await input.registry.execute(input.toolName, { prompt: input.prompt })
+
+  if (!result.ok) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: result.error ?? 'Media generation failed',
+    })
+  }
+
+  return result.output
+}
 
 export default defineEventHandler(async (event) => {
   const keyId = event.context.keyId
@@ -29,8 +48,22 @@ export default defineEventHandler(async (event) => {
     apiKey: config.minimaxApiKey,
     groupId: config.minimaxGroupId,
   })
+  const registry = createAgentToolRegistry()
 
-  const result = await withMiniMaxErrorBoundary(() => client.generateImage(normalizeMediaPrompt(body.data.prompt)), 'Image generation failed')
+  registerStarAgentTools(registry, {
+    media: {
+      generateImage: prompt => client.generateImage(normalizeMediaPrompt(prompt)),
+    },
+  })
+
+  const result = await withMiniMaxErrorBoundary(
+    () => generateMediaWithTool({
+      toolName: 'star.generateImage',
+      prompt: body.data.prompt,
+      registry,
+    }),
+    'Image generation failed',
+  )
 
   if (keyId) {
     markKeyActivity(config.sqlitePath, keyId, 'media')

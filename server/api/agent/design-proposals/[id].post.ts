@@ -6,6 +6,8 @@ import {
 } from '../../../db/sqlite'
 import { createDefaultDesignSchema, parseDesignSchema } from '../../../services/design-schema'
 import { createDefaultAgentModelProvider } from '../../../services/agent-providers'
+import { createAgentToolRegistry } from '../../../services/agent-runtime'
+import { registerStarAgentTools } from '../../../services/star-agent-tools'
 import { withMiniMaxErrorBoundary } from '../../../services/api-errors'
 import { requireAgentKey } from '../core.get'
 
@@ -68,13 +70,25 @@ export default defineEventHandler(async (event) => {
     minimaxApiKey: config.minimaxApiKey,
     minimaxGroupId: config.minimaxGroupId,
   })
+  const registry = createAgentToolRegistry()
+
+  registerStarAgentTools(registry, { provider })
+
   const generated = await withMiniMaxErrorBoundary(
-    () => provider.generateDesignPatch({
-      currentSchema,
-      instruction,
-      assistantName: profile?.assistantName || '星信',
-      mbti: profile?.mbti || 'INTJ',
-    }),
+    async () => {
+      const result = await registry.execute('star.previewDesign', {
+        currentSchema,
+        instruction,
+        assistantName: profile?.assistantName || '星信',
+        mbti: profile?.mbti || 'INTJ',
+      })
+
+      if (!result.ok) {
+        throw new Error(result.error ?? 'Design generation failed')
+      }
+
+      return result.output
+    },
     'Design generation failed',
   )
 

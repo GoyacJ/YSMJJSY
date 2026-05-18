@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildAgentWorksResponse } from './agent/works.get'
-import { updateAgentWorkVisibilityAction } from './agent/works/[id].put'
+import { publishWorkWithTool, updateAgentWorkVisibilityAction } from './agent/works/[id].put'
 
 describe('agent works api helpers', () => {
   it('returns only current key works', () => {
@@ -62,5 +62,18 @@ describe('agent works api helpers', () => {
 
     expect(result.visibility).toBe('public')
     expect(updateWorkVisibility).toHaveBeenCalledWith('key_1', 'work_1', 'public', '2026-05-17T00:00:00.000Z')
+  })
+
+  it('publishes works through star.publishWork tool', async () => {
+    const execute = vi.fn(async () => ({ ok: true, output: { id: 'work_1', visibility: 'public' } }))
+
+    const result = await publishWorkWithTool({
+      toolName: 'star.publishWork',
+      workId: 'work_1',
+      registry: { execute },
+    } as any)
+
+    expect(result.visibility).toBe('public')
+    expect(execute).toHaveBeenCalledWith('star.publishWork', { workId: 'work_1' })
   })
 })

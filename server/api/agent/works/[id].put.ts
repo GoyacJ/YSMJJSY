@@ -1,5 +1,7 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 import { createAgentWorkRepository, type AgentWorkRecord, type AgentWorkVisibility } from '../../../db/sqlite'
+import { createAgentToolRegistry, type AgentToolRegistry } from '../../../services/agent-runtime'
+import { registerStarAgentTools } from '../../../services/star-agent-tools'
 import { requireAgentKey } from '../core.get'
 
 export function updateAgentWorkVisibilityAction(input: {
@@ -29,6 +31,23 @@ export function updateAgentWorkVisibilityAction(input: {
   }
 }
 
+export async function publishWorkWithTool(input: {
+  toolName: 'star.publishWork'
+  workId: string
+  registry: Pick<AgentToolRegistry, 'execute'>
+}) {
+  const result = await input.registry.execute(input.toolName, { workId: input.workId })
+
+  if (!result.ok) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: result.error ?? 'Work publishing failed',
+    })
+  }
+
+  return result.output as { id: string, visibility: AgentWorkVisibility }
+}
+
 function parseWorkVisibilityBody(body: unknown): AgentWorkVisibility {
   if (body && typeof body === 'object') {
     const visibility = (body as { visibility?: unknown }).visibility
@@ -56,12 +75,31 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig(event)
+  const visibility = parseWorkVisibilityBody(await readBody(event))
+  const now = new Date().toISOString()
+
+  if (visibility === 'public') {
+    const works = createAgentWorkRepository(config.sqlitePath)
+    const registry = createAgentToolRegistry()
+
+    registerStarAgentTools(registry, {
+      keyId,
+      now,
+      works,
+    })
+
+    return publishWorkWithTool({
+      toolName: 'star.publishWork',
+      workId,
+      registry,
+    })
+  }
 
   return updateAgentWorkVisibilityAction({
     keyId,
     workId,
-    visibility: parseWorkVisibilityBody(await readBody(event)),
-    now: new Date().toISOString(),
+    visibility,
+    now,
     works: createAgentWorkRepository(config.sqlitePath),
   })
 })

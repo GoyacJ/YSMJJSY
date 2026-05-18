@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { applyMemoryGovernanceAction } from './agent/memories/[id].put'
+import { applyMemoryGovernanceAction, governMemoryWithTool } from './agent/memories/[id].put'
 
 describe('agent memory api helpers', () => {
   it('archives a memory and records before and after snapshots', () => {
@@ -31,5 +31,24 @@ describe('agent memory api helpers', () => {
     expect(result.status).toBe('archived')
     expect(updateMemory).toHaveBeenCalled()
     expect(addMemoryEvent).toHaveBeenCalled()
+  })
+
+  it('governs memory through star.governMemory tool', async () => {
+    const execute = vi.fn(async () => ({ ok: true, output: { id: 'memory_1', status: 'archived' } }))
+
+    const result = await governMemoryWithTool({
+      toolName: 'star.governMemory',
+      memoryId: 'memory_1',
+      action: 'archive',
+      reason: '过期。',
+      registry: { execute },
+    } as any)
+
+    expect(result.status).toBe('archived')
+    expect(execute).toHaveBeenCalledWith('star.governMemory', {
+      memoryId: 'memory_1',
+      action: 'archive',
+      reason: '过期。',
+    })
   })
 })

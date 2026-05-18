@@ -11,6 +11,9 @@ import { markKeyActivity } from '../services/key-activity'
 import { getDefaultMusicPrompt } from '../services/media'
 import { createMiniMaxClient } from '../services/minimax'
 import { recordMediaObservation } from './video/tasks.post'
+import { createAgentToolRegistry } from '../services/agent-runtime'
+import { registerStarAgentTools } from '../services/star-agent-tools'
+import { generateMediaWithTool } from './image.post'
 
 const musicBodySchema = z.object({
   prompt: z.string().trim().max(800).optional(),
@@ -29,8 +32,23 @@ export default defineEventHandler(async (event) => {
     apiKey: config.minimaxApiKey,
     groupId: config.minimaxGroupId,
   })
+  const registry = createAgentToolRegistry()
+  const prompt = body.data.prompt || getDefaultMusicPrompt()
 
-  const result = await withMiniMaxErrorBoundary(() => client.generateMusic(body.data.prompt || getDefaultMusicPrompt()), 'Music generation failed')
+  registerStarAgentTools(registry, {
+    media: {
+      generateMusic: value => client.generateMusic(value),
+    },
+  })
+
+  const result = await withMiniMaxErrorBoundary(
+    () => generateMediaWithTool({
+      toolName: 'star.generateMusic',
+      prompt,
+      registry,
+    }),
+    'Music generation failed',
+  )
 
   if (keyId) {
     markKeyActivity(config.sqlitePath, keyId, 'media')

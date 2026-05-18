@@ -14,6 +14,8 @@ import { buildAgentEvent } from '../../services/agent-events'
 import { markKeyActivity } from '../../services/key-activity'
 import { normalizeMediaPrompt } from '../../services/media'
 import { createMiniMaxClient } from '../../services/minimax'
+import { createAgentToolRegistry } from '../../services/agent-runtime'
+import { registerStarAgentTools } from '../../services/star-agent-tools'
 
 const videoBodySchema = z.object({
   prompt: z.string().trim().min(1).max(1000),
@@ -70,9 +72,16 @@ export default defineEventHandler(async (event) => {
     apiKey: config.minimaxApiKey,
     groupId: config.minimaxGroupId,
   })
+  const registry = createAgentToolRegistry()
   const now = new Date().toISOString()
   const id = nanoid()
   const prompt = normalizeMediaPrompt(body.data.prompt)
+
+  registerStarAgentTools(registry, {
+    media: {
+      createVideoTask: value => client.createVideoTask(value),
+    },
+  })
 
   repo.addMediaTask({
     id,
@@ -88,7 +97,15 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
-    const result = await withMiniMaxErrorBoundary(() => client.createVideoTask(prompt), 'Video task failed')
+    const result = await withMiniMaxErrorBoundary(async () => {
+      const toolResult = await registry.execute('star.generateVideo', { prompt })
+
+      if (!toolResult.ok) {
+        throw new Error(toolResult.error ?? 'Video task failed')
+      }
+
+      return toolResult.output as { providerTaskId?: string }
+    }, 'Video task failed')
 
     if (!result.providerTaskId) {
       throw new Error('MiniMax did not return a video task id')

@@ -13,6 +13,8 @@ import {
   type MemoryRecord,
 } from '../../../db/sqlite'
 import { buildAgentEvent } from '../../../services/agent-events'
+import { createAgentToolRegistry, type AgentToolRegistry } from '../../../services/agent-runtime'
+import { registerStarAgentTools } from '../../../services/star-agent-tools'
 import { requireAgentKey } from '../core.get'
 
 type MemoryGovernanceInput = {
@@ -122,6 +124,30 @@ export function applyMemoryGovernanceAction(input: MemoryGovernanceInput) {
   }
 }
 
+export async function governMemoryWithTool(input: {
+  toolName: 'star.governMemory'
+  memoryId: string
+  action: MemoryGovernanceAction
+  reason: string
+  registry: Pick<AgentToolRegistry, 'execute'>
+}) {
+  const payload = {
+    memoryId: input.memoryId,
+    action: input.action,
+    reason: input.reason,
+  }
+  const result = await input.registry.execute(input.toolName, payload)
+
+  if (!result.ok) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: result.error ?? 'Memory governance failed',
+    })
+  }
+
+  return result.output as { id: string, status: string, importance?: number }
+}
+
 function parseMemoryGovernanceBody(body: unknown) {
   if (body && typeof body === 'object') {
     const input = body as { action?: unknown, reason?: unknown }
@@ -160,14 +186,23 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const now = new Date().toISOString()
 
-  const result = applyMemoryGovernanceAction({
+  const memories = createMemoryRepository(config.sqlitePath)
+  const memoryEvents = createMemoryEventRepository(config.sqlitePath)
+  const registry = createAgentToolRegistry()
+
+  registerStarAgentTools(registry, {
     keyId,
+    now,
+    memories,
+    memoryEvents,
+  })
+
+  const result = await governMemoryWithTool({
+    toolName: 'star.governMemory',
     memoryId,
     action: body.action,
     reason: body.reason,
-    now,
-    memories: createMemoryRepository(config.sqlitePath),
-    events: createMemoryEventRepository(config.sqlitePath),
+    registry,
   })
 
   try {
