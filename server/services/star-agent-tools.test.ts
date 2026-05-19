@@ -8,8 +8,10 @@ describe('star agent tools', () => {
     const registry = createAgentToolRegistry()
 
     registerStarAgentTools(registry, {} as any)
+    const tools = registry.list()
+    const toolByName = (name: string) => tools.find(tool => tool.name === name)
 
-    expect(registry.list().map(tool => tool.name)).toEqual(expect.arrayContaining([
+    expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
       'star.previewDesign',
       'star.publishWork',
       'star.governMemory',
@@ -18,6 +20,51 @@ describe('star agent tools', () => {
       'star.generateVideo',
     ]))
     expect(registry.get('star.publishWork')?.approvalRequired).toBe(true)
+    expect(toolByName('star.generateImage')).toMatchObject({
+      title: '生成图片',
+      category: 'media',
+      behavior: 'create',
+      aliases: expect.arrayContaining(['画一张', '图片']),
+      inputSchema: { prompt: 'string' },
+    })
+    expect(toolByName('star.generateMusic')).toMatchObject({
+      title: '生成音乐',
+      category: 'media',
+      behavior: 'create',
+      aliases: expect.arrayContaining(['音乐']),
+      inputSchema: { prompt: 'string' },
+    })
+    expect(toolByName('star.generateVideo')).toMatchObject({
+      title: '生成视频',
+      category: 'media',
+      behavior: 'create',
+      aliases: expect.arrayContaining(['视频']),
+      inputSchema: { prompt: 'string' },
+    })
+    expect(toolByName('star.governMemory')).toMatchObject({
+      title: '治理记忆',
+      category: 'memory',
+      behavior: 'mutate',
+      inputSchema: { memoryId: 'string', action: 'string', reason: 'string' },
+    })
+    expect(toolByName('star.publishWork')).toMatchObject({
+      title: '发布作品',
+      category: 'publish',
+      behavior: 'publish',
+      inputSchema: { workId: 'string' },
+    })
+    expect(toolByName('star.previewDesign')).toMatchObject({
+      title: '预览设计',
+      category: 'design',
+      behavior: 'mutate',
+      inputSchema: { instruction: 'string' },
+    })
+    expect(toolByName('star.commitDesign')).toMatchObject({
+      title: '提交设计',
+      category: 'design',
+      behavior: 'mutate',
+      inputSchema: { version: 'number' },
+    })
   })
 
   it('executes publish work through injected repositories', async () => {

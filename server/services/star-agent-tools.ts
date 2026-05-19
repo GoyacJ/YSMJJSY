@@ -83,7 +83,13 @@ async function runTool(action: () => Promise<unknown> | unknown): Promise<AgentT
 export function registerStarAgentTools(registry: AgentToolRegistry, context: StarAgentToolContext) {
   registry.register({
     name: 'star.previewDesign',
+    title: '预览设计',
     description: 'Preview a star page design change.',
+    category: 'design',
+    behavior: 'mutate',
+    aliases: ['预览设计', '改页面', '设计草稿'],
+    whenToUse: '用户要求预览页面设计变更，或确认了设计修改建议。',
+    inputSchema: { instruction: 'string' },
     riskLevel: 'high',
     approvalRequired: true,
     execute: input => runTool(() => {
@@ -95,7 +101,13 @@ export function registerStarAgentTools(registry: AgentToolRegistry, context: Sta
 
   registry.register({
     name: 'star.commitDesign',
+    title: '提交设计',
     description: 'Commit a star page design change.',
+    category: 'design',
+    behavior: 'mutate',
+    aliases: ['提交设计', '应用设计', '保存页面'],
+    whenToUse: '用户明确要求应用已预览的页面设计变更。',
+    inputSchema: { version: 'number' },
     riskLevel: 'high',
     approvalRequired: true,
     execute: input => runTool(() => input),
@@ -103,7 +115,13 @@ export function registerStarAgentTools(registry: AgentToolRegistry, context: Sta
 
   registry.register({
     name: 'star.publishWork',
+    title: '发布作品',
     description: 'Publish a private star work.',
+    category: 'publish',
+    behavior: 'publish',
+    aliases: ['发布', '公开', '展示作品'],
+    whenToUse: '用户明确要求把已有私密作品发布为公开作品。',
+    inputSchema: { workId: 'string' },
     riskLevel: 'high',
     approvalRequired: true,
     execute: input => runTool(() => {
@@ -128,7 +146,13 @@ export function registerStarAgentTools(registry: AgentToolRegistry, context: Sta
 
   registry.register({
     name: 'star.governMemory',
+    title: '治理记忆',
     description: 'Apply memory governance.',
+    category: 'memory',
+    behavior: 'mutate',
+    aliases: ['整理记忆', '删除记忆', '归档记忆', '调整记忆'],
+    whenToUse: '用户明确要求确认、降级、归档、拒绝或删除某条记忆。',
+    inputSchema: { memoryId: 'string', action: 'string', reason: 'string' },
     riskLevel: 'medium',
     approvalRequired: true,
     execute: input => runTool(() => {
@@ -190,7 +214,13 @@ export function registerStarAgentTools(registry: AgentToolRegistry, context: Sta
 
   registry.register({
     name: 'star.generateImage',
+    title: '生成图片',
     description: 'Generate an image artifact.',
+    category: 'media',
+    behavior: 'create',
+    aliases: ['画一张', '图片', '插画', '海报'],
+    whenToUse: '用户明确要求生成静态画面，或确认了图片生成建议。',
+    inputSchema: { prompt: 'string' },
     riskLevel: 'medium',
     approvalRequired: false,
     execute: input => runTool(() => {
@@ -202,7 +232,13 @@ export function registerStarAgentTools(registry: AgentToolRegistry, context: Sta
 
   registry.register({
     name: 'star.generateMusic',
+    title: '生成音乐',
     description: 'Generate a music artifact.',
+    category: 'media',
+    behavior: 'create',
+    aliases: ['音乐', '写首歌', '配乐', '生成音乐'],
+    whenToUse: '用户明确要求生成音乐、歌曲或配乐。',
+    inputSchema: { prompt: 'string' },
     riskLevel: 'medium',
     approvalRequired: false,
     execute: input => runTool(() => {
@@ -214,7 +250,13 @@ export function registerStarAgentTools(registry: AgentToolRegistry, context: Sta
 
   registry.register({
     name: 'star.generateVideo',
+    title: '生成视频',
     description: 'Generate a video artifact.',
+    category: 'media',
+    behavior: 'create',
+    aliases: ['视频', '短片', '生成视频'],
+    whenToUse: '用户明确要求生成动态视频或短片。',
+    inputSchema: { prompt: 'string' },
     riskLevel: 'medium',
     approvalRequired: false,
     execute: input => runTool(() => {
