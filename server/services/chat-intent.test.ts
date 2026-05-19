@@ -7,12 +7,13 @@ describe('resolveChatIntent', () => {
     expect(resolveChatIntent({ message: '随便聊聊', forcedIntent: 'image' })).toBe('image')
   })
 
-  it('detects image intent', () => {
-    expect(resolveChatIntent({ message: '画一张月光下的信' })).toBe('image')
+  it('does not route keyword-like messages without an explicit compatibility intent', () => {
+    expect(resolveChatIntent({ message: '画一张月光下的信' })).toBe('chat')
+    expect(resolveChatIntent({ message: '读给我听' })).toBe('chat')
   })
 
-  it('detects audio intent', () => {
-    expect(resolveChatIntent({ message: '读给我听' })).toBe('audio')
+  it('treats auto as normal chat so the planner can decide', () => {
+    expect(resolveChatIntent({ message: '画一张月光下的信', forcedIntent: 'auto' })).toBe('chat')
   })
 
   it('defaults to chat', () => {
