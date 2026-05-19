@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentToolRegistry } from './agent-runtime'
 import type { StarChatTurnPlan } from './star-chat-planner'
-import { normalizeStarChatToolCalls } from './star-chat-tool-execution'
+import { executeStarChatToolCalls, normalizeStarChatToolCalls } from './star-chat-tool-execution'
 
 function createRegistry() {
   const registry = createAgentToolRegistry()
@@ -99,5 +99,151 @@ describe('star chat tool execution', () => {
       registry: createRegistry(),
       reply: '',
     })).toHaveLength(4)
+  })
+
+  it('creates a waiting approval task for proposed calls', async () => {
+    const tasks = { addTask: vi.fn(), updateTask: vi.fn() }
+    const events = { addEvent: vi.fn() }
+    const registry = createRegistry()
+    const calls = normalizeStarChatToolCalls({
+      plan: {
+        reply: '',
+        toolSearches: [],
+        toolCalls: [{
+          toolName: 'star.generateImage',
+          input: { prompt: '星空' },
+          mode: 'propose',
+          evidence: '用户暗示想要图片。',
+          reason: '需要确认。',
+        }],
+      },
+      registry,
+      reply: '',
+    })
+
+    await expect(executeStarChatToolCalls({
+      agentId: 'agent_1',
+      now: '2026-05-19T00:00:00.000Z',
+      calls,
+      tasks,
+      events,
+      registry,
+      policy: { autoRunLowRiskTasks: false } as any,
+    })).resolves.toEqual([
+      expect.objectContaining({
+        toolName: 'star.generateImage',
+        status: 'waiting_approval',
+        inboxItemId: expect.stringMatching(/^task_approval:/),
+      }),
+    ])
+    expect(tasks.addTask).toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }))
+    expect(tasks.updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: 'waiting_approval' }))
+  })
+
+  it('runs explicit low-risk retrieval immediately', async () => {
+    const tasks = { addTask: vi.fn(), updateTask: vi.fn() }
+    const events = { addEvent: vi.fn() }
+    const registry = createAgentToolRegistry()
+
+    registry.register({
+      name: 'star.searchMemories',
+      description: 'Search memories.',
+      riskLevel: 'low',
+      approvalRequired: false,
+      execute: vi.fn(),
+    })
+
+    await executeStarChatToolCalls({
+      agentId: 'agent_1',
+      now: '2026-05-19T00:00:00.000Z',
+      calls: [{
+        toolName: 'star.searchMemories',
+        input: { query: '星空' },
+        mode: 'execute',
+        evidence: '',
+        reason: '',
+        status: 'ready',
+      }],
+      tasks,
+      events,
+      registry: {
+        get: registry.get,
+        execute: vi.fn(async () => ({ ok: true, output: { memories: [] } })),
+      },
+      policy: { autoRunLowRiskTasks: true } as any,
+    })
+
+    expect(tasks.updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: 'completed' }))
+  })
+
+  it('requires approval for high-risk tools even when execution was requested', async () => {
+    const tasks = { addTask: vi.fn(), updateTask: vi.fn() }
+    const events = { addEvent: vi.fn() }
+    const registry = createAgentToolRegistry()
+
+    registry.register({
+      name: 'star.publishWork',
+      description: 'Publish work.',
+      riskLevel: 'high',
+      approvalRequired: true,
+      execute: vi.fn(),
+    })
+
+    await expect(executeStarChatToolCalls({
+      agentId: 'agent_1',
+      now: '2026-05-19T00:00:00.000Z',
+      calls: [{
+        toolName: 'star.publishWork',
+        input: { workId: 'work_1' },
+        mode: 'execute',
+        evidence: '',
+        reason: '',
+        status: 'ready',
+      }],
+      tasks,
+      events,
+      registry,
+      policy: { requireApprovalForPublishing: true } as any,
+    })).resolves.toEqual([
+      expect.objectContaining({ status: 'waiting_approval' }),
+    ])
+  })
+
+  it('returns a safe status when policy denies a tool call', async () => {
+    const tasks = { addTask: vi.fn(), updateTask: vi.fn() }
+    const events = { addEvent: vi.fn() }
+    const registry = createAgentToolRegistry()
+
+    registry.register({
+      name: 'star.writeMemory',
+      description: 'Write memory.',
+      riskLevel: 'medium',
+      approvalRequired: false,
+      execute: vi.fn(),
+    })
+
+    await expect(executeStarChatToolCalls({
+      agentId: 'agent_1',
+      now: '2026-05-19T00:00:00.000Z',
+      calls: [{
+        toolName: 'star.writeMemory',
+        input: { content: 'secret topic' },
+        mode: 'execute',
+        evidence: '',
+        reason: '',
+        status: 'ready',
+      }],
+      tasks,
+      events,
+      registry,
+      policy: {
+        disallowedMemoryTopics: ['secret'],
+      } as any,
+    })).resolves.toEqual([
+      expect.objectContaining({
+        toolName: 'star.writeMemory',
+        status: 'denied',
+      }),
+    ])
   })
 })
