@@ -67,7 +67,34 @@ export type StarChatStreamEvent =
   | { type: 'audio-delta', hex: string }
   | { type: 'music-delta', hex: string }
   | { type: 'status', text: string }
+  | { type: 'tool-status', text: string }
+  | { type: 'tool-confirmation', taskId: string, inboxItemId: string, title: string, summary: string }
   | StarChatApiReply & { type: 'message' }
+
+export const starChatStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('delta'), text: z.string() }),
+  z.object({ type: z.literal('audio-delta'), hex: z.string() }),
+  z.object({ type: z.literal('music-delta'), hex: z.string() }),
+  z.object({ type: z.literal('status'), text: z.string() }),
+  z.object({ type: z.literal('tool-status'), text: z.string() }),
+  z.object({
+    type: z.literal('tool-confirmation'),
+    taskId: z.string(),
+    inboxItemId: z.string(),
+    title: z.string(),
+    summary: z.string(),
+  }),
+  z.object({
+    type: z.literal('message'),
+    reply: z.string(),
+    message: z.object({
+      role: z.literal('assistant'),
+      content: z.string(),
+      parts: z.array(z.record(z.string(), z.unknown())),
+    }),
+    taskId: z.string().optional(),
+  }),
+])
 
 function buildLetterContext() {
   const paragraphs = letterParagraphs.map(item => `- ${item.text}`).join('\n')

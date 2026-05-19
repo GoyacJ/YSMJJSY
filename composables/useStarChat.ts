@@ -46,6 +46,8 @@ export type StarChatStreamEvent =
   | { type: 'audio-delta'; hex: string }
   | { type: 'music-delta'; hex: string }
   | { type: 'status'; text: string }
+  | { type: 'tool-status'; text: string }
+  | { type: 'tool-confirmation'; taskId: string; inboxItemId: string; title: string; summary: string }
   | { type: 'message'; reply: string; message: StarChatMessage }
   | { type: 'error'; message: string }
 

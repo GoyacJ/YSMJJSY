@@ -1,8 +1,28 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildWorksFromAssistantMessage, recordChatObservations, runAgentLearning, scheduleAgentSleepAfterChat } from './chat/stream.post'
-import { buildStarChatMessages, streamStarChatReply } from '../services/star-chat'
+import { buildStarChatMessages, starChatStreamEventSchema, streamStarChatReply } from '../services/star-chat'
 
 describe('chat api helpers', () => {
+  it('accepts chat tool stream events', () => {
+    expect(starChatStreamEventSchema.parse({ type: 'tool-status', text: '正在准备工具。' })).toEqual({
+      type: 'tool-status',
+      text: '正在准备工具。',
+    })
+    expect(starChatStreamEventSchema.parse({
+      type: 'tool-confirmation',
+      taskId: 'task_1',
+      inboxItemId: 'task_approval:task_1',
+      title: '发布作品',
+      summary: '发布前需要确认。',
+    })).toEqual({
+      type: 'tool-confirmation',
+      taskId: 'task_1',
+      inboxItemId: 'task_approval:task_1',
+      title: '发布作品',
+      summary: '发布前需要确认。',
+    })
+  })
+
   it('records chat observations for user and assistant messages', () => {
     const addObservation = vi.fn()
     const addEvent = vi.fn()
