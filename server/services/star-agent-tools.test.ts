@@ -132,4 +132,81 @@ describe('star agent tools', () => {
     })
     expect(JSON.stringify(result.output)).not.toContain('raw-audio')
   })
+
+  it('searches memory summaries without exposing private fields', async () => {
+    const registry = createAgentToolRegistry()
+
+    registerStarAgentTools(registry, {
+      keyId: 'key_1',
+      memorySearch: {
+        search: vi.fn(() => [
+          {
+            id: 'memory_1',
+            content: '用户喜欢短句。',
+            status: 'active',
+            keyId: 'key_1',
+            payloadJson: '{"secret":true}',
+          },
+        ]),
+      },
+    } as any)
+
+    const result = await registry.execute('star.searchMemories', { query: '短句', limit: 3 })
+
+    expect(result).toEqual({
+      ok: true,
+      output: {
+        memories: [
+          {
+            id: 'memory_1',
+            content: '用户喜欢短句。',
+            status: 'active',
+          },
+        ],
+      },
+    })
+    expect(JSON.stringify(result.output)).not.toContain('key_1')
+    expect(JSON.stringify(result.output)).not.toContain('payloadJson')
+  })
+
+  it('searches work summaries without exposing raw payloads or media data', async () => {
+    const registry = createAgentToolRegistry()
+
+    registerStarAgentTools(registry, {
+      keyId: 'key_1',
+      workSearch: {
+        search: vi.fn(() => [
+          {
+            id: 'work_1',
+            type: 'image',
+            title: '月光星空',
+            summary: '一张星空图。',
+            keyId: 'key_1',
+            payloadJson: '{"base64":"raw"}',
+            previewUrl: 'data:image/png;base64,raw',
+          },
+        ]),
+      },
+    } as any)
+
+    const result = await registry.execute('star.searchWorks', { query: '星空', limit: 3 })
+
+    expect(result).toEqual({
+      ok: true,
+      output: {
+        works: [
+          {
+            id: 'work_1',
+            type: 'image',
+            title: '月光星空',
+            summary: '一张星空图。',
+          },
+        ],
+      },
+    })
+    expect(JSON.stringify(result.output)).not.toContain('key_1')
+    expect(JSON.stringify(result.output)).not.toContain('payloadJson')
+    expect(JSON.stringify(result.output)).not.toContain('data:image')
+    expect(JSON.stringify(result.output)).not.toContain('raw')
+  })
 })

@@ -23,6 +23,20 @@ export type StarAgentToolContext = {
   reply?: {
     speak?: (text: string) => Promise<{ url?: string, base64?: string }>
   }
+  memorySearch?: {
+    search: (
+      keyId: string,
+      query: string,
+      limit: number
+    ) => Array<{ id: string, content: string, status?: string }>
+  }
+  workSearch?: {
+    search: (
+      keyId: string,
+      query: string,
+      limit: number
+    ) => Array<{ id: string, type: string, title: string, summary: string }>
+  }
   works?: {
     getWorkByKey: (keyId: string, id: string) => Pick<AgentWorkRecord, 'id' | 'visibility'> | undefined
     updateWorkVisibility: (keyId: string, id: string, visibility: AgentWorkVisibility, updatedAt: string) => void
@@ -68,6 +82,18 @@ function readMemoryAction(input: unknown): MemoryGovernanceAction {
   throw new Error('Invalid memory action')
 }
 
+function readOptionalLimit(input: unknown, fallback = 5) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return fallback
+  }
+
+  const value = (input as Record<string, unknown>).limit
+
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(Math.max(Math.floor(value), 1), 10)
+    : fallback
+}
+
 async function runTool(action: () => Promise<unknown> | unknown): Promise<AgentToolResult> {
   try {
     return {
@@ -104,6 +130,61 @@ export function registerStarAgentTools(registry: AgentToolRegistry, context: Sta
         type: 'audio',
         status: 'created',
         ...(output.url ? { url: output.url } : {}),
+      }
+    }),
+  })
+
+  registry.register({
+    name: 'star.searchMemories',
+    title: '搜索记忆',
+    description: 'Search sanitized star memory summaries.',
+    category: 'memory',
+    behavior: 'retrieve',
+    aliases: ['查记忆', '搜索记忆', '回忆'],
+    whenToUse: '用户需要查找过往记忆，或需要先定位记忆 id 再治理记忆。',
+    inputSchema: { query: 'string', limit: 'number' },
+    riskLevel: 'low',
+    approvalRequired: false,
+    execute: input => runTool(() => {
+      const keyId = requireContextValue(context.keyId, 'Missing key id')
+      const memorySearch = requireContextValue(context.memorySearch, 'Missing memory search')
+      const query = readStringField(input, 'query')
+      const limit = readOptionalLimit(input)
+
+      return {
+        memories: memorySearch.search(keyId, query, limit).map(memory => ({
+          id: memory.id,
+          content: memory.content,
+          ...(memory.status ? { status: memory.status } : {}),
+        })),
+      }
+    }),
+  })
+
+  registry.register({
+    name: 'star.searchWorks',
+    title: '搜索作品',
+    description: 'Search sanitized star work summaries.',
+    category: 'publish',
+    behavior: 'retrieve',
+    aliases: ['查作品', '搜索作品', '找作品'],
+    whenToUse: '用户需要查找已有作品，或需要先定位作品 id 再发布作品。',
+    inputSchema: { query: 'string', limit: 'number' },
+    riskLevel: 'low',
+    approvalRequired: false,
+    execute: input => runTool(() => {
+      const keyId = requireContextValue(context.keyId, 'Missing key id')
+      const workSearch = requireContextValue(context.workSearch, 'Missing work search')
+      const query = readStringField(input, 'query')
+      const limit = readOptionalLimit(input)
+
+      return {
+        works: workSearch.search(keyId, query, limit).map(work => ({
+          id: work.id,
+          type: work.type,
+          title: work.title,
+          summary: work.summary,
+        })),
       }
     }),
   })
