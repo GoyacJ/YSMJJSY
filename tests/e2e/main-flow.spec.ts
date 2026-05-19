@@ -9,16 +9,43 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   let workVisibility: 'private' | 'public' = 'private'
   let rollbackRestored = false
   let memoryGovernanceApproved = false
+  let plainChatSeen = false
+  let imageGenerationRequests = 0
+  let chatToolApprovalRequested = false
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': forwardedIp })
 
   await page.route('**/api/chat/stream', async (route) => {
     const body = route.request().postDataJSON()
 
-    if (body.intent === 'image') {
+    if (body.intent === 'auto' && body.message === '这封信是真的吗？') {
+      plainChatSeen = true
+    }
+
+    if (body.intent === 'auto' && body.message === '这段回忆像一张照片，可以处理吗？') {
       await route.fulfill({
         contentType: 'text/event-stream',
         body: [
+          `data: ${JSON.stringify({
+            type: 'tool-confirmation',
+            taskId: 'task_image_suggestion',
+            inboxItemId: 'task_approval:task_image_suggestion',
+            title: '生成图片建议',
+            summary: '建议生成图片前需要确认。',
+          })}`,
+          'data: [DONE]',
+          '',
+        ].join('\n\n'),
+      })
+      return
+    }
+
+    if (body.intent === 'image') {
+      imageGenerationRequests += 1
+      await route.fulfill({
+        contentType: 'text/event-stream',
+        body: [
+          `data: ${JSON.stringify({ type: 'tool-status', text: '正在生成图片。' })}`,
           `data: ${JSON.stringify({
             type: 'message',
             reply: '画好了。',
@@ -26,6 +53,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
               role: 'assistant',
               content: '画好了。',
               parts: [
+                { type: 'status', text: '正在生成图片。' },
                 { type: 'text', text: '画好了。' },
                 { type: 'image', url: generatedImageUrl },
               ],
@@ -262,8 +290,13 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   })
 
   await page.route('**/api/agents/current/inbox/*/approve', async (route) => {
-    if (route.request().url().includes('memory_governance')) {
+    const requestUrl = decodeURIComponent(route.request().url())
+
+    if (requestUrl.includes('memory_governance')) {
       memoryGovernanceApproved = true
+    }
+    if (requestUrl.includes('task_approval:task_image_suggestion')) {
+      chatToolApprovalRequested = true
     }
     await route.fulfill({
       contentType: 'application/json',
@@ -448,6 +481,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.getByLabel('和星信说话').fill('这封信是真的吗？')
   await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('这句我会记得。')).toBeVisible()
+  expect(plainChatSeen).toBe(true)
   await page.getByRole('button', { name: '打开星信设置' }).click()
   const settingsDialog = page.getByRole('dialog', { name: '星信设置' })
   await expect(settingsDialog).toBeVisible()
@@ -487,12 +521,24 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.getByText('这封信里的星光')).toHaveCount(0)
   await expect(page.locator('.star-orbit-group').first()).toBeVisible()
 
-  await clickChatTool('画一张')
-  await page.getByLabel('和星信说话').fill('画一张月光星空')
+  await clickChatTool('生成图片')
+  await page.getByLabel('和星信说话').fill('月光星空')
   await page.getByLabel('和星信说话').press('Enter')
+  await expect(page.getByText('正在生成图片。')).toBeVisible()
   await expect(page.getByText('画好了。')).toBeVisible()
   await expect(page.locator('.star-orbit-stage img[alt="生成的图片"]')).toBeVisible()
+  expect(imageGenerationRequests).toBe(1)
   await expect(page.locator('.generated-asset')).toHaveCount(0)
+
+  const imageCountBeforeSuggestion = await page.locator('.star-orbit-stage img[alt="生成的图片"]').count()
+  await page.getByLabel('和星信说话').fill('这段回忆像一张照片，可以处理吗？')
+  await page.getByLabel('和星信说话').press('Enter')
+  await expect(page.getByText('生成图片建议')).toBeVisible()
+  await expect(page.getByText('建议生成图片前需要确认。')).toBeVisible()
+  expect(await page.locator('.star-orbit-stage img[alt="生成的图片"]').count()).toBe(imageCountBeforeSuggestion)
+  expect(imageGenerationRequests).toBe(1)
+  await page.getByRole('button', { name: '批准工具请求' }).click()
+  expect(chatToolApprovalRequested).toBe(true)
 
   await page.request.post('/api/design/commit', {
     data: {
