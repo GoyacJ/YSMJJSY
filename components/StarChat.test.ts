@@ -812,6 +812,62 @@ describe('StarChat', () => {
     expect(wrapper.get('img[alt="生成的图片"]').attributes('src')).toBe('https://example.com/star.png')
   })
 
+  it('adds a streamed tool confirmation card and approves it inline', async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 200 }))
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await onEvent({
+        type: 'tool-confirmation',
+        taskId: 'task_1',
+        inboxItemId: 'task_approval:task_1',
+        title: '发布作品',
+        summary: '发布前需要确认。',
+      })
+      return { reply: '' }
+    })
+    vi.stubGlobal('fetch', fetch)
+    const wrapper = mountStarChat({ props: { sendMessageStream } })
+
+    await wrapper.find('textarea').setValue('发布这张图')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('发布作品')
+    expect(wrapper.text()).toContain('发布前需要确认。')
+
+    await wrapper.get('button[aria-label="批准工具请求"]').trigger('click')
+
+    expect(fetch).toHaveBeenCalledWith('/api/agents/current/inbox/task_approval%3Atask_1/approve', {
+      method: 'POST',
+      headers: expect.any(Object),
+    })
+  })
+
+  it('rejects streamed tool confirmations inline', async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 200 }))
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await onEvent({
+        type: 'tool-confirmation',
+        taskId: 'task_2',
+        inboxItemId: 'task_approval:task_2',
+        title: '发布作品',
+        summary: '暂不发布。',
+      })
+      return { reply: '' }
+    })
+    vi.stubGlobal('fetch', fetch)
+    const wrapper = mountStarChat({ props: { sendMessageStream } })
+
+    await wrapper.find('textarea').setValue('先别发布')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    await wrapper.get('button[aria-label="拒绝工具请求"]').trigger('click')
+
+    expect(fetch).toHaveBeenCalledWith('/api/agents/current/inbox/task_approval%3Atask_2/reject', {
+      method: 'POST',
+      headers: expect.any(Object),
+    })
+  })
+
   it('marks thread active after user interaction', async () => {
     const sendMessageStream = createStreamReply('这封信是真的。')
     const wrapper = mountStarChat({

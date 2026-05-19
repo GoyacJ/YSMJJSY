@@ -18,6 +18,7 @@ export type StarChatPart =
   | { type: 'music'; url?: string; base64?: string }
   | { type: 'video'; url?: string }
   | { type: 'status'; text: string }
+  | { type: 'tool_confirmation'; taskId: string; inboxItemId: string; title: string; summary: string; status?: 'pending' | 'approved' | 'rejected' }
 
 export type StarChatAttachment = {
   kind: AttachmentKind

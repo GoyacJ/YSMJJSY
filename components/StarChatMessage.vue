@@ -12,6 +12,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   copy: [message: StarChatMessage]
   activate: []
+  approveTool: [part: Extract<StarChatPart, { type: 'tool_confirmation' }>]
+  rejectTool: [part: Extract<StarChatPart, { type: 'tool_confirmation' }>]
 }>()
 
 const messageClass = computed(() => ({
@@ -60,6 +62,28 @@ function isMediaPart(part: StarChatPart) {
           :role="message.role"
         />
         <span v-else-if="part.type === 'status'" class="star-chat-message__status">{{ part.text }}</span>
+        <section v-else-if="part.type === 'tool_confirmation'" class="star-chat-message__tool-confirmation">
+          <strong>{{ part.title }}</strong>
+          <p>{{ part.summary }}</p>
+          <div class="star-chat-message__tool-actions">
+            <button
+              type="button"
+              aria-label="批准工具请求"
+              :disabled="part.status === 'approved' || part.status === 'rejected'"
+              @click.stop="emit('approveTool', part)"
+            >
+              批准
+            </button>
+            <button
+              type="button"
+              aria-label="拒绝工具请求"
+              :disabled="part.status === 'approved' || part.status === 'rejected'"
+              @click.stop="emit('rejectTool', part)"
+            >
+              拒绝
+            </button>
+          </div>
+        </section>
         <StarMediaCard v-else-if="isMediaPart(part)" :part="part" />
       </template>
     </template>

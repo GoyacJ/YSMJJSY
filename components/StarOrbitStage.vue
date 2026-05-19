@@ -26,6 +26,8 @@ const emit = defineEmits<{
   copy: [message: StarChatMessage]
   activate: [index: number]
   interact: []
+  approveTool: [part: Extract<StarChatPart, { type: 'tool_confirmation' }>]
+  rejectTool: [part: Extract<StarChatPart, { type: 'tool_confirmation' }>]
 }>()
 
 const activeMemoryId = ref<string | null>(null)
@@ -168,6 +170,10 @@ function getMediaParts(message: StarChatMessage | undefined) {
   return message?.parts?.filter((part): part is Extract<StarChatPart, { type: 'audio' | 'image' | 'music' | 'video' }> => ['audio', 'image', 'music', 'video'].includes(part.type)) ?? []
 }
 
+function getToolConfirmationParts(message: StarChatMessage | undefined) {
+  return message?.parts?.filter((part): part is Extract<StarChatPart, { type: 'tool_confirmation' }> => part.type === 'tool_confirmation') ?? []
+}
+
 function getGroupStyle(group: OrbitGroup) {
   return {
     '--orbit-x': `${group.position.x}%`,
@@ -279,6 +285,32 @@ function copyGroupMessage(group: OrbitGroup) {
               :part="part"
             />
           </div>
+          <section
+            v-for="(part, partIndex) in getToolConfirmationParts(group.assistantMessage)"
+            :key="`tool-${partIndex}`"
+            class="star-orbit-group__tool-confirmation"
+          >
+            <strong>{{ part.title }}</strong>
+            <p>{{ part.summary }}</p>
+            <div class="star-orbit-group__tool-actions">
+              <button
+                type="button"
+                aria-label="批准工具请求"
+                :disabled="part.status === 'approved' || part.status === 'rejected'"
+                @click.stop="emit('approveTool', part)"
+              >
+                批准
+              </button>
+              <button
+                type="button"
+                aria-label="拒绝工具请求"
+                :disabled="part.status === 'approved' || part.status === 'rejected'"
+                @click.stop="emit('rejectTool', part)"
+              >
+                拒绝
+              </button>
+            </div>
+          </section>
         </div>
 
         <button

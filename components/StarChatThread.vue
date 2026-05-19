@@ -11,6 +11,8 @@ const emit = defineEmits<{
   copy: [message: StarChatMessage]
   activate: [index: number]
   interact: []
+  approveTool: [part: NonNullable<StarChatMessage['parts']>[number]]
+  rejectTool: [part: NonNullable<StarChatMessage['parts']>[number]]
 }>()
 </script>
 
@@ -29,6 +31,8 @@ const emit = defineEmits<{
       :active="activeMessageIndex === index"
       @activate="emit('activate', index)"
       @copy="emit('copy', $event)"
+      @approve-tool="emit('approveTool', $event)"
+      @reject-tool="emit('rejectTool', $event)"
     />
   </div>
 </template>

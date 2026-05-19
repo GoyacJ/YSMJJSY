@@ -16,6 +16,7 @@ import {
 } from '../composables/useStarChat'
 
 type MediaIntent = Exclude<StarChatIntent, 'auto' | 'chat'>
+type ToolConfirmationPart = Extract<StarChatPart, { type: 'tool_confirmation' }>
 
 const props = defineProps<{
   sendMessageStream?: (payload: StarChatSendPayload, onEvent: StarChatStreamHandler) => Promise<StarChatReply>
@@ -270,6 +271,27 @@ async function copyMessage(message: StarChatMessage) {
   await navigator.clipboard.writeText(text)
 }
 
+function getLetterCsrfToken() {
+  if (typeof document === 'undefined') {
+    return ''
+  }
+
+  const cookie = document.cookie
+    .split('; ')
+    .find(item => item.startsWith('letter_csrf='))
+
+  return cookie ? decodeURIComponent(cookie.slice('letter_csrf='.length)) : ''
+}
+
+function withChatCsrfHeaders(headers: HeadersInit = {}) {
+  const token = getLetterCsrfToken()
+
+  return {
+    ...headers,
+    ...(token ? { 'x-letter-csrf': token } : {}),
+  }
+}
+
 function createStreamingAssistantMessage(parts: StarChatPart[]) {
   return {
     role: 'assistant' as const,
@@ -334,6 +356,65 @@ function applyStreamMessage(index: number, message: StarChatMessage) {
   localMessages.value.splice(index, 1, message)
 }
 
+function appendStreamPart(index: number, part: StarChatPart) {
+  const message = localMessages.value[index]
+
+  if (!message) {
+    return
+  }
+
+  applyStreamMessage(index, {
+    ...message,
+    content: message.content || (part.type === 'status' ? part.text : message.content),
+    parts: [...(message.parts ?? []), part],
+  })
+}
+
+function mergeFinalStreamMessage(index: number, message: StarChatMessage) {
+  const existingConfirmations = localMessages.value[index]?.parts
+    ?.filter((part): part is ToolConfirmationPart => part.type === 'tool_confirmation') ?? []
+  const nextParts = [...(message.parts ?? [])]
+  const knownInboxItems = new Set(nextParts
+    .filter((part): part is ToolConfirmationPart => part.type === 'tool_confirmation')
+    .map(part => part.inboxItemId))
+
+  for (const part of existingConfirmations) {
+    if (!knownInboxItems.has(part.inboxItemId)) {
+      nextParts.push(part)
+    }
+  }
+
+  applyStreamMessage(index, {
+    ...message,
+    parts: nextParts,
+  })
+}
+
+function updateToolConfirmationStatus(inboxItemId: string, status: ToolConfirmationPart['status']) {
+  localMessages.value = localMessages.value.map(message => ({
+    ...message,
+    parts: message.parts?.map(part => part.type === 'tool_confirmation' && part.inboxItemId === inboxItemId
+      ? { ...part, status }
+      : part),
+  }))
+}
+
+async function approveInboxItem(part: ToolConfirmationPart) {
+  await fetch(`/api/agents/current/inbox/${encodeURIComponent(part.inboxItemId)}/approve`, {
+    method: 'POST',
+    headers: withChatCsrfHeaders(),
+  })
+  updateToolConfirmationStatus(part.inboxItemId, 'approved')
+}
+
+async function rejectInboxItem(part: ToolConfirmationPart) {
+  await fetch(`/api/agents/current/inbox/${encodeURIComponent(part.inboxItemId)}/reject`, {
+    method: 'POST',
+    headers: withChatCsrfHeaders(),
+  })
+  updateToolConfirmationStatus(part.inboxItemId, 'rejected')
+}
+
 function handleStreamEvent(index: number) {
   return async (event: StarChatStreamEvent) => {
     if (event.type === 'delta') {
@@ -352,8 +433,29 @@ function handleStreamEvent(index: number) {
       return
     }
 
+    if (event.type === 'tool-status') {
+      appendStreamPart(index, { type: 'status', text: event.text })
+      await scrollMessagesToLatest()
+      await waitForVisibleStreamPaint()
+      return
+    }
+
+    if (event.type === 'tool-confirmation') {
+      appendStreamPart(index, {
+        type: 'tool_confirmation',
+        taskId: event.taskId,
+        inboxItemId: event.inboxItemId,
+        title: event.title,
+        summary: event.summary,
+        status: 'pending',
+      })
+      await scrollMessagesToLatest()
+      await waitForVisibleStreamPaint()
+      return
+    }
+
     if (event.type === 'message') {
-      applyStreamMessage(index, event.message)
+      mergeFinalStreamMessage(index, event.message)
       await scrollMessagesToLatest()
     }
   }
@@ -481,6 +583,8 @@ onBeforeUnmount(() => {
         @interact="threadActive = true"
         @activate="activeMessageIndex = $event"
         @copy="copyMessage"
+        @approve-tool="approveInboxItem"
+        @reject-tool="rejectInboxItem"
       />
 
       <div v-if="attachments.length" class="star-chat__attachment-preview">

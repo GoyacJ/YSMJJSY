@@ -99,4 +99,33 @@ describe('StarChatMessage', () => {
     expect(wrapper.get('.star-chat-message__orb').exists()).toBe(true)
     expect(wrapper.get('.star-glyph-text[data-role="assistant"]').text()).toContain('我在。')
   })
+
+  it('renders tool confirmation cards and emits decisions', async () => {
+    const part = {
+      type: 'tool_confirmation' as const,
+      taskId: 'task_1',
+      inboxItemId: 'task_approval:task_1',
+      title: '发布作品',
+      summary: '发布前需要确认。',
+    }
+    const wrapper = mount(StarChatMessage, {
+      props: {
+        message: {
+          role: 'assistant',
+          content: '需要确认。',
+          parts: [part],
+        },
+        active: false,
+      },
+    })
+
+    expect(wrapper.text()).toContain('发布作品')
+    expect(wrapper.text()).toContain('发布前需要确认。')
+
+    await wrapper.get('button[aria-label="批准工具请求"]').trigger('click')
+    await wrapper.get('button[aria-label="拒绝工具请求"]').trigger('click')
+
+    expect(wrapper.emitted('approveTool')).toEqual([[part]])
+    expect(wrapper.emitted('rejectTool')).toEqual([[part]])
+  })
 })
