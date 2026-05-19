@@ -7,13 +7,37 @@ export type AgentModelMessage = {
 
 export type AgentToolRiskLevel = 'low' | 'medium' | 'high'
 
+export type AgentToolCategory =
+  | 'reply'
+  | 'media'
+  | 'memory'
+  | 'design'
+  | 'publish'
+  | 'system'
+
+export type AgentToolBehavior =
+  | 'present_reply'
+  | 'create'
+  | 'retrieve'
+  | 'mutate'
+  | 'publish'
+
+export type AgentToolMetadata = {
+  title?: string
+  category?: AgentToolCategory
+  behavior?: AgentToolBehavior
+  aliases?: string[]
+  whenToUse?: string
+  inputSchema?: Record<string, unknown>
+}
+
 export type AgentToolResult<Output = unknown> = {
   ok: boolean
   output?: Output
   error?: string
 }
 
-export type AgentTool<Input = unknown, Output = unknown> = {
+export type AgentTool<Input = unknown, Output = unknown> = AgentToolMetadata & {
   name: string
   description: string
   riskLevel: AgentToolRiskLevel
@@ -66,7 +90,13 @@ export function createAgentToolRegistry(): AgentToolRegistry {
     list() {
       return Array.from(tools.values()).map(tool => ({
         name: tool.name,
+        title: tool.title,
         description: tool.description,
+        category: tool.category,
+        behavior: tool.behavior,
+        aliases: tool.aliases,
+        whenToUse: tool.whenToUse,
+        inputSchema: tool.inputSchema,
         riskLevel: tool.riskLevel,
         approvalRequired: tool.approvalRequired,
       }))

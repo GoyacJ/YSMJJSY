@@ -30,6 +30,57 @@ describe('agent runtime seams', () => {
     expect(execute).toHaveBeenCalledWith({ instruction: 'more stars' })
   })
 
+  it('keeps searchable metadata on listed tools', () => {
+    const registry = createAgentToolRegistry()
+
+    registry.register({
+      name: 'star.generateImage',
+      title: '生成图片',
+      description: 'Generate an image artifact.',
+      category: 'media',
+      behavior: 'create',
+      aliases: ['画一张', '图片'],
+      whenToUse: '用户明确要求生成静态画面。',
+      inputSchema: { prompt: 'string' },
+      riskLevel: 'medium',
+      approvalRequired: false,
+      execute: vi.fn(),
+    })
+
+    expect(registry.list()[0]).toMatchObject({
+      name: 'star.generateImage',
+      title: '生成图片',
+      category: 'media',
+      behavior: 'create',
+      aliases: ['画一张', '图片'],
+      whenToUse: '用户明确要求生成静态画面。',
+      inputSchema: { prompt: 'string' },
+    })
+  })
+
+  it('lists tools without metadata safely', () => {
+    const registry = createAgentToolRegistry()
+    const execute = vi.fn()
+
+    registry.register({
+      name: 'legacy.tool',
+      description: 'Existing tool.',
+      riskLevel: 'low',
+      approvalRequired: false,
+      execute,
+    })
+
+    expect(registry.list()).toEqual([
+      {
+        name: 'legacy.tool',
+        description: 'Existing tool.',
+        riskLevel: 'low',
+        approvalRequired: false,
+      },
+    ])
+    expect(registry.get('legacy.tool')?.execute).toBe(execute)
+  })
+
   it('throws when executing an unknown agent tool', async () => {
     const registry = createAgentToolRegistry()
 
