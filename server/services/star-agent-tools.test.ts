@@ -99,4 +99,37 @@ describe('star agent tools', () => {
 
     await expect(registry.execute('star.generateImage', { prompt: 'x' })).resolves.toMatchObject({ ok: true })
   })
+
+  it('runs speak reply through the injected reply presenter without returning raw audio data', async () => {
+    const registry = createAgentToolRegistry()
+    const speak = vi.fn(async () => ({ base64: 'raw-audio' }))
+
+    registerStarAgentTools(registry, {
+      reply: {
+        speak,
+      },
+    } as any)
+
+    expect(registry.list().find(tool => tool.name === 'star.speakReply')).toMatchObject({
+      title: '语音回复',
+      category: 'reply',
+      behavior: 'present_reply',
+      aliases: expect.arrayContaining(['读给我听', '语音回复']),
+      inputSchema: { text: 'string' },
+      riskLevel: 'low',
+      approvalRequired: false,
+    })
+
+    const result = await registry.execute('star.speakReply', { text: '你好' })
+
+    expect(speak).toHaveBeenCalledWith('你好')
+    expect(result).toMatchObject({
+      ok: true,
+      output: {
+        type: 'audio',
+        status: 'created',
+      },
+    })
+    expect(JSON.stringify(result.output)).not.toContain('raw-audio')
+  })
 })

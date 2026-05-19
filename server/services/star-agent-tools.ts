@@ -20,6 +20,9 @@ export type StarAgentToolContext = {
     generateMusic?: (prompt: string) => Promise<unknown>
     createVideoTask?: (prompt: string) => Promise<unknown>
   }
+  reply?: {
+    speak?: (text: string) => Promise<{ url?: string, base64?: string }>
+  }
   works?: {
     getWorkByKey: (keyId: string, id: string) => Pick<AgentWorkRecord, 'id' | 'visibility'> | undefined
     updateWorkVisibility: (keyId: string, id: string, visibility: AgentWorkVisibility, updatedAt: string) => void
@@ -81,6 +84,30 @@ async function runTool(action: () => Promise<unknown> | unknown): Promise<AgentT
 }
 
 export function registerStarAgentTools(registry: AgentToolRegistry, context: StarAgentToolContext) {
+  registry.register({
+    name: 'star.speakReply',
+    title: '语音回复',
+    description: 'Present the current reply as speech.',
+    category: 'reply',
+    behavior: 'present_reply',
+    aliases: ['读给我听', '语音回复', '念给我听'],
+    whenToUse: '用户明确要求把本轮回复读出来或用语音回复。',
+    inputSchema: { text: 'string' },
+    riskLevel: 'low',
+    approvalRequired: false,
+    execute: input => runTool(async () => {
+      const speak = requireContextValue(context.reply?.speak, 'Missing reply speaker')
+      const text = readStringField(input, 'text')
+      const output = await speak(text)
+
+      return {
+        type: 'audio',
+        status: 'created',
+        ...(output.url ? { url: output.url } : {}),
+      }
+    }),
+  })
+
   registry.register({
     name: 'star.previewDesign',
     title: '预览设计',
