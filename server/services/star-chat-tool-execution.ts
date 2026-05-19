@@ -1,15 +1,15 @@
 import type { AgentToolRegistry } from './agent-runtime'
 import type { AgentPolicy } from './agent-policy'
 import type { AgentEventRecord, AgentTaskRecord, AgentTaskType } from '../db/sqlite'
-import type { StarChatToolCall, StarChatTurnPlan } from './star-chat-planner'
+import type { StarChatToolCallAction } from './star-chat-planner'
+import type { StarChatMessagePart } from './star-chat'
 import { createAgentLoop } from './agent-loop'
-import { enqueueAgentTask } from './agent-task-queue'
+import { enqueueAgentTask, requestAgentTaskApproval } from './agent-task-queue'
 
 export type NormalizedStarChatToolCall = {
   toolName: string
   input: Record<string, unknown>
-  mode: StarChatToolCall['mode']
-  evidence: string
+  mode: StarChatToolCallAction['mode']
   reason: string
   status: 'ready' | 'rejected'
   error?: string
@@ -21,12 +21,11 @@ const mediaToolNames = new Set([
   'star.generateVideo',
 ])
 
-function rejectCall(call: StarChatToolCall, error: string): NormalizedStarChatToolCall {
+function rejectCall(call: StarChatToolCallAction, error: string): NormalizedStarChatToolCall {
   return {
     toolName: call.toolName,
     input: call.input,
     mode: call.mode,
-    evidence: call.evidence,
     reason: call.reason,
     status: 'rejected',
     error,
@@ -37,7 +36,7 @@ function hasPrompt(input: Record<string, unknown>) {
   return typeof input.prompt === 'string' && Boolean(input.prompt.trim())
 }
 
-function normalizeInput(call: StarChatToolCall, reply: string) {
+function normalizeInput(call: StarChatToolCallAction, reply: string) {
   if (call.toolName !== 'star.speakReply') {
     return call.input
   }
@@ -49,30 +48,29 @@ function normalizeInput(call: StarChatToolCall, reply: string) {
 }
 
 export function normalizeStarChatToolCalls(input: {
-  plan: StarChatTurnPlan
+  action: StarChatToolCallAction
   registry: Pick<AgentToolRegistry, 'get'>
   reply: string
 }): NormalizedStarChatToolCall[] {
-  return input.plan.toolCalls.slice(0, 4).map((call) => {
-    if (!input.registry.get(call.toolName)) {
-      return rejectCall(call, 'Unknown tool')
-    }
+  const call = input.action
 
-    const normalizedInput = normalizeInput(call, input.reply)
+  if (!input.registry.get(call.toolName)) {
+    return [rejectCall(call, 'Unknown tool')]
+  }
 
-    if (mediaToolNames.has(call.toolName) && !hasPrompt(normalizedInput)) {
-      return rejectCall({ ...call, input: normalizedInput }, 'Missing prompt')
-    }
+  const normalizedInput = normalizeInput(call, input.reply)
 
-    return {
-      toolName: call.toolName,
-      input: normalizedInput,
-      mode: call.mode,
-      evidence: call.evidence,
-      reason: call.reason,
-      status: 'ready',
-    }
-  })
+  if (mediaToolNames.has(call.toolName) && !hasPrompt(normalizedInput)) {
+    return [rejectCall({ ...call, input: normalizedInput }, 'Missing prompt')]
+  }
+
+  return [{
+    toolName: call.toolName,
+    input: normalizedInput,
+    mode: call.mode,
+    reason: call.reason,
+    status: 'ready',
+  }]
 }
 
 type TaskRepository = {
@@ -93,6 +91,7 @@ export type StarChatToolExecutionResult = {
   summary?: string
   error?: string
   result?: Record<string, unknown>
+  chatParts?: StarChatMessagePart[]
 }
 
 function taskTypeForTool(toolName: string): AgentTaskType {
@@ -120,7 +119,7 @@ function taskTypeForTool(toolName: string): AgentTaskType {
 }
 
 function summarizeCall(call: NormalizedStarChatToolCall) {
-  return call.reason || call.evidence || `执行 ${call.toolName}。`
+  return call.reason || `执行 ${call.toolName}。`
 }
 
 function findLatestStatus(
@@ -180,11 +179,33 @@ export async function executeStarChatToolCalls(input: {
       events: input.events,
     })
 
-    await loop.runTask(task)
+    if (call.mode === 'propose') {
+      requestAgentTaskApproval({
+        task,
+        toolName: call.toolName,
+        now: input.now,
+        tasks,
+        events: input.events,
+      })
+
+      results.push({
+        toolName: call.toolName,
+        taskId: task.id,
+        status: 'waiting_approval',
+        inboxItemId: `task_approval:${task.id}`,
+        title: task.title,
+        summary: task.summary,
+      })
+      continue
+    }
+
+    const runResult = await loop.runTask(task)
 
     const update = findLatestStatus(task.id, updates)
-    const status = update?.status === 'failed' && update.error
+    const status = runResult.status === 'denied'
       ? 'denied'
+      : runResult.status === 'failed'
+      ? 'failed'
       : update?.status ?? task.status
 
     results.push({
@@ -196,6 +217,7 @@ export async function executeStarChatToolCalls(input: {
       summary: task.summary,
       ...(update?.error ? { error: update.error } : {}),
       ...(update?.resultJson ? { result: JSON.parse(update.resultJson) as Record<string, unknown> } : {}),
+      ...(runResult.chatParts ? { chatParts: runResult.chatParts as StarChatMessagePart[] } : {}),
     })
   }
 

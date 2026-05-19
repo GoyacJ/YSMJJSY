@@ -1,6 +1,6 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { z } from 'zod'
-import { createKeyProfileRepository } from '../../db/sqlite'
+import { createKeyProfileRepository, defaultStarBoundarySettings, normalizeStarBoundarySettings } from '../../db/sqlite'
 
 export const mbtiValues = [
   'INTJ',
@@ -24,7 +24,20 @@ export const mbtiValues = [
 const profileUpdateSchema = z.object({
   assistantName: z.string().trim().min(1).max(24),
   mbti: z.enum(mbtiValues),
-})
+  boundarySettings: z.object({
+    memoryWriteMode: z.enum(['manual', 'assisted', 'auto']).default(defaultStarBoundarySettings.memoryWriteMode),
+    generatedWorksDefaultVisibility: z.enum(['private', 'public']).default(defaultStarBoundarySettings.generatedWorksDefaultVisibility),
+    requireApprovalForPublishing: z.boolean().default(defaultStarBoundarySettings.requireApprovalForPublishing),
+    requireApprovalForPersonaChange: z.boolean().default(defaultStarBoundarySettings.requireApprovalForPersonaChange),
+    requireApprovalForSensitiveMemory: z.boolean().default(defaultStarBoundarySettings.requireApprovalForSensitiveMemory),
+    disallowedMemoryTopics: z.array(z.string().trim().min(1).max(80)).max(30).default(defaultStarBoundarySettings.disallowedMemoryTopics),
+    allowedMemoryTopics: z.array(z.string().trim().min(1).max(80)).max(30).default(defaultStarBoundarySettings.allowedMemoryTopics),
+    minorMode: z.boolean().default(defaultStarBoundarySettings.minorMode),
+  }).strict().optional(),
+}).transform(value => ({
+  ...value,
+  boundarySettings: value.boundarySettings ? normalizeStarBoundarySettings(value.boundarySettings) : undefined,
+}))
 
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>
 
@@ -75,6 +88,7 @@ export default defineEventHandler(async (event) => {
     mbti: body.mbti,
     configuredAt: now,
     updatedAt: now,
+    boundarySettings: body.boundarySettings ?? current?.boundarySettings,
   })
   repo.markKeyActivity(keyId, {
     activityAt: now,
@@ -86,5 +100,6 @@ export default defineEventHandler(async (event) => {
     assistantName: body.assistantName,
     mbti: body.mbti,
     configured: true,
+    boundarySettings: body.boundarySettings ?? current?.boundarySettings ?? defaultStarBoundarySettings,
   }
 })

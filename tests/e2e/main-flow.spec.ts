@@ -5,24 +5,26 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   const key = `e2e-${testInfo.project.name}-${runId}`
   const forwardedIp = `e2e-${testInfo.project.name}-${runId}`
   const generatedImageUrl = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+  const generatedMusicUrl = 'data:audio/mpeg;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA='
   let sleepCompleted = false
   let workVisibility: 'private' | 'public' = 'private'
-  let rollbackRestored = false
   let memoryGovernanceApproved = false
   let plainChatSeen = false
   let imageGenerationRequests = 0
+  let musicGenerationRequests = 0
   let chatToolApprovalRequested = false
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': forwardedIp })
 
   await page.route('**/api/chat/stream', async (route) => {
     const body = route.request().postDataJSON()
+    expect(body.intent).toBeUndefined()
 
-    if (body.intent === 'auto' && body.message === '这封信是真的吗？') {
+    if (body.message === '这封信是真的吗？') {
       plainChatSeen = true
     }
 
-    if (body.intent === 'auto' && body.message === '这段回忆像一张照片，可以处理吗？') {
+    if (body.message === '这段回忆像一张照片，可以处理吗？') {
       await route.fulfill({
         contentType: 'text/event-stream',
         body: [
@@ -40,7 +42,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
       return
     }
 
-    if (body.intent === 'image') {
+    if (body.message === '生成一张月光星空图片') {
       imageGenerationRequests += 1
       await route.fulfill({
         contentType: 'text/event-stream',
@@ -56,6 +58,32 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
                 { type: 'status', text: '正在生成图片。' },
                 { type: 'text', text: '画好了。' },
                 { type: 'image', url: generatedImageUrl },
+              ],
+            },
+          })}`,
+          'data: [DONE]',
+          '',
+        ].join('\n\n'),
+      })
+      return
+    }
+
+    if (body.message === '制作一个音乐') {
+      musicGenerationRequests += 1
+      await route.fulfill({
+        contentType: 'text/event-stream',
+        body: [
+          `data: ${JSON.stringify({ type: 'tool-status', text: '正在生成音乐。' })}`,
+          `data: ${JSON.stringify({
+            type: 'message',
+            reply: '音乐做好了。',
+            message: {
+              role: 'assistant',
+              content: '音乐做好了。',
+              parts: [
+                { type: 'status', text: '正在生成音乐。' },
+                { type: 'text', text: '音乐做好了。' },
+                { type: 'music', url: generatedMusicUrl },
               ],
             },
           })}`,
@@ -268,6 +296,16 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             createdAt: '2026-05-17T00:00:00.000Z',
           },
         ],
+        records: [
+          {
+            id: 'event_1',
+            type: '失败',
+            title: '模型调用失败',
+            summary: '模型失败。',
+            status: '失败',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
       }),
     })
   })
@@ -342,6 +380,13 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
             previewUrl: generatedImageUrl,
             visibility: workVisibility,
             sourceConversationId: 'conversation_1',
+            payload: {
+              disclosure: {
+                aiGenerated: true,
+                explicitLabel: 'AI 生成',
+                generatedAt: '2026-05-17T00:00:00.000Z',
+              },
+            },
             createdAt: '2026-05-17T00:00:00.000Z',
           },
         ],
@@ -403,29 +448,16 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   })
 
   await page.route('**/api/agent/snapshots/*/restore', async (route) => {
-    rollbackRestored = true
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ restored: true, snapshotId: 'snapshot_1' }),
     })
   })
 
-  async function clickChatTool(name: string) {
-    const visibleTool = page.getByRole('button', { name }).first()
-
-    if (await visibleTool.count()) {
-      await visibleTool.click()
-      return
-    }
-
-    await page.getByRole('button', { name: '添加附件' }).click()
-    await page.getByRole('button', { name }).click()
-  }
-
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
-  await page.getByPlaceholder('输入钥匙').fill(key)
+  await page.getByPlaceholder('输入星球钥匙').fill(key)
   const createResponse = page.waitForResponse(response =>
     response.url().includes('/api/keys') && response.request().method() === 'POST',
   )
@@ -434,6 +466,7 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
 
   await expect(page).toHaveURL('/setup')
   await expect(page.getByLabel('星信设定')).toBeVisible()
+  await expect(page.locator('option[value="public"]')).toHaveCount(0)
   await page.getByRole('textbox', { name: '称呼' }).fill('月光')
   await page.getByRole('combobox', { name: 'MBTI' }).selectOption('INFJ')
   await page.getByRole('button', { name: '保存设定' }).click()
@@ -445,27 +478,80 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await expect(page.locator('.chat-theater')).toBeVisible()
   await expect(page.locator('.chat-theater__atmosphere')).toBeVisible()
   await expect(page.locator('.star-orbit-stage')).toBeVisible()
-  await expect(page.getByRole('button', { name: '打开星AI' })).toBeVisible()
-  await page.getByRole('button', { name: '打开星AI' }).click()
-  await expect(page.getByLabel('星AI')).toBeVisible()
-  await expect(page.getByText('决策收件箱')).toBeVisible()
-  await expect(page.getByText('任务中心')).toBeVisible()
-  await expect(page.getByText('睡眠整理')).toBeVisible()
-  await expect(page.getByText('审计事件')).toBeVisible()
-  await expect(page.getByText('Provider failed')).toBeVisible()
+  await expect(page.getByRole('button', { name: '星球', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '星球', exact: true }).click()
+  const starDialog = page.getByRole('dialog', { name: '星球', exact: true })
+  await expect(starDialog).toBeVisible()
+  await expect(starDialog.getByRole('button', { name: '查看记忆', exact: true })).toBeVisible()
+  await expect(starDialog.getByRole('button', { name: '查看作品', exact: true })).toBeVisible()
+  await expect(starDialog.getByRole('button', { name: '查看边界', exact: true })).toBeVisible()
+  await expect(starDialog.getByRole('button', { name: '查看记录', exact: true })).toBeVisible()
+  await expect(starDialog.getByText('任务中心')).toHaveCount(0)
+  await expect(starDialog.getByText('审计事件')).toHaveCount(0)
+
+  await expect(starDialog.getByRole('dialog', { name: '记忆星球' })).toBeVisible()
+  await expect(starDialog.getByRole('button', { name: '查看进化提案：调整页面' })).toBeVisible()
+  await starDialog.getByRole('button', { name: '查看记忆：用户喜欢短句。' }).click()
+  await expect(starDialog.getByText('重要性')).toBeVisible()
+  await expect(starDialog.getByText('来源 对话 conversation_1')).toBeVisible()
+  await expect(starDialog.getByText('最近记录 确认 · 用户明确表达。')).toBeVisible()
+  await starDialog.getByRole('button', { name: '归档记忆' }).click()
+
+  await starDialog.getByRole('button', { name: '查看作品', exact: true }).click()
+  await expect(starDialog.getByRole('button', { name: '查看星球时间线' })).toHaveCount(0)
+  await expect(starDialog.getByRole('button', { name: '查看智能体作品' })).toHaveCount(0)
+  await expect(starDialog.getByText('月光图')).toBeVisible()
+  await expect(starDialog.getByText('私密').first()).toBeVisible()
+  await expect(starDialog.getByText('AI 生成').first()).toBeVisible()
+  expect(workVisibility).toBe('private')
+  await starDialog.getByRole('button', { name: '查看作品：月光图' }).click()
+  await expect(starDialog.locator('.star-works-panel__detail img[alt="月光图"]')).toBeVisible()
+  await starDialog.getByRole('button', { name: '公开作品' }).click()
+  await expect.poll(() => workVisibility).toBe('public')
+
+  const loadBoundaryResponse = page.waitForResponse(response =>
+    response.url().includes('/api/key/profile') && response.request().method() === 'GET',
+  )
+  await starDialog.getByRole('button', { name: '查看边界', exact: true }).click()
+  expect((await loadBoundaryResponse).ok()).toBe(true)
+  const boundaryDialog = starDialog.getByRole('dialog', { name: '星信设置' })
+  await expect(boundaryDialog).toBeVisible()
+  await boundaryDialog.getByRole('combobox', { name: '记忆写入方式' }).selectOption('auto')
+  await boundaryDialog.getByRole('textbox', { name: '不允许记住的内容' }).fill('家庭住址')
+  await expect(boundaryDialog.getByRole('combobox', { name: '记忆写入方式' })).toHaveValue('auto')
+  const saveBoundaryResponse = page.waitForResponse(response =>
+    response.url().includes('/api/key/profile') && response.request().method() === 'PUT',
+  )
+  await boundaryDialog.getByRole('button', { name: '保存设置' }).click()
+  expect((await saveBoundaryResponse).ok()).toBe(true)
+
+  await starDialog.getByRole('button', { name: '查看记录', exact: true }).click()
+  await expect(starDialog.getByText('模型调用失败')).toBeVisible()
+  await expect(starDialog.getByText('失败 · 失败 · 2026-05-17 00:00:00')).toBeVisible()
+  await expect(starDialog.getByText('provider.failed')).toHaveCount(0)
+  await expect(starDialog.getByText('当前状态')).toHaveCount(0)
+  await expect(starDialog.getByText('最近反思')).toHaveCount(0)
+  await expect(starDialog.getByText('进化历史')).toHaveCount(0)
+
   await page.getByRole('button', { name: '执行' }).click()
   await expect.poll(() => memoryGovernanceApproved).toBe(true)
-  await page.getByRole('button', { name: '生成设计预览' }).click()
+  await page.getByRole('button', { name: '生成页面预览' }).click()
   await expect(page.getByLabel('设计预览')).toBeVisible()
   await expect(page.getByText('银河信笺')).toBeVisible()
   await page.getByRole('button', { name: '放弃' }).click()
-  await page.getByRole('button', { name: '回滚提案' }).click()
-  await expect.poll(() => rollbackRestored).toBe(true)
-  await page.getByRole('button', { name: '让智能体思考' }).click()
-  await expect(page.getByText('整理完成。')).toBeVisible()
-  await expect(page.getByText('短句回信')).toBeVisible()
-  await expect(page.getByText('承接短句偏好')).toBeVisible()
-  await page.getByRole('button', { name: '关闭面板' }).click()
+  await page.getByRole('button', { name: '关闭星球' }).click()
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('button', { name: '星球', exact: true }).click()
+  const reloadedStarDialog = page.getByRole('dialog', { name: '星球', exact: true })
+  const reloadBoundaryResponse = page.waitForResponse(response =>
+    response.url().includes('/api/key/profile') && response.request().method() === 'GET',
+  )
+  await reloadedStarDialog.getByRole('button', { name: '查看边界', exact: true }).click()
+  expect((await reloadBoundaryResponse).ok()).toBe(true)
+  await expect(reloadedStarDialog.getByRole('combobox', { name: '记忆写入方式' })).toHaveValue('auto')
+  await expect(reloadedStarDialog.getByRole('textbox', { name: '不允许记住的内容' })).toHaveValue('家庭住址')
+  await page.getByRole('button', { name: '关闭星球' }).click()
   await expect(page.getByText('这里会慢慢写下只属于这把钥匙的内容。')).toHaveCount(0)
   await expect(page.locator('.star-chat__dock')).not.toHaveAttribute('data-mode', /.+/)
   await expect(page.getByPlaceholder('把想说的话交给这片星空')).toBeVisible()
@@ -482,47 +568,21 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('这句我会记得。')).toBeVisible()
   expect(plainChatSeen).toBe(true)
-  await page.getByRole('button', { name: '打开星信设置' }).click()
-  const settingsDialog = page.getByRole('dialog', { name: '星信设置' })
-  await expect(settingsDialog).toBeVisible()
-  await expect(settingsDialog.getByText('星AI')).toHaveCount(0)
-  await expect(settingsDialog.getByText('智能体核心')).toHaveCount(0)
-  await page.getByRole('button', { name: '关闭设置' }).click()
-  await page.getByRole('button', { name: '打开记忆星球' }).click()
-  const planetDialog = page.getByRole('dialog', { name: '记忆星球' })
-  await expect(planetDialog).toBeVisible()
-  await expect(planetDialog.getByText('星AI')).toHaveCount(0)
-  await expect(planetDialog.getByText('智能体核心')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: '查看进化提案：调整页面' })).toBeVisible()
-  await page.getByRole('button', { name: '查看进化提案：调整页面' }).click()
-  await expect(planetDialog.getByText('让页面更像星空。', { exact: true }).first()).toBeVisible()
-  await expect(page.getByRole('button', { name: '查看记忆：用户喜欢短句。' })).toBeVisible()
-  await page.getByRole('button', { name: '查看记忆：用户喜欢短句。' }).click()
-  await expect(planetDialog.getByText('重要性')).toBeVisible()
-  await expect(planetDialog.getByText('来源 conversation_1')).toBeVisible()
-  await expect(planetDialog.getByText('最近治理动作 confirm · 用户明确表达。')).toBeVisible()
-  await planetDialog.getByRole('button', { name: '归档记忆' }).click()
-  await planetDialog.getByRole('button', { name: '查看星球时间线' }).click()
-  await expect(planetDialog.getByText('2026-05-17')).toBeVisible()
-  await expect(planetDialog.getByText('形成记忆')).toBeVisible()
-  await expect(planetDialog.getByText('高信号')).toBeVisible()
-  await planetDialog.getByRole('button', { name: '查看智能体作品' }).click()
-  await expect(planetDialog.getByText('月光图')).toBeVisible()
-  await expect(planetDialog.locator('.memory-planet-panel__work-preview[alt="月光图"]')).toBeVisible()
-  await planetDialog.getByRole('button', { name: '查看作品：月光图' }).click()
-  await expect(planetDialog.locator('.memory-planet-panel__detail img[alt="月光图"]')).toBeVisible()
-  await planetDialog.getByRole('button', { name: '公开作品' }).click()
+  await page.getByRole('button', { name: '星球', exact: true }).click()
+  const timelineStarDialog = page.getByRole('dialog', { name: '星球', exact: true })
+  await timelineStarDialog.getByRole('button', { name: '查看记忆', exact: true }).click()
+  await expect(timelineStarDialog.getByRole('button', { name: '查看星球时间线' })).toHaveCount(0)
+  await expect(timelineStarDialog.getByRole('button', { name: '查看智能体作品' })).toHaveCount(0)
   const planetBox = await page.locator('.memory-planet-panel').boundingBox()
   const dockBox = await page.locator('.star-chat__dock').boundingBox()
   expect(planetBox).not.toBeNull()
   expect(dockBox).not.toBeNull()
   expect(planetBox!.y + planetBox!.height).toBeLessThan(dockBox!.y)
-  await page.getByRole('button', { name: '关闭记忆星球' }).click()
+  await page.getByRole('button', { name: '关闭星球' }).click()
   await expect(page.getByText('这封信里的星光')).toHaveCount(0)
   await expect(page.locator('.star-orbit-group').first()).toBeVisible()
 
-  await clickChatTool('生成图片')
-  await page.getByLabel('和星信说话').fill('月光星空')
+  await page.getByLabel('和星信说话').fill('生成一张月光星空图片')
   await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('正在生成图片。')).toBeVisible()
   await expect(page.getByText('画好了。')).toBeVisible()
@@ -530,60 +590,33 @@ test('creates a key, configures profile, chats, designs, and re-enters', async (
   expect(imageGenerationRequests).toBe(1)
   await expect(page.locator('.generated-asset')).toHaveCount(0)
 
-  const imageCountBeforeSuggestion = await page.locator('.star-orbit-stage img[alt="生成的图片"]').count()
+  await page.getByLabel('和星信说话').fill('制作一个音乐')
+  await page.getByLabel('和星信说话').press('Enter')
+  await expect(page.getByText('正在生成音乐。')).toBeVisible()
+  await expect(page.getByText('音乐做好了。')).toBeVisible()
+  await expect(page.locator('.star-orbit-stage .star-audio-player[data-kind="music"]')).toBeVisible()
+  await expect(page.locator('.star-orbit-stage audio[data-kind="music"]')).toHaveAttribute('src', generatedMusicUrl)
+  expect(musicGenerationRequests).toBe(1)
+
   await page.getByLabel('和星信说话').fill('这段回忆像一张照片，可以处理吗？')
   await page.getByLabel('和星信说话').press('Enter')
   await expect(page.getByText('生成图片建议')).toBeVisible()
   await expect(page.getByText('建议生成图片前需要确认。')).toBeVisible()
-  expect(await page.locator('.star-orbit-stage img[alt="生成的图片"]').count()).toBe(imageCountBeforeSuggestion)
   expect(imageGenerationRequests).toBe(1)
   await page.getByRole('button', { name: '批准工具请求' }).click()
   expect(chatToolApprovalRequested).toBe(true)
-
-  await page.request.post('/api/design/commit', {
-    data: {
-      prompt: '把页面改成银河和月光',
-      schema: {
-        version: 1,
-        theme: 'moon-note',
-        palette: 'midnight',
-        title: '银河信笺',
-        subtitle: '把这一页改成更像星空的样子。',
-        sections: [
-          { type: 'letter', layout: 'star-trail', text: '这是一段由测试保存的设计。' },
-          { type: 'star-scene', density: 0.8, caption: '保存后，这片星空会留在这把钥匙里。' },
-        ],
-      },
-    },
-  })
-  const worksResponse = await page.request.get('/api/agent/works')
-  const worksBody = await worksResponse.json()
-  const committedDesignWork = worksBody.works.find((work: { type: string }) => work.type === 'page_design')
-  expect(committedDesignWork).toBeTruthy()
-  await page.request.put(`/api/agent/works/${committedDesignWork.id}`, {
-    data: { visibility: 'public' },
-  })
-
-  await page.getByRole('button', { name: '打开星信设置' }).click()
-  await expect(page.getByRole('dialog', { name: '星信设置' })).toBeVisible()
-  await expect(page.getByRole('textbox', { name: '称呼' })).toHaveValue('月光')
-  await expect(page.getByRole('combobox', { name: 'MBTI' })).toHaveValue('INFJ')
-  await page.getByRole('button', { name: '关闭设置' }).click()
 
   await page.reload()
   await page.waitForLoadState('networkidle')
   await page.goto('/')
   await page.waitForLoadState('networkidle')
   await expect(page.getByText('公开星球')).toBeVisible()
-  await expect(page.getByText('月光 / INFJ').first()).toBeVisible()
-  await expect(page.getByText('银河信笺').first()).toBeVisible()
-  await expect(page.getByText('把页面改成银河和月光').first()).toBeVisible()
-  await page.getByPlaceholder('输入钥匙').fill(key)
-  await expect(page.getByPlaceholder('输入钥匙')).toHaveValue(key)
+  await page.getByPlaceholder('输入星球钥匙').fill(key)
+  await expect(page.getByPlaceholder('输入星球钥匙')).toHaveValue(key)
   const unlockResponse = page.waitForResponse(response =>
     response.url().includes('/api/unlock') && response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: '进入' }).click()
+  await page.getByRole('button', { name: '进入星球' }).click()
   expect((await unlockResponse).ok()).toBe(true)
   await expect(page).toHaveURL('/chat')
   await expect(page.getByLabel('星信设定')).toHaveCount(0)

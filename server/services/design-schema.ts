@@ -1,5 +1,20 @@
 import { z } from 'zod'
-import type { StarPageDesignSchema } from '../../types/design-schema'
+import type { GeneratedContentDisclosure, StarPageDesignSchema } from '../../types/design-schema'
+
+export type GeneratedContentDisclosureInput = {
+  explicitLabel?: string
+  provider?: string
+  generatedAt: string
+  sourceWorkId?: string
+}
+
+const generatedContentDisclosureSchema = z.object({
+  aiGenerated: z.literal(true),
+  explicitLabel: z.string().trim().min(1).max(40),
+  provider: z.string().trim().min(1).max(80).optional(),
+  generatedAt: z.string().trim().min(1).max(40),
+  sourceWorkId: z.string().trim().min(1).max(120).optional(),
+})
 
 const letterSectionSchema = z.object({
   type: z.literal('letter'),
@@ -27,6 +42,7 @@ export const starPageDesignSchema = z.object({
   palette: z.enum(['rose-gold', 'midnight', 'paper-moon']),
   title: z.string().trim().min(1).max(80),
   subtitle: z.string().trim().min(1).max(160),
+  disclosure: generatedContentDisclosureSchema.optional(),
   sections: z.array(z.discriminatedUnion('type', [
     letterSectionSchema,
     memoryMapSectionSchema,
@@ -59,6 +75,26 @@ export function createDefaultDesignSchema(): StarPageDesignSchema {
         caption: '每一颗星都可以被重新设计。',
       },
     ],
+  }
+}
+
+export function createGeneratedContentDisclosure(input: GeneratedContentDisclosureInput): GeneratedContentDisclosure {
+  return {
+    aiGenerated: true,
+    explicitLabel: input.explicitLabel ?? 'AI 生成',
+    ...(input.provider ? { provider: input.provider } : {}),
+    generatedAt: input.generatedAt,
+    ...(input.sourceWorkId ? { sourceWorkId: input.sourceWorkId } : {}),
+  }
+}
+
+export function attachGeneratedContentDisclosure<T extends Record<string, unknown>>(
+  payload: T,
+  disclosure: GeneratedContentDisclosureInput,
+): T & { disclosure: GeneratedContentDisclosure } {
+  return {
+    ...payload,
+    disclosure: createGeneratedContentDisclosure(disclosure),
   }
 }
 

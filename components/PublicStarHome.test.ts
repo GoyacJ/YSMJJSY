@@ -40,7 +40,13 @@ describe('PublicStarHome', () => {
             name: '阿月',
             mbti: 'INTJ',
             createdAt: '2026-05-16T00:00:00.000Z',
-            publicWorks: [{ id: 'w1', type: 'image', title: '月光图', summary: '公开作品。' }],
+            publicWorks: [{
+              id: 'w1',
+              type: 'image',
+              title: '月光图',
+              summary: '公开作品。',
+              disclosure: { aiGenerated: true, explicitLabel: 'AI 生成' },
+            }],
           },
         ],
       },
@@ -51,6 +57,7 @@ describe('PublicStarHome', () => {
     expect(wrapper.text()).toContain('公开作品 1')
     expect(wrapper.text()).toContain('月光图')
     expect(wrapper.text()).toContain('公开作品。')
+    expect(wrapper.text()).toContain('AI 生成')
     expect(wrapper.text()).not.toContain('payloadJson')
   })
 

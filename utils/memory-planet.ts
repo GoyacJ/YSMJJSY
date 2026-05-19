@@ -13,6 +13,14 @@ export type MemoryPlanetState = {
     type: string
     importance: number
     confidence: number
+    status?: string
+    sourceConversationId?: string | null
+    latestGovernanceEvent?: {
+      id: string
+      action: string
+      reason: string
+      createdAt: string
+    }
     bright: boolean
     position: PlanetPosition
   }>
@@ -42,14 +50,18 @@ function hashId(id: string) {
   return Array.from(id).reduce((hash, character) => hash + character.charCodeAt(0), 0)
 }
 
+function clampPosition(value: number) {
+  return Math.min(86, Math.max(14, value))
+}
+
 function buildPosition(id: string, index: number, radiusOffset = 0): PlanetPosition {
   const hash = hashId(id)
   const angle = ((index * 137 + hash) % 360) * (Math.PI / 180)
   const radius = 28 + ((hash + index * 17 + radiusOffset) % 24)
 
   return {
-    x: Math.round((50 + Math.cos(angle) * radius) * 100) / 100,
-    y: Math.round((50 + Math.sin(angle) * radius) * 100) / 100,
+    x: Math.round(clampPosition(50 + Math.cos(angle) * radius) * 100) / 100,
+    y: Math.round(clampPosition(50 + Math.sin(angle) * radius) * 100) / 100,
   }
 }
 
@@ -85,6 +97,9 @@ export function buildMemoryPlanetState(core: AgentCore | null): MemoryPlanetStat
       type: memory.type,
       importance: memory.importance,
       confidence: memory.confidence,
+      status: memory.status,
+      sourceConversationId: memory.sourceConversationId,
+      latestGovernanceEvent: memory.governanceEvents?.[0],
       bright: memory.importance >= 0.8,
       position: buildPosition(memory.id, index),
     })),

@@ -6,7 +6,6 @@ import {
   useStarChat,
   type AttachmentKind,
   type StarChatAttachment,
-  type StarChatIntent,
   type StarChatMessage,
   type StarChatPart,
   type StarChatReply,
@@ -15,8 +14,20 @@ import {
   type StarChatStreamHandler,
 } from '../composables/useStarChat'
 
-type MediaIntent = Exclude<StarChatIntent, 'auto' | 'chat'>
 type ToolConfirmationPart = Extract<StarChatPart, { type: 'tool_confirmation' }>
+type MediaTaskStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
+type MediaTaskResponse = {
+  task?: {
+    id: string
+    type: 'tts' | 'image' | 'video' | 'music'
+    status: MediaTaskStatus
+    resultUrl?: string | null
+    error?: string | null
+  }
+}
+
+const mediaTaskPollDelayMs = 2000
+const mediaTaskPollLimit = 300
 
 const props = defineProps<{
   sendMessageStream?: (payload: StarChatSendPayload, onEvent: StarChatStreamHandler) => Promise<StarChatReply>
@@ -28,21 +39,20 @@ const pending = ref(false)
 const error = ref('')
 const localMessages = ref<StarChatMessage[]>([])
 const attachments = ref<StarChatAttachment[]>([])
-const selectedMediaKinds = ref<MediaIntent[]>([])
 const listening = ref(false)
 const threadActive = ref(false)
 const activeMessageIndex = ref<number | null>(null)
 const attachmentMenuOpen = ref(false)
-const attachmentMenuRef = ref<HTMLElement | null>(null)
 const messagesThreadRef = ref<{ $el: HTMLElement } | null>(null)
 const chat = useStarChat()
 let recognition: { start: () => void; stop?: () => void; abort?: () => void; lang: string; interimResults: boolean; onresult: ((event: any) => void) | null; onerror: (() => void) | null; onend: (() => void) | null } | null = null
+let activeChatRunToken = 0
+let componentUnmounted = false
 
 type QueuedChatRequest = {
   id: number
   text: string
   attachments: StarChatAttachment[]
-  intent: StarChatIntent
 }
 
 const chatQueue = ref<QueuedChatRequest[]>([])
@@ -135,7 +145,7 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
   const target = event.target
 
-  if (target instanceof Node && attachmentMenuRef.value?.contains(target)) {
+  if (target instanceof Element && target.closest('.star-chat__attachment-menu')) {
     return
   }
 
@@ -170,10 +180,6 @@ function removeAttachment(index: number) {
 
 function removeQueuedChatRequest(id: number) {
   chatQueue.value = chatQueue.value.filter(request => request.id !== id)
-}
-
-function toggleMediaKind(kind: MediaIntent) {
-  selectedMediaKinds.value = selectedMediaKinds.value[0] === kind ? [] : [kind]
 }
 
 function startVoiceInput() {
@@ -224,41 +230,6 @@ function buildAttachmentParts(text: string, selectedAttachments: StarChatAttachm
   }
 
   return parts
-}
-
-function buildThinkingStatusParts(intent: StarChatIntent, selectedAttachments: StarChatAttachment[]) {
-  const statuses: string[] = []
-
-  if (selectedAttachments.some(attachment => attachment.kind === 'image')) {
-    statuses.push('正在看你发来的图片')
-  }
-  else if (selectedAttachments.some(attachment => attachment.kind === 'audio')) {
-    statuses.push('正在听你的声音')
-  }
-  else if (selectedAttachments.some(attachment => attachment.kind === 'video')) {
-    statuses.push('正在看这段影像里的光')
-  }
-  else {
-    statuses.push('正在读你的话')
-  }
-
-  if (intent === 'audio') {
-    statuses.push('先写好回复，再把它变成声音')
-  }
-  else if (intent === 'image') {
-    statuses.push('正在把你的想法交给星图')
-  }
-  else if (intent === 'music') {
-    statuses.push('正在酝酿一段旋律')
-  }
-  else if (intent === 'video') {
-    statuses.push('正在整理成一段画面')
-  }
-  else {
-    statuses.push('在星光里组织一句回复')
-  }
-
-  return statuses.slice(0, 2).map(text => ({ type: 'status' as const, text }))
 }
 
 async function copyMessage(message: StarChatMessage) {
@@ -390,6 +361,129 @@ function mergeFinalStreamMessage(index: number, message: StarChatMessage) {
   })
 }
 
+function applyStreamError(index: number, message: string) {
+  applyStreamMessage(index, {
+    role: 'assistant',
+    content: message,
+    parts: [{ type: 'status', text: message }],
+  })
+}
+
+function needsStreamFallback(message?: StarChatMessage) {
+  if (!message || message.content.trim()) {
+    return false
+  }
+
+  return !(message.parts ?? []).some(part => part.type !== 'status')
+}
+
+function getProcessingMediaTaskIds(message?: StarChatMessage) {
+  return message?.parts
+    ?.filter((part): part is Extract<StarChatPart, { type: 'music' }> =>
+      part.type === 'music'
+      && part.status === 'processing'
+      && typeof part.taskId === 'string'
+      && Boolean(part.taskId),
+    )
+    .map(part => part.taskId) ?? []
+}
+
+function updateMediaTaskPart(index: number, task: NonNullable<MediaTaskResponse['task']>) {
+  const message = localMessages.value[index]
+
+  if (!message) {
+    return
+  }
+
+  applyStreamMessage(index, {
+    ...message,
+    parts: message.parts?.map((part) => {
+      if (part.type !== 'music' || part.taskId !== task.id) {
+        return part
+      }
+
+      if (task.status === 'succeeded') {
+        return {
+          ...part,
+          status: 'succeeded',
+          ...(task.resultUrl ? { url: task.resultUrl } : {}),
+        }
+      }
+
+      if (task.status === 'failed') {
+        return {
+          ...part,
+          status: 'failed',
+          error: task.error ?? 'Music generation failed',
+        }
+      }
+
+      return {
+        ...part,
+        status: 'processing',
+      }
+    }),
+  })
+}
+
+function wait(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
+async function fetchMediaTask(taskId: string): Promise<NonNullable<MediaTaskResponse['task']>> {
+  const response = await fetch(`/api/media/tasks/${encodeURIComponent(taskId)}`)
+
+  if (!response.ok) {
+    throw new Error('Media task status request failed')
+  }
+
+  const body = await response.json() as MediaTaskResponse
+
+  if (!body.task) {
+    throw new Error('Media task response is missing task')
+  }
+
+  return body.task
+}
+
+async function pollMediaTaskUntilSettled(index: number, taskId: string, runToken: number) {
+  for (let attempt = 0; attempt < mediaTaskPollLimit; attempt += 1) {
+    if (componentUnmounted || activeChatRunToken !== runToken) {
+      return
+    }
+
+    try {
+      const task = await fetchMediaTask(taskId)
+
+      updateMediaTaskPart(index, task)
+
+      if (task.status === 'succeeded' || task.status === 'failed') {
+        return
+      }
+    }
+    catch {
+      if (attempt >= 2) {
+        updateMediaTaskPart(index, {
+          id: taskId,
+          type: 'music',
+          status: 'failed',
+          error: 'Media task status request failed',
+        })
+        return
+      }
+    }
+
+    await wait(mediaTaskPollDelayMs)
+  }
+
+  updateMediaTaskPart(index, {
+    id: taskId,
+    type: 'music',
+    status: 'failed',
+    error: 'Media task timed out',
+  })
+}
+
 function updateToolConfirmationStatus(inboxItemId: string, status: ToolConfirmationPart['status']) {
   localMessages.value = localMessages.value.map(message => ({
     ...message,
@@ -400,22 +494,40 @@ function updateToolConfirmationStatus(inboxItemId: string, status: ToolConfirmat
 }
 
 async function approveInboxItem(part: ToolConfirmationPart) {
-  await fetch(`/api/agents/current/inbox/${encodeURIComponent(part.inboxItemId)}/approve`, {
-    method: 'POST',
-    headers: withChatCsrfHeaders(),
-  })
-  updateToolConfirmationStatus(part.inboxItemId, 'approved')
+  updateToolConfirmationStatus(part.inboxItemId, 'submitting')
+
+  try {
+    await fetch(`/api/agents/current/inbox/${encodeURIComponent(part.inboxItemId)}/approve`, {
+      method: 'POST',
+      headers: withChatCsrfHeaders(),
+    })
+    updateToolConfirmationStatus(part.inboxItemId, 'approved')
+  }
+  catch (error) {
+    updateToolConfirmationStatus(part.inboxItemId, undefined)
+    throw error
+  }
 }
 
 async function rejectInboxItem(part: ToolConfirmationPart) {
-  await fetch(`/api/agents/current/inbox/${encodeURIComponent(part.inboxItemId)}/reject`, {
-    method: 'POST',
-    headers: withChatCsrfHeaders(),
-  })
-  updateToolConfirmationStatus(part.inboxItemId, 'rejected')
+  updateToolConfirmationStatus(part.inboxItemId, 'submitting')
+
+  try {
+    await fetch(`/api/agents/current/inbox/${encodeURIComponent(part.inboxItemId)}/reject`, {
+      method: 'POST',
+      headers: withChatCsrfHeaders(),
+    })
+    updateToolConfirmationStatus(part.inboxItemId, 'rejected')
+  }
+  catch (error) {
+    updateToolConfirmationStatus(part.inboxItemId, undefined)
+    throw error
+  }
 }
 
-function handleStreamEvent(index: number) {
+function handleStreamEvent(index: number, markVisibleCompleteWhenReady: () => void) {
+  let finalized = false
+
   return async (event: StarChatStreamEvent) => {
     if (event.type === 'delta') {
       await applyStreamDeltaByCharacter(index, event.text)
@@ -434,6 +546,10 @@ function handleStreamEvent(index: number) {
     }
 
     if (event.type === 'tool-status') {
+      if (event.visibility === 'debug') {
+        return
+      }
+
       appendStreamPart(index, { type: 'status', text: event.text })
       await scrollMessagesToLatest()
       await waitForVisibleStreamPaint()
@@ -455,8 +571,22 @@ function handleStreamEvent(index: number) {
     }
 
     if (event.type === 'message') {
+      finalized = true
       mergeFinalStreamMessage(index, event.message)
       await scrollMessagesToLatest()
+      markVisibleCompleteWhenReady()
+      return
+    }
+
+    if (event.type === 'error') {
+      if (finalized) {
+        return
+      }
+
+      applyStreamError(index, event.message)
+      error.value = event.message
+      await scrollMessagesToLatest()
+      markVisibleCompleteWhenReady()
     }
   }
 }
@@ -464,12 +594,6 @@ function handleStreamEvent(index: number) {
 async function submit() {
   const text = input.value.trim()
   const selectedAttachments = [...attachments.value]
-  const selectedIntent: StarChatIntent = selectedMediaKinds.value[0] ?? 'auto'
-
-  if (!text && selectedIntent !== 'auto') {
-    error.value = '先写下想生成什么。'
-    return
-  }
 
   if (!text && selectedAttachments.length === 0) {
     return
@@ -479,12 +603,10 @@ async function submit() {
   input.value = ''
   attachments.value = []
   attachmentMenuOpen.value = false
-  selectedMediaKinds.value = []
   chatQueue.value.push({
     id: nextQueuedChatRequestId++,
     text,
     attachments: selectedAttachments,
-    intent: selectedIntent,
   })
 
   void processChatQueue()
@@ -502,6 +624,49 @@ async function processChatQueue() {
   }
 
   pending.value = true
+  const runToken = activeChatRunToken + 1
+  activeChatRunToken = runToken
+  let visibleComplete = false
+  let assistantIndex: number | null = null
+  let mediaCompletionPromise: Promise<void> | null = null
+  const markVisibleComplete = () => {
+    if (visibleComplete) {
+      return
+    }
+
+    visibleComplete = true
+
+    if (activeChatRunToken !== runToken) {
+      return
+    }
+
+    pending.value = false
+
+    if (chatQueue.value.length > 0) {
+      void processChatQueue()
+    }
+  }
+  const markVisibleCompleteWhenReady = () => {
+    if (assistantIndex === null) {
+      markVisibleComplete()
+      return
+    }
+
+    const taskIds = getProcessingMediaTaskIds(localMessages.value[assistantIndex])
+
+    if (taskIds.length < 1) {
+      markVisibleComplete()
+      return
+    }
+
+    if (!mediaCompletionPromise) {
+      mediaCompletionPromise = Promise.all(
+        taskIds.map(taskId => pollMediaTaskUntilSettled(assistantIndex!, taskId, runToken)),
+      ).then(() => {
+        markVisibleComplete()
+      })
+    }
+  }
 
   try {
     localMessages.value.push({
@@ -513,13 +678,12 @@ async function processChatQueue() {
     const payload = {
       message: nextRequest.text,
       attachments: nextRequest.attachments,
-      intent: nextRequest.intent,
     }
     const streamMessage = props.sendMessageStream ?? chat.sendMessageStream
-    const assistantMessage = createStreamingAssistantMessage(buildThinkingStatusParts(nextRequest.intent, nextRequest.attachments))
-    const assistantIndex = localMessages.value.length
+    const assistantMessage = createStreamingAssistantMessage([])
+    assistantIndex = localMessages.value.length
     localMessages.value.push(assistantMessage)
-    const result = await streamMessage(payload, handleStreamEvent(assistantIndex))
+    const result = await streamMessage(payload, handleStreamEvent(assistantIndex, markVisibleCompleteWhenReady))
 
     if (!result.message && result.reply) {
       applyStreamMessage(assistantIndex, {
@@ -527,17 +691,22 @@ async function processChatQueue() {
         content: result.reply,
         parts: [{ type: 'text', text: result.reply }],
       })
+      markVisibleCompleteWhenReady()
+    }
+    else if (!result.message && !result.reply && assistantIndex !== null && needsStreamFallback(localMessages.value[assistantIndex])) {
+      applyStreamError(assistantIndex, '星信刚刚走神了，等一下再试。')
+      markVisibleCompleteWhenReady()
     }
   }
   catch {
+    if (assistantIndex !== null && needsStreamFallback(localMessages.value[assistantIndex])) {
+      applyStreamError(assistantIndex, '星信刚刚走神了，等一下再试。')
+    }
     error.value = '星信刚刚走神了，等一下再试。'
+    markVisibleCompleteWhenReady()
   }
   finally {
-    pending.value = false
-
-    if (chatQueue.value.length > 0) {
-      void processChatQueue()
-    }
+    markVisibleCompleteWhenReady()
   }
 }
 
@@ -564,6 +733,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  componentUnmounted = true
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   recognition?.abort?.()
 })
@@ -602,7 +772,7 @@ onBeforeUnmount(() => {
         {{ error }}
       </p>
 
-      <div ref="attachmentMenuRef" class="star-chat__dock-stack">
+      <div class="star-chat__dock-stack">
         <div
           v-if="chatQueue.length"
           class="star-chat__queue"
@@ -642,14 +812,12 @@ onBeforeUnmount(() => {
           v-model:input="input"
           :pending="pending"
           :listening="listening"
-          :selected-media-kinds="selectedMediaKinds"
           :attachment-menu-open="attachmentMenuOpen"
           @submit="submit"
           @focus="threadActive = true"
           @toggle-attachments="attachmentMenuOpen = !attachmentMenuOpen"
           @attachment-change="handleAttachmentChange"
           @start-voice="startVoiceInput"
-          @toggle-media-kind="toggleMediaKind"
         />
       </div>
     </div>

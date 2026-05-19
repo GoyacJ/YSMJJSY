@@ -16,7 +16,7 @@ const emit = defineEmits<{
       </span>
       <span>
         <strong>记忆星球</strong>
-        <small>记忆、反思和进化轨道</small>
+        <small>记忆、来源和确认记录</small>
       </span>
     </button>
     <button type="button" class="star-memory-map__settings" aria-label="打开星信设置" @click="emit('open-settings')">

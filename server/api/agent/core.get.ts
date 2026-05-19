@@ -113,7 +113,7 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
     const status = memory.status ?? 'active'
     counts.total += 1
 
-    if (status === 'active' || status === 'archived' || status === 'rejected') {
+    if (status === 'active' || status === 'pending' || status === 'archived' || status === 'rejected') {
       counts[status] += 1
     }
 
@@ -121,6 +121,7 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
   }, {
     total: 0,
     active: 0,
+    pending: 0,
     archived: 0,
     rejected: 0,
   })
@@ -138,7 +139,10 @@ export function buildAgentCoreResponse(input: AgentCoreInput) {
     },
     memoryCounts,
     memories: input.memories
-      .filter(memory => (memory.status ?? 'active') === 'active')
+      .filter(memory => {
+        const status = memory.status ?? 'active'
+        return status === 'active' || status === 'pending'
+      })
       .map(memory => ({
         id: memory.id,
         type: memory.type,

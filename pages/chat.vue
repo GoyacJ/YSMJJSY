@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { withCsrfHeaders } from '../composables/useCsrf'
 import type { StarChatMessage } from '../composables/useStarChat'
 import type { StarPageDesignSchema } from '../types/design-schema'
 
@@ -26,21 +27,15 @@ const {
 const {
   os: agentOs,
   loadOs: loadAgentOs,
+  enqueueTask,
   runTask,
   cancelTask,
   approveInboxItem,
   rejectInboxItem,
 } = useAgentOs()
 const chatMessages = ref<StarChatMessage[]>([])
-const profileSettingsOpen = ref(false)
-const memoryPlanetOpen = ref(false)
 const designProposalPreview = ref<{ proposalId: string, schema: StarPageDesignSchema } | null>(null)
 const activePreviewSchema = computed(() => designProposalPreview.value?.schema ?? previewSchema.value)
-
-async function openMemoryPlanet() {
-  memoryPlanetOpen.value = true
-  await loadAgentCore()
-}
 
 async function previewAgentDesignProposal(id: string) {
   const result = await previewDesignProposal(id)
@@ -62,6 +57,7 @@ async function confirmDesignPreview() {
 
     await $fetch('/api/design/commit', {
       method: 'POST',
+      headers: withCsrfHeaders(),
       body: {
         schema: preview.schema,
         proposalId: preview.proposalId,
@@ -108,24 +104,18 @@ onMounted(async () => {
         <span class="chat-theater__meteor" />
       </div>
       <StarChat :initial-messages="chatMessages" />
-      <StarMemoryMap
-        @open-planet="openMemoryPlanet"
-        @open-settings="profileSettingsOpen = true"
-      />
-      <AgentCorePanel
+      <StarPlanetPanel
+        :core="agentCore"
         :load-core="loadAgentCore"
         :load-os="loadAgentOs"
         :apply-proposal="applyAgentCoreProposal"
         :approve-inbox-item="approveInboxItem"
         :reject-inbox-item="rejectInboxItem"
+        :enqueue-task="enqueueTask"
         :run-task="runTask"
         :cancel-task="cancelTask"
         :preview-design-proposal="previewAgentDesignProposal"
         :run-sleep="runSleep"
-      />
-      <MemoryPlanetPanel
-        :core="agentCore"
-        :open="memoryPlanetOpen"
         :govern-memory="governMemory"
         :timeline="agentTimeline"
         :timeline-groups="agentTimelineGroups"
@@ -133,12 +123,6 @@ onMounted(async () => {
         :load-timeline="loadTimeline"
         :load-works="loadWorks"
         :update-work-visibility="updateWorkVisibility"
-        @close="memoryPlanetOpen = false"
-      />
-      <ProfileSettingsSheet
-        :open="profileSettingsOpen"
-        hide-trigger
-        @close="profileSettingsOpen = false"
       />
       <DesignPreviewSheet
         v-if="activePreviewSchema"

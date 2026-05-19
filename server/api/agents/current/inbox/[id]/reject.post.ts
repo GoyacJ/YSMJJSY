@@ -18,6 +18,7 @@ export function rejectAgentInboxItem(input: InboxActionInput) {
       action: 'reject',
       now: input.now,
       profile: input.profile,
+      boundarySettings: input.boundarySettings,
       agentState: input.agentState,
       proposals: input.proposals,
       snapshots: input.snapshots,

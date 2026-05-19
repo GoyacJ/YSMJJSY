@@ -26,6 +26,7 @@ describe('agent memory api helpers', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         }),
         updateMemory,
+        deleteMemoryByKey: vi.fn(),
       },
       events: { addMemoryEvent },
     })
@@ -33,6 +34,45 @@ describe('agent memory api helpers', () => {
     expect(result.status).toBe('archived')
     expect(updateMemory).toHaveBeenCalled()
     expect(addMemoryEvent).toHaveBeenCalled()
+  })
+
+  it('deletes a memory and records only minimal governance state', () => {
+    const deleteMemoryByKey = vi.fn(() => 1)
+    const addMemoryEvent = vi.fn()
+
+    const result = applyMemoryGovernanceAction({
+      keyId: 'key_1',
+      memoryId: 'memory_1',
+      action: 'delete',
+      reason: '用户要求删除。',
+      now: '2026-05-17T00:00:00.000Z',
+      memories: {
+        getMemoryByKey: () => ({
+          id: 'memory_1',
+          keyId: 'key_1',
+          type: 'preference',
+          content: '用户喜欢短句。',
+          importance: 0.8,
+          confidence: 0.9,
+          status: 'pending',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }),
+        updateMemory: vi.fn(),
+        deleteMemoryByKey,
+      },
+      events: { addMemoryEvent },
+    })
+
+    expect(result.status).toBe('deleted')
+    expect(deleteMemoryByKey).toHaveBeenCalledWith('key_1', 'memory_1')
+    const event = addMemoryEvent.mock.calls[0][0]
+    expect(event.action).toBe('delete')
+    expect(event.beforeJson).not.toContain('用户喜欢短句')
+    expect(JSON.parse(event.afterJson)).toEqual({
+      importance: 0.8,
+      status: 'pending',
+      deleted: true,
+    })
   })
 
   it('governs memory through star.governMemory tool', async () => {
@@ -76,6 +116,7 @@ describe('agent memory api helpers', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         }),
         updateMemory,
+        deleteMemoryByKey: vi.fn(),
       },
       memoryEvents: { addMemoryEvent: vi.fn() },
     })

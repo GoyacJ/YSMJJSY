@@ -55,12 +55,28 @@ export type AgentOsResponse = {
     targetId?: string | null
     createdAt: string
   }>
+  records: AgentOsRecordItem[]
   plannedTasks?: Array<{
     type: string
     title: string
     summary: string
     input?: Record<string, unknown>
   }>
+}
+
+export type AgentOsRecordItem = {
+  id: string
+  type: '记忆' | '行动' | '作品' | '发布' | '整理' | '失败'
+  title: string
+  summary: string
+  status: string
+  createdAt: string
+  details?: {
+    sections: Array<{
+      title: string
+      items: string[]
+    }>
+  }
 }
 
 export function parseJsonObject(value?: string | null): Record<string, unknown> | undefined {
@@ -207,6 +223,137 @@ export function parseMemoryActionCandidatesFromSleepRun(
   }
 }
 
+function getRecordType(event: AgentEventRecord): AgentOsRecordItem['type'] {
+  if (event.type === 'task.failed' || event.type === 'tool.failed' || event.type === 'provider.failed' || event.type === 'policy.denied') {
+    return '失败'
+  }
+
+  if (event.type === 'organizing_report.completed' || event.targetType === 'sleep') {
+    return '整理'
+  }
+
+  if (event.targetType === 'memory') {
+    return '记忆'
+  }
+
+  if (event.targetType === 'work' && (event.type === 'approval.approved' || event.type === 'approval.required')) {
+    return '发布'
+  }
+
+  if (event.targetType === 'work') {
+    return '作品'
+  }
+
+  return '行动'
+}
+
+function getRecordStatus(event: AgentEventRecord) {
+  if (event.type === 'task.completed' || event.type === 'tool.completed' || event.type === 'organizing_report.completed') {
+    return '完成'
+  }
+
+  if (event.type === 'task.failed' || event.type === 'tool.failed' || event.type === 'provider.failed' || event.type === 'policy.denied') {
+    return '失败'
+  }
+
+  if (event.type === 'task.started' || event.type === 'tool.started') {
+    return '进行中'
+  }
+
+  if (event.type === 'task.queued') {
+    return '等待'
+  }
+
+  if (event.type === 'task.cancelled') {
+    return '已取消'
+  }
+
+  if (event.type === 'approval.required') {
+    return '待确认'
+  }
+
+  if (event.type === 'approval.approved') {
+    return '已确认'
+  }
+
+  if (event.type === 'approval.rejected') {
+    return '已拒绝'
+  }
+
+  return '已记录'
+}
+
+function getRecordTitle(event: AgentEventRecord, type: AgentOsRecordItem['type']) {
+  if (event.type === 'provider.failed') {
+    return '模型调用失败'
+  }
+
+  if (event.type === 'tool.failed') {
+    return '行动执行失败'
+  }
+
+  if (event.type === 'policy.denied') {
+    return '行动被边界拦截'
+  }
+
+  if (event.type === 'task.failed') {
+    return event.title || '行动失败'
+  }
+
+  if (type === '发布' && event.type === 'approval.required') {
+    return event.title || '公开待确认'
+  }
+
+  return event.title || type
+}
+
+function parseOrganizingReportDetails(event: AgentEventRecord): AgentOsRecordItem['details'] | undefined {
+  if (event.type !== 'organizing_report.completed') {
+    return undefined
+  }
+
+  const payload = parseJsonObject(event.payloadJson)
+  const sections = Array.isArray(payload?.sections) ? payload.sections : []
+  const normalized = sections.flatMap((section) => {
+    if (!section || typeof section !== 'object' || Array.isArray(section)) {
+      return []
+    }
+
+    const record = section as { title?: unknown, items?: unknown }
+    const title = typeof record.title === 'string' ? record.title.trim() : ''
+    const items = Array.isArray(record.items)
+      ? record.items
+          .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+          .map(item => item.trim())
+      : []
+
+    if (!title || items.length === 0) {
+      return []
+    }
+
+    return [{ title, items }]
+  })
+
+  return normalized.length > 0 ? { sections: normalized } : undefined
+}
+
+export function buildAgentRecords(events: AgentEventRecord[]): AgentOsRecordItem[] {
+  return events.map((event) => {
+    const type = getRecordType(event)
+    const details = parseOrganizingReportDetails(event)
+
+    return {
+      id: event.id,
+      type,
+      title: getRecordTitle(event, type),
+      summary: event.summary,
+      status: getRecordStatus(event),
+      createdAt: event.createdAt,
+      ...(details ? { details } : {}),
+    }
+  })
+}
+
 export function buildAgentOsResponse(input: {
   agent: AgentForOwnerRecord
   tasks: AgentTaskRecord[]
@@ -267,6 +414,7 @@ export function buildAgentOsResponse(input: {
       updatedAt: task.updatedAt,
     })),
     events: input.events.map(serializeAgentEventForOs),
+    records: buildAgentRecords(input.events),
     plannedTasks: input.plannedTasks?.map(task => ({
       type: task.type,
       title: task.title,

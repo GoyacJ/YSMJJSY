@@ -649,6 +649,7 @@ onBeforeUnmount(() => {
             <span>{{ work.type }}</span>
             <strong>{{ work.title }}</strong>
             <small>{{ work.summary }}</small>
+            <small v-if="work.disclosure?.explicitLabel">{{ work.disclosure.explicitLabel }}</small>
           </li>
         </ul>
       </article>

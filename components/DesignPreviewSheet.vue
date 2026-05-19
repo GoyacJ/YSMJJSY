@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { StarPageDesignSchema } from '../types/design-schema'
 
-defineProps<{
+const props = defineProps<{
   schema: StarPageDesignSchema
 }>()
 
@@ -9,12 +10,15 @@ const emit = defineEmits<{
   confirm: []
   cancel: []
 }>()
+
+const disclosureLabel = computed(() => props.schema.disclosure?.explicitLabel || 'AI 生成')
 </script>
 
 <template>
   <section class="design-preview-sheet" aria-label="设计预览">
     <div class="design-preview-sheet__panel">
       <div class="design-preview-sheet__preview">
+        <span class="design-preview-sheet__disclosure">{{ disclosureLabel }}</span>
         <DynamicStarPage :schema="schema" />
       </div>
       <div class="design-preview-sheet__actions">

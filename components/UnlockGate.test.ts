@@ -15,6 +15,8 @@ describe('UnlockGate', () => {
     await wrapper.find('form').trigger('submit.prevent')
 
     expect(wrapper.find('.unlock-gate__panel').exists()).toBe(true)
+    expect(wrapper.get('input').attributes('placeholder')).toBe('输入星球钥匙')
+    expect(wrapper.get('button[aria-label="进入星球"]').text()).toBe('进入星球')
     expect(wrapper.text()).not.toContain('给你的信')
     expect(wrapper.emitted('unlocked')?.[0]?.[0]).toEqual({ ok: true })
   })

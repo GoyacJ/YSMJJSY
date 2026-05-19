@@ -22,18 +22,44 @@ export type AgentToolBehavior =
   | 'mutate'
   | 'publish'
 
+export type AgentToolCapability =
+  | 'text_to_speech'
+  | 'generate_image'
+  | 'generate_music'
+  | 'generate_song'
+  | 'generate_video'
+  | 'search_memory'
+  | 'search_work'
+  | 'preview_design'
+  | 'commit_design'
+  | 'publish_work'
+  | 'govern_memory'
+  | 'sleep_review'
+
+export type AgentToolOutputType =
+  | 'text'
+  | 'status'
+  | 'audio'
+  | 'image'
+  | 'music'
+  | 'video'
+
 export type AgentToolMetadata = {
   title?: string
   category?: AgentToolCategory
   behavior?: AgentToolBehavior
+  capabilities?: AgentToolCapability[]
   aliases?: string[]
   whenToUse?: string
+  cannotDo?: string
+  outputTypes?: AgentToolOutputType[]
   inputSchema?: Record<string, unknown>
 }
 
 export type AgentToolResult<Output = unknown> = {
   ok: boolean
   output?: Output
+  chatParts?: Array<Record<string, unknown>>
   error?: string
 }
 
@@ -94,8 +120,11 @@ export function createAgentToolRegistry(): AgentToolRegistry {
         description: tool.description,
         category: tool.category,
         behavior: tool.behavior,
+        capabilities: tool.capabilities,
         aliases: tool.aliases,
         whenToUse: tool.whenToUse,
+        cannotDo: tool.cannotDo,
+        outputTypes: tool.outputTypes,
         inputSchema: tool.inputSchema,
         riskLevel: tool.riskLevel,
         approvalRequired: tool.approvalRequired,

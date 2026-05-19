@@ -9,6 +9,7 @@ import {
   createAgentStateRepository,
   createKeyProfileRepository,
   createMemoryRepository,
+  type StarBoundarySettings,
   type AgentEventRecord,
   type AgentEvolutionProposalRecord,
   type AgentObservationRecord,
@@ -29,6 +30,7 @@ type ApplyAgentProposalActionInput = {
     assistantName: string
     mbti: string
   }
+  boundarySettings?: StarBoundarySettings
   agentState: Pick<AgentStateRecord, 'tone' | 'relationshipRole' | 'learningMode' | 'contentStrategy'>
   proposals: {
     listProposalsByKey: (keyId: string) => AgentEvolutionProposalRecord[]
@@ -41,7 +43,7 @@ type ApplyAgentProposalActionInput = {
     updateAgentState: (keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) => void
   }
   memories: {
-    updateMemory: (id: string, updates: { importance?: number, status?: 'active' | 'archived' | 'rejected', updatedAt: string }) => void
+    updateMemory: (id: string, updates: { importance?: number, status?: 'active' | 'pending' | 'archived' | 'rejected', updatedAt: string }) => void
   }
 }
 
@@ -53,6 +55,22 @@ function parsePayload(payloadJson: string) {
   catch {
     return {}
   }
+}
+
+function isIntimatePersonaProposal(proposal: AgentEvolutionProposalRecord, payload: Record<string, unknown>) {
+  if (proposal.type !== 'relationship_role' && proposal.type !== 'tone') {
+    return false
+  }
+
+  const values = [
+    proposal.title,
+    proposal.summary,
+    typeof payload.relationshipRole === 'string' ? payload.relationshipRole : '',
+    typeof payload.role === 'string' ? payload.role : '',
+    typeof payload.tone === 'string' ? payload.tone : '',
+  ].join('\n')
+
+  return /恋人|伴侣|爱人|暧昧|亲密关系|virtual lover/i.test(values)
 }
 
 export function recordApprovalObservation(input: {
@@ -115,6 +133,20 @@ export function applyAgentProposalAction(input: ApplyAgentProposalActionInput) {
       id: proposal.id,
       status: 'pending',
       requiresPreview: true,
+    }
+  }
+
+  if (input.boundarySettings?.minorMode && isIntimatePersonaProposal(proposal, payload as Record<string, unknown>)) {
+    input.proposals.updateProposal(proposal.id, {
+      status: 'rejected',
+      updatedAt: input.now,
+    })
+
+    return {
+      id: proposal.id,
+      status: 'rejected',
+      blocked: true,
+      reason: '未成年人模式不允许亲密关系定位。',
     }
   }
 
@@ -232,6 +264,7 @@ export default defineEventHandler(async (event) => {
       assistantName: profile.assistantName,
       mbti: profile.mbti,
     },
+    boundarySettings: profile.boundarySettings,
     agentState: createAgentStateRepository(config.sqlitePath).getOrCreateAgentState(keyId, now),
     proposals: createAgentEvolutionRepository(config.sqlitePath),
     snapshots: createAgentSnapshotRepository(config.sqlitePath),

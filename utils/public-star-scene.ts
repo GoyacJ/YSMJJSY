@@ -5,7 +5,16 @@ export type PublicStar = {
   createdAt: string
   activityAt?: string | null
   activityKind?: 'created' | 'profile' | 'chat' | 'design' | 'media' | null
-  publicWorks?: Array<{ id: string, type: string, title: string, summary: string }>
+  publicWorks?: Array<{
+    id: string
+    type: string
+    title: string
+    summary: string
+    disclosure?: {
+      aiGenerated: true
+      explicitLabel: string
+    }
+  }>
 }
 
 export type SceneBounds = {

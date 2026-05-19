@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentToolRegistry } from './agent-runtime'
-import type { StarChatTurnPlan } from './star-chat-planner'
 import { executeStarChatToolCalls, normalizeStarChatToolCalls } from './star-chat-tool-execution'
 
 function createRegistry() {
@@ -9,6 +8,20 @@ function createRegistry() {
   registry.register({
     name: 'star.generateImage',
     description: 'Generate image.',
+    riskLevel: 'medium',
+    approvalRequired: false,
+    execute: vi.fn(),
+  })
+  registry.register({
+    name: 'star.generateMusic',
+    description: 'Generate music.',
+    riskLevel: 'medium',
+    approvalRequired: false,
+    execute: vi.fn(),
+  })
+  registry.register({
+    name: 'star.generateVideo',
+    description: 'Generate video.',
     riskLevel: 'medium',
     approvalRequired: false,
     execute: vi.fn(),
@@ -27,11 +40,7 @@ function createRegistry() {
 describe('star chat tool execution', () => {
   it('rejects unknown tools', () => {
     const calls = normalizeStarChatToolCalls({
-      plan: {
-        reply: '',
-        toolSearches: [],
-        toolCalls: [{ toolName: 'missing.tool', input: {}, mode: 'execute', evidence: '', reason: '' }],
-      },
+      action: { type: 'tool_call', toolName: 'missing.tool', input: {}, mode: 'execute', reason: '' },
       registry: createRegistry(),
       reply: '',
     })
@@ -47,11 +56,7 @@ describe('star chat tool execution', () => {
 
   it('rejects media calls without a prompt', () => {
     const calls = normalizeStarChatToolCalls({
-      plan: {
-        reply: '',
-        toolSearches: [],
-        toolCalls: [{ toolName: 'star.generateImage', input: {}, mode: 'execute', evidence: '', reason: '' }],
-      },
+      action: { type: 'tool_call', toolName: 'star.generateImage', input: {}, mode: 'execute', reason: '' },
       registry: createRegistry(),
       reply: '',
     })
@@ -63,13 +68,38 @@ describe('star chat tool execution', () => {
     })
   })
 
+  it('rejects music and video calls without a prompt', () => {
+    const registry = createRegistry()
+    const calls = [
+      ...normalizeStarChatToolCalls({
+        action: { type: 'tool_call', toolName: 'star.generateMusic', input: {}, mode: 'execute', reason: '' },
+        registry,
+        reply: '',
+      }),
+      ...normalizeStarChatToolCalls({
+        action: { type: 'tool_call', toolName: 'star.generateVideo', input: {}, mode: 'execute', reason: '' },
+        registry,
+        reply: '',
+      }),
+    ]
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        toolName: 'star.generateMusic',
+        status: 'rejected',
+        error: 'Missing prompt',
+      }),
+      expect.objectContaining({
+        toolName: 'star.generateVideo',
+        status: 'rejected',
+        error: 'Missing prompt',
+      }),
+    ])
+  })
+
   it('replaces speak reply placeholder with final reply text', () => {
     const calls = normalizeStarChatToolCalls({
-      plan: {
-        reply: '你好',
-        toolSearches: [],
-        toolCalls: [{ toolName: 'star.speakReply', input: { text: '$reply' }, mode: 'execute', evidence: '', reason: '' }],
-      },
+      action: { type: 'tool_call', toolName: 'star.speakReply', input: { text: '$reply' }, mode: 'execute', reason: '' },
       registry: createRegistry(),
       reply: '最终回复',
     })
@@ -81,41 +111,18 @@ describe('star chat tool execution', () => {
     })
   })
 
-  it('caps tool calls at four', () => {
-    const plan: StarChatTurnPlan = {
-      reply: '',
-      toolSearches: [],
-      toolCalls: Array.from({ length: 6 }, (_, index) => ({
-        toolName: 'star.speakReply',
-        input: { text: String(index) },
-        mode: 'execute',
-        evidence: '',
-        reason: '',
-      })),
-    }
-
-    expect(normalizeStarChatToolCalls({
-      plan,
-      registry: createRegistry(),
-      reply: '',
-    })).toHaveLength(4)
-  })
-
   it('creates a waiting approval task for proposed calls', async () => {
     const tasks = { addTask: vi.fn(), updateTask: vi.fn() }
     const events = { addEvent: vi.fn() }
     const registry = createRegistry()
+    const execute = vi.fn(async () => ({ ok: true, output: { type: 'image', status: 'created' } }))
     const calls = normalizeStarChatToolCalls({
-      plan: {
-        reply: '',
-        toolSearches: [],
-        toolCalls: [{
-          toolName: 'star.generateImage',
-          input: { prompt: '星空' },
-          mode: 'propose',
-          evidence: '用户暗示想要图片。',
-          reason: '需要确认。',
-        }],
+      action: {
+        type: 'tool_call',
+        toolName: 'star.generateImage',
+        input: { prompt: '星空' },
+        mode: 'propose',
+        reason: '需要确认。',
       },
       registry,
       reply: '',
@@ -127,8 +134,11 @@ describe('star chat tool execution', () => {
       calls,
       tasks,
       events,
-      registry,
-      policy: { autoRunLowRiskTasks: false } as any,
+      registry: {
+        get: registry.get,
+        execute,
+      },
+      policy: { autoRunLowRiskTasks: true } as any,
     })).resolves.toEqual([
       expect.objectContaining({
         toolName: 'star.generateImage',
@@ -138,6 +148,77 @@ describe('star chat tool execution', () => {
     ])
     expect(tasks.addTask).toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }))
     expect(tasks.updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: 'waiting_approval' }))
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('runs explicit medium-risk media calls when default policy allows it', async () => {
+    const tasks = { addTask: vi.fn(), updateTask: vi.fn() }
+    const events = { addEvent: vi.fn() }
+    const registry = createRegistry()
+    const execute = vi.fn(async () => ({ ok: true, output: { type: 'image', status: 'created' } }))
+
+    await expect(executeStarChatToolCalls({
+      agentId: 'agent_1',
+      now: '2026-05-19T00:00:00.000Z',
+      calls: [{
+        toolName: 'star.generateImage',
+        input: { prompt: '星空' },
+        mode: 'execute',
+        reason: '',
+        status: 'ready',
+      }],
+      tasks,
+      events,
+      registry: {
+        get: registry.get,
+        execute,
+      },
+      policy: { autoRunLowRiskTasks: true } as any,
+    })).resolves.toEqual([
+      expect.objectContaining({
+        toolName: 'star.generateImage',
+        status: 'completed',
+      }),
+    ])
+    expect(execute).toHaveBeenCalledWith('star.generateImage', { prompt: '星空' })
+  })
+
+  it('returns chat parts from completed tool execution without persisting them in task result', async () => {
+    const tasks = { addTask: vi.fn(), updateTask: vi.fn() }
+    const events = { addEvent: vi.fn() }
+    const registry = createRegistry()
+
+    await expect(executeStarChatToolCalls({
+      agentId: 'agent_1',
+      now: '2026-05-19T00:00:00.000Z',
+      calls: [{
+        toolName: 'star.generateImage',
+        input: { prompt: '星空' },
+        mode: 'execute',
+        reason: '',
+        status: 'ready',
+      }],
+      tasks,
+      events,
+      registry: {
+        get: registry.get,
+        execute: vi.fn(async () => ({
+          ok: true,
+          output: { type: 'image', status: 'created' },
+          chatParts: [{ type: 'image', base64: 'raw-image' }],
+        })),
+      },
+      policy: { autoRunLowRiskTasks: true } as any,
+    })).resolves.toEqual([
+      expect.objectContaining({
+        status: 'completed',
+        chatParts: [{ type: 'image', base64: 'raw-image' }],
+        result: { type: 'image', status: 'created' },
+      }),
+    ])
+
+    const completedUpdate = tasks.updateTask.mock.calls.find(call => call[1]?.status === 'completed')?.[1]
+    expect(completedUpdate?.resultJson).not.toContain('raw-image')
   })
 
   it('runs explicit low-risk retrieval immediately', async () => {
@@ -160,7 +241,6 @@ describe('star chat tool execution', () => {
         toolName: 'star.searchMemories',
         input: { query: '星空' },
         mode: 'execute',
-        evidence: '',
         reason: '',
         status: 'ready',
       }],
@@ -196,7 +276,6 @@ describe('star chat tool execution', () => {
         toolName: 'star.publishWork',
         input: { workId: 'work_1' },
         mode: 'execute',
-        evidence: '',
         reason: '',
         status: 'ready',
       }],
@@ -229,7 +308,6 @@ describe('star chat tool execution', () => {
         toolName: 'star.writeMemory',
         input: { content: 'secret topic' },
         mode: 'execute',
-        evidence: '',
         reason: '',
         status: 'ready',
       }],

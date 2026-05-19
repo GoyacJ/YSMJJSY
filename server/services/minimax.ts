@@ -559,12 +559,12 @@ export function createMiniMaxClient(options: MiniMaxClientOptions) {
       return normalizeImageResult(response)
     },
 
-    async describeImage(imageDataUrl: string, prompt: string): Promise<string> {
+    async describeImage(imageDataUri: string, prompt: string): Promise<string> {
       const response = await request('/v1/coding_plan/vlm', {
         method: 'POST',
         body: {
           prompt,
-          image_url: imageDataUrl,
+          image_url: imageDataUri,
         },
       })
 

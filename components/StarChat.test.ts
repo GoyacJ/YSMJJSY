@@ -41,7 +41,7 @@ describe('StarChat', () => {
     await wrapper.find('textarea').setValue('这封信是真的吗？')
     await wrapper.find('form').trigger('submit.prevent')
 
-    expect(sendMessageStream).toHaveBeenCalledWith({ message: '这封信是真的吗？', attachments: [], intent: 'auto' }, expect.any(Function))
+    expect(sendMessageStream).toHaveBeenCalledWith({ message: '这封信是真的吗？', attachments: [] }, expect.any(Function))
     expect(wrapper.text()).toContain('这封信是真的')
     expect(wrapper.find('.star-chat__header').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('这封信里的星光')
@@ -172,10 +172,10 @@ describe('StarChat', () => {
     expect(wrapper.get('button[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="设计模式"]').exists()).toBe(false)
-    expect(wrapper.get('button[aria-label="生成语音"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="生成图片"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="生成视频"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="生成音乐"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="生成语音"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="生成图片"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="生成视频"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="生成音乐"]').exists()).toBe(false)
     expect(wrapper.get('button[aria-label="发送"]').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('完全访问权限')
     expect(wrapper.get('textarea').attributes('placeholder')).toBe('把想说的话交给这片星空')
@@ -210,6 +210,22 @@ describe('StarChat', () => {
     wrapper.unmount()
   })
 
+  it('closes attachment options when focusing the composer text area', async () => {
+    const wrapper = mountStarChat({
+      attachTo: document.body,
+    })
+
+    await wrapper.get('button[aria-label="添加附件"]').trigger('click')
+    expect(wrapper.find('.star-chat__attachment-popover').exists()).toBe(true)
+
+    await wrapper.get('textarea').trigger('pointerdown')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.star-chat__attachment-popover').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it('sends with Enter and keeps Shift Enter for new lines', async () => {
     const sendMessageStream = createStreamReply('收到。')
     const wrapper = mountStarChat({
@@ -226,7 +242,7 @@ describe('StarChat', () => {
 
     await textarea.trigger('keydown.enter')
 
-    expect(sendMessageStream).toHaveBeenCalledWith({ message: '第一行', attachments: [], intent: 'auto' }, expect.any(Function))
+    expect(sendMessageStream).toHaveBeenCalledWith({ message: '第一行', attachments: [] }, expect.any(Function))
   })
 
   it('sends selected image attachment with the message', async () => {
@@ -263,7 +279,6 @@ describe('StarChat', () => {
 
     expect(sendMessageStream).toHaveBeenCalledWith({
       message: '看看这张图',
-      intent: 'auto',
       attachments: [{
         kind: 'image',
         dataUrl: 'data:image/png;base64,abc',
@@ -290,33 +305,29 @@ describe('StarChat', () => {
     expect(sendMessageStream).toHaveBeenCalledWith({
       message: '把页面改成月光感',
       attachments: [],
-      intent: 'auto',
     }, expect.any(Function))
   })
 
-  it('sends selected media intent through the chat request only', async () => {
+  it('uses natural language instead of compatibility media intent buttons', async () => {
     const sendMessageStream = createStreamReply('画好了。', {
         role: 'assistant' as const,
         content: '画好了。',
         parts: [{ type: 'image' as const, url: 'https://example.com/star.png' }],
       })
-    vi.stubGlobal('fetch', vi.fn())
     const wrapper = mountStarChat({
       props: {
         sendMessageStream,
       },
     })
 
-    await wrapper.get('button[aria-label="生成图片"]').trigger('click')
-    await wrapper.find('textarea').setValue('月光星空')
+    expect(wrapper.find('button[aria-label="生成图片"]').exists()).toBe(false)
+    await wrapper.find('textarea').setValue('生成一张月光星空图片')
     await wrapper.find('form').trigger('submit.prevent')
 
     expect(sendMessageStream).toHaveBeenCalledWith({
-      message: '月光星空',
+      message: '生成一张月光星空图片',
       attachments: [],
-      intent: 'image',
     }, expect.any(Function))
-    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('renders streamed reply deltas before the final message', async () => {
@@ -357,7 +368,7 @@ describe('StarChat', () => {
     await flushPromises()
 
     expect(sendMessageStream).toHaveBeenCalledWith(
-      { message: '在吗', attachments: [], intent: 'auto' },
+      { message: '在吗', attachments: [] },
       expect.any(Function),
     )
     expect(wrapper.text()).toContain('你')
@@ -440,10 +451,63 @@ describe('StarChat', () => {
     expect(sendMessageStream).toHaveBeenNthCalledWith(2, {
       message: '第二条',
       attachments: [],
-      intent: 'auto',
     }, expect.any(Function))
     expect(wrapper.text()).toContain('第一条回复')
     expect(wrapper.text()).toContain('第二条回复')
+  })
+
+  it('sends the next message immediately after the previous final message is rendered', async () => {
+    let finishFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      finishFirst = resolve
+    })
+    const sendMessageStream = vi.fn(async (payload, onEvent) => {
+      const reply = `${payload.message}回复`
+      await onEvent({
+        type: 'message',
+        reply,
+        message: {
+          role: 'assistant' as const,
+          content: reply,
+          parts: [{ type: 'text' as const, text: reply }],
+        },
+      })
+
+      if (payload.message === '第一条') {
+        await firstGate
+      }
+
+      return {
+        reply,
+        message: {
+          role: 'assistant' as const,
+          content: reply,
+          parts: [{ type: 'text' as const, text: reply }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('第一条')
+    const firstSubmit = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('第一条回复')
+
+    await wrapper.find('textarea').setValue('第二条')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(sendMessageStream).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.star-chat__queue').exists()).toBe(false)
+    expect(wrapper.text()).toContain('第二条回复')
+
+    finishFirst()
+    await firstSubmit
   })
 
   it('shows queued messages above the composer while waiting to send', async () => {
@@ -558,18 +622,18 @@ describe('StarChat', () => {
     expect(sendMessageStream).toHaveBeenNthCalledWith(2, {
       message: '第三条',
       attachments: [],
-      intent: 'auto',
     }, expect.any(Function))
     expect(wrapper.text()).not.toContain('第二条回复')
     expect(wrapper.text()).toContain('第三条回复')
   })
 
-  it('shows contextual thinking status before the assistant reply starts', async () => {
+  it('shows streamed model progress before the assistant reply starts', async () => {
     let continueStream!: () => void
     const streamGate = new Promise<void>((resolve) => {
       continueStream = resolve
     })
     const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      void onEvent({ type: 'tool-status', text: '我在判断是否需要用工具。' })
       await streamGate
       onEvent({
         type: 'message',
@@ -599,8 +663,7 @@ describe('StarChat', () => {
     const submitPromise = wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('正在读你的话')
-    expect(wrapper.text()).toContain('在星光里组织一句回复')
+    expect(wrapper.text()).toContain('我在判断是否需要用工具。')
     expect(wrapper.text()).not.toContain('我在。')
 
     continueStream()
@@ -608,15 +671,212 @@ describe('StarChat', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('我在。')
-    expect(wrapper.text()).not.toContain('正在读你的话')
+    expect(wrapper.text()).not.toContain('我在判断是否需要用工具。')
   })
 
-  it('adapts thinking status for image attachments and audio intent', async () => {
+  it('does not render debug tool status events', async () => {
     let continueStream!: () => void
     const streamGate = new Promise<void>((resolve) => {
       continueStream = resolve
     })
     const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      void onEvent({
+        type: 'tool-status',
+        text: 'The operation was aborted due to timeout',
+        visibility: 'debug',
+      })
+      await streamGate
+      onEvent({
+        type: 'message',
+        reply: '音乐生成已开始。',
+        message: {
+          role: 'assistant' as const,
+          content: '音乐生成已开始。',
+          parts: [
+            { type: 'text' as const, text: '音乐生成已开始。' },
+            { type: 'music' as const, status: 'processing', taskId: 'media_task_1' },
+          ],
+        },
+      })
+      return {
+        reply: '音乐生成已开始。',
+        message: {
+          role: 'assistant' as const,
+          content: '音乐生成已开始。',
+          parts: [
+            { type: 'text' as const, text: '音乐生成已开始。' },
+            { type: 'music' as const, status: 'processing', taskId: 'media_task_1' },
+          ],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('我要听歌')
+    const submitPromise = wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('The operation was aborted due to timeout')
+
+    continueStream()
+    await submitPromise
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('音乐生成已开始。')
+    expect(wrapper.text()).not.toContain('The operation was aborted due to timeout')
+  })
+
+  it('keeps later messages queued until processing music finishes', async () => {
+    let resolveMediaTask!: (response: Response) => void
+    const fetch = vi.fn(() => new Promise<Response>((resolve) => {
+      resolveMediaTask = resolve
+    }))
+    const sendMessageStream = vi.fn(async (payload, onEvent) => {
+      if (payload.message === '你可以给我唱首歌吗') {
+        await onEvent({
+          type: 'message',
+          reply: '音乐生成已开始。',
+          message: {
+            role: 'assistant' as const,
+            content: '音乐生成已开始。',
+            parts: [
+              { type: 'text' as const, text: '音乐生成已开始。' },
+              { type: 'music' as const, status: 'processing', taskId: 'media_task_1' },
+            ],
+          },
+        })
+
+        return {
+          reply: '音乐生成已开始。',
+          message: {
+            role: 'assistant' as const,
+            content: '音乐生成已开始。',
+            parts: [
+              { type: 'text' as const, text: '音乐生成已开始。' },
+              { type: 'music' as const, status: 'processing', taskId: 'media_task_1' },
+            ],
+          },
+        }
+      }
+
+      await onEvent({
+        type: 'message',
+        reply: '第二条回复。',
+        message: {
+          role: 'assistant' as const,
+          content: '第二条回复。',
+          parts: [{ type: 'text' as const, text: '第二条回复。' }],
+        },
+      })
+
+      return {
+        reply: '第二条回复。',
+        message: {
+          role: 'assistant' as const,
+          content: '第二条回复。',
+          parts: [{ type: 'text' as const, text: '第二条回复。' }],
+        },
+      }
+    })
+    vi.stubGlobal('fetch', fetch)
+    const wrapper = mountStarChat({ props: { sendMessageStream } })
+
+    await wrapper.find('textarea').setValue('你可以给我唱首歌吗')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('音乐生成中')
+    expect(fetch).toHaveBeenCalledWith('/api/media/tasks/media_task_1')
+
+    await wrapper.find('textarea').setValue('第二条')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(sendMessageStream).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.star-chat__queue').exists()).toBe(true)
+
+    resolveMediaTask(new Response(JSON.stringify({
+      task: {
+        id: 'media_task_1',
+        type: 'music',
+        status: 'succeeded',
+        resultUrl: 'https://example.com/song.mp3',
+      },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    await flushPromises()
+    await flushPromises()
+
+    expect(sendMessageStream).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.star-chat__queue').exists()).toBe(false)
+  })
+
+  it('replaces the thinking placeholder when the stream returns an error', async () => {
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await onEvent({ type: 'error', message: '工具规划失败，请重试。' })
+      throw new Error('工具规划失败，请重试。')
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('我想听一首歌')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('工具规划失败，请重试。')
+  })
+
+  it('keeps the final message if a later stream error arrives', async () => {
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await onEvent({
+        type: 'message',
+        reply: '你好。',
+        message: {
+          role: 'assistant' as const,
+          content: '你好。',
+          parts: [{ type: 'text' as const, text: '你好。' }],
+        },
+      })
+      await onEvent({ type: 'error', message: '星信刚刚走神了，等一下再试。' })
+      return {
+        reply: '你好。',
+        message: {
+          role: 'assistant' as const,
+          content: '你好。',
+          parts: [{ type: 'text' as const, text: '你好。' }],
+        },
+      }
+    })
+    const wrapper = mountStarChat({
+      props: {
+        sendMessageStream,
+      },
+    })
+
+    await wrapper.find('textarea').setValue('你好')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('你好。')
+    expect(wrapper.text()).not.toContain('星信刚刚走神了')
+  })
+
+  it('replaces streamed progress with the final attachment reply', async () => {
+    let continueStream!: () => void
+    const streamGate = new Promise<void>((resolve) => {
+      continueStream = resolve
+    })
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      void onEvent({ type: 'tool-status', text: '我在结合你发来的图片判断。' })
       await streamGate
       onEvent({
         type: 'message',
@@ -662,20 +922,18 @@ describe('StarChat', () => {
     })
     await input.trigger('change')
     await flushPromises()
-    await wrapper.get('button[aria-label="生成语音"]').trigger('click')
     await wrapper.find('textarea').setValue('看看这张图，再读给我听')
     const submitPromise = wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('正在看你发来的图片')
-    expect(wrapper.text()).toContain('先写好回复，再把它变成声音')
+    expect(wrapper.text()).toContain('我在结合你发来的图片判断。')
 
     continueStream()
     await submitPromise
     await flushPromises()
 
     expect(wrapper.text()).toContain('我看见了。')
-    expect(wrapper.text()).not.toContain('正在看你发来的图片')
+    expect(wrapper.text()).not.toContain('我在结合你发来的图片判断。')
   })
 
   it('lets the page paint between streamed text events from one response chunk', async () => {
@@ -803,8 +1061,7 @@ describe('StarChat', () => {
     })
     const wrapper = mountStarChat({ props: { sendMessageStream } })
 
-    await wrapper.get('button[aria-label="生成图片"]').trigger('click')
-    await wrapper.find('textarea').setValue('月光星空')
+    await wrapper.find('textarea').setValue('生成一张月光星空图片')
     await wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
 
@@ -840,6 +1097,37 @@ describe('StarChat', () => {
       method: 'POST',
       headers: expect.any(Object),
     })
+  })
+
+  it('marks a tool confirmation as submitting before approval request finishes', async () => {
+    let resolveFetch!: () => void
+    const fetch = vi.fn(() => new Promise<Response>((resolve) => {
+      resolveFetch = () => resolve(new Response(null, { status: 200 }))
+    }))
+    const sendMessageStream = vi.fn(async (_payload, onEvent) => {
+      await onEvent({
+        type: 'tool-confirmation',
+        taskId: 'task_1',
+        inboxItemId: 'task_approval:task_1',
+        title: '发布作品',
+        summary: '发布前需要确认。',
+      })
+      return { reply: '' }
+    })
+    vi.stubGlobal('fetch', fetch)
+    const wrapper = mountStarChat({ props: { sendMessageStream } })
+
+    await wrapper.find('textarea').setValue('发布这张图')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="批准工具请求"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('button[aria-label="批准工具请求"]').attributes('disabled')).toBeDefined()
+
+    resolveFetch()
+    await flushPromises()
   })
 
   it('rejects streamed tool confirmations inline', async () => {

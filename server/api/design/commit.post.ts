@@ -10,16 +10,23 @@ import {
   createAgentWorkRepository,
   createKeyDesignRepository,
   createKeyProfileRepository,
-  type AgentEventRecord,
-  type AgentObservationRecord,
   type AgentStateSnapshotRecord,
-  type AgentWorkRecord,
-  type KeyDesignRecord,
 } from '../../db/sqlite'
 import type { StarPageDesignSchema } from '../../../types/design-schema'
 import { parseDesignSchema } from '../../services/design-schema'
 import { markKeyActivity } from '../../services/key-activity'
-import { buildAgentEvent } from '../../services/agent-events'
+import {
+  buildWorkFromCommittedDesign,
+  commitKeyDesign,
+  getNextDesignVersion,
+  recordDesignObservation,
+} from '../../services/design-commit'
+
+export {
+  buildWorkFromCommittedDesign,
+  getNextDesignVersion,
+  recordDesignObservation,
+}
 
 const commitBodySchema = z.object({
   schema: z.unknown(),
@@ -27,36 +34,8 @@ const commitBodySchema = z.object({
   proposalId: z.string().trim().min(1).optional(),
 })
 
-export function getNextDesignVersion(latest: Pick<KeyDesignRecord, 'version'> | undefined) {
-  return latest ? latest.version + 1 : 1
-}
-
 export function buildDesignCommitResponse(version: number) {
   return { ok: true, version }
-}
-
-export function buildWorkFromCommittedDesign(input: {
-  keyId: string
-  version: number
-  schema: StarPageDesignSchema
-  prompt: string
-  now: string
-}): AgentWorkRecord {
-  return {
-    id: nanoid(),
-    keyId: input.keyId,
-    type: 'page_design',
-    title: input.schema.title || `页面设计 v${input.version}`,
-    summary: input.prompt || '保存了一版页面设计。',
-    sourceConversationId: null,
-    sourceMediaTaskId: null,
-    sourceDesignVersion: input.version,
-    previewUrl: null,
-    payloadJson: JSON.stringify(input.schema),
-    visibility: 'private',
-    createdAt: input.now,
-    updatedAt: input.now,
-  }
 }
 
 export function buildDesignProposalSnapshot(input: {
@@ -88,38 +67,6 @@ export function buildDesignProposalSnapshot(input: {
     }),
     createdAt: input.now,
   }
-}
-
-export function recordDesignObservation(input: {
-  agentId: string
-  version: number
-  prompt: string
-  now: string
-  observations: { addObservation: (record: AgentObservationRecord) => void }
-  events: { addEvent: (record: AgentEventRecord) => void }
-}) {
-  const observationId = `observation_${nanoid()}`
-
-  input.observations.addObservation({
-    id: observationId,
-    agentId: input.agentId,
-    sourceType: 'design',
-    sourceId: `design:${input.version}`,
-    summary: input.prompt || `保存页面设计 v${input.version}。`,
-    payloadJson: JSON.stringify({ version: input.version }),
-    createdAt: input.now,
-  })
-  input.events.addEvent(buildAgentEvent({
-    id: `event_${nanoid()}`,
-    agentId: input.agentId,
-    type: 'observation.created',
-    title: '观察记录',
-    summary: '页面设计变更已记录。',
-    targetType: 'observation',
-    targetId: observationId,
-    payload: { sourceType: 'design', version: input.version },
-    createdAt: input.now,
-  }))
 }
 
 export default defineEventHandler(async (event) => {
@@ -168,24 +115,38 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const repo = createKeyDesignRepository(config.sqlitePath)
-  const version = getNextDesignVersion(repo.getLatestDesign(keyId))
   const now = new Date().toISOString()
+  let observation: Parameters<typeof commitKeyDesign>[0]['observation']
 
-  repo.addKeyDesign({
+  try {
+    const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
+      ownerType: 'key',
+      ownerId: keyId,
+      domain: 'star',
+      now,
+    })
+
+    observation = {
+      agentId: agent.id,
+      observations: createAgentObservationRepository(config.sqlitePath),
+      events: createAgentEventRepository(config.sqlitePath),
+    }
+  }
+  catch {
+    observation = undefined
+  }
+
+  const result = commitKeyDesign({
     keyId,
-    version,
-    schemaJson: JSON.stringify(schema),
-    prompt: body.data.prompt,
-    createdAt: now,
-  })
-  createAgentWorkRepository(config.sqlitePath).addWork(buildWorkFromCommittedDesign({
-    keyId,
-    version,
     schema,
     prompt: body.data.prompt,
     now,
-  }))
+    designs: createKeyDesignRepository(config.sqlitePath),
+    works: createAgentWorkRepository(config.sqlitePath),
+    markActivity: (id, kind) => markKeyActivity(config.sqlitePath, id, kind),
+    observation,
+  })
+  const version = result.version
 
   if (body.data.proposalId && proposalProfile) {
     createAgentEvolutionRepository(config.sqlitePath).updateProposal(body.data.proposalId, {
@@ -201,29 +162,6 @@ export default defineEventHandler(async (event) => {
       version,
       now,
     }))
-  }
-
-  markKeyActivity(config.sqlitePath, keyId, 'design')
-
-  try {
-    const agent = createAgentInstanceRepository(config.sqlitePath).getOrCreateAgentForOwner({
-      ownerType: 'key',
-      ownerId: keyId,
-      domain: 'star',
-      now,
-    })
-
-    recordDesignObservation({
-      agentId: agent.id,
-      version,
-      prompt: body.data.prompt,
-      now,
-      observations: createAgentObservationRepository(config.sqlitePath),
-      events: createAgentEventRepository(config.sqlitePath),
-    })
-  }
-  catch {
-    // Observation capture is secondary.
   }
 
   return buildDesignCommitResponse(version)

@@ -296,7 +296,7 @@ function copyGroupMessage(group: OrbitGroup) {
               <button
                 type="button"
                 aria-label="批准工具请求"
-                :disabled="part.status === 'approved' || part.status === 'rejected'"
+                :disabled="part.status === 'submitting' || part.status === 'approved' || part.status === 'rejected'"
                 @click.stop="emit('approveTool', part)"
               >
                 批准
@@ -304,7 +304,7 @@ function copyGroupMessage(group: OrbitGroup) {
               <button
                 type="button"
                 aria-label="拒绝工具请求"
-                :disabled="part.status === 'approved' || part.status === 'rejected'"
+                :disabled="part.status === 'submitting' || part.status === 'approved' || part.status === 'rejected'"
                 @click.stop="emit('rejectTool', part)"
               >
                 拒绝

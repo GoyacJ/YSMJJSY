@@ -1,11 +1,17 @@
 import { createError, defineEventHandler, getQuery } from 'h3'
-import { createConversationRepository, type ConversationRecord } from '../../db/sqlite'
+import { createConversationRepository, createMediaTaskRepository, type ConversationRecord, type MediaTaskRecord } from '../../db/sqlite'
 
 type StoredChatMessage = {
   role: 'user' | 'assistant'
   content: string
-  imageDataUrl?: string
   parts?: unknown[]
+}
+
+type ChatHistoryHydrationOptions = {
+  keyId?: string
+  mediaTasks?: {
+    getMediaTaskByKey: (keyId: string, id: string) => MediaTaskRecord | undefined
+  }
 }
 
 export function normalizeHistoryLimit(value: unknown) {
@@ -40,7 +46,61 @@ function parseStoredMessage(record: ConversationRecord): StoredChatMessage | und
   }
 }
 
-export function buildChatHistoryResponse(records: ConversationRecord[]) {
+function hydrateAsyncMediaPart(part: unknown, options?: ChatHistoryHydrationOptions) {
+  if (
+    !part
+    || typeof part !== 'object'
+    || Array.isArray(part)
+    || !options?.keyId
+    || !options.mediaTasks
+  ) {
+    return part
+  }
+
+  const record = part as { type?: unknown, taskId?: unknown, status?: unknown }
+
+  if (record.type !== 'music' || typeof record.taskId !== 'string' || record.status !== 'processing') {
+    return part
+  }
+
+  const task = options.mediaTasks.getMediaTaskByKey(options.keyId, record.taskId)
+
+  if (!task) {
+    return part
+  }
+
+  if (task.status === 'succeeded' && task.resultUrl) {
+    return {
+      ...record,
+      status: 'succeeded',
+      ...(task.providerTaskId ? { providerTaskId: task.providerTaskId } : {}),
+      url: task.resultUrl,
+    }
+  }
+
+  if (task.status === 'failed') {
+    return {
+      ...record,
+      status: 'failed',
+      ...(task.error ? { error: task.error } : {}),
+    }
+  }
+
+  return part
+}
+
+function hydrateStoredMessage(message: StoredChatMessage, options?: ChatHistoryHydrationOptions) {
+  if (!message.parts?.length) {
+    return message
+  }
+
+  return {
+    ...message,
+    parts: message.parts.map(part => hydrateAsyncMediaPart(part, options)),
+  }
+}
+
+export function buildChatHistoryResponse(records: ConversationRecord[], options?: ChatHistoryHydrationOptions) {
   return {
     messages: records
       .filter(record => record.role === 'user' || record.role === 'assistant')
@@ -48,7 +108,7 @@ export function buildChatHistoryResponse(records: ConversationRecord[]) {
         const storedMessage = parseStoredMessage(record)
 
         if (storedMessage) {
-          return storedMessage
+          return hydrateStoredMessage(storedMessage, options)
         }
 
         return {
@@ -76,5 +136,8 @@ export default defineEventHandler((event) => {
   const limit = normalizeHistoryLimit(getQuery(event).limit)
   const records = createConversationRepository(config.sqlitePath).listRecentConversationsByKey(keyId, limit)
 
-  return buildChatHistoryResponse(records)
+  return buildChatHistoryResponse(records, {
+    keyId,
+    mediaTasks: createMediaTaskRepository(config.sqlitePath),
+  })
 })

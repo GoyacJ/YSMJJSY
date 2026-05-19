@@ -99,7 +99,7 @@ describe('MemoryPlanetPanel', () => {
           applyProposal: Function,
           runSleep: Function,
         },
-        template: '<section class="agent-core-stub" :data-embedded="String(embedded)" :data-load-core="String(Boolean(loadCore))" :data-apply-proposal="String(Boolean(applyProposal))" :data-run-sleep="String(Boolean(runSleep))">星AI</section>',
+        template: '<section class="agent-core-stub" :data-embedded="String(embedded)" :data-load-core="String(Boolean(loadCore))" :data-apply-proposal="String(Boolean(applyProposal))" :data-run-sleep="String(Boolean(runSleep))">待确认</section>',
       },
     },
   }
@@ -115,7 +115,7 @@ describe('MemoryPlanetPanel', () => {
 
     expect(wrapper.text()).toContain('记忆星球')
     expect(wrapper.text()).toContain('还没有形成星球')
-    expect(wrapper.text()).toContain('暂无星体')
+    expect(wrapper.text()).toContain('还没有记忆')
   })
 
   it('closes when the backdrop is clicked', async () => {
@@ -147,6 +147,19 @@ describe('MemoryPlanetPanel', () => {
     expect(button.classes()).toContain('dialog-close-button')
   })
 
+  it('hides its close button when embedded in the star panel', () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        embedded: true,
+      },
+      global,
+    })
+
+    expect(wrapper.find('button[aria-label="关闭记忆星球"]').exists()).toBe(false)
+  })
+
   it('renders memory stars and opens memory detail', async () => {
     const wrapper = mount(MemoryPlanetPanel, {
       props: {
@@ -159,7 +172,7 @@ describe('MemoryPlanetPanel', () => {
     await wrapper.get('button[aria-label="查看记忆：用户喜欢短句。"]').trigger('click')
 
     expect(wrapper.text()).toContain('用户喜欢短句。')
-    expect(wrapper.text()).toContain('preference')
+    expect(wrapper.text()).toContain('偏好')
   })
 
   it('shows memory governance actions for a selected memory', async () => {
@@ -173,9 +186,13 @@ describe('MemoryPlanetPanel', () => {
 
     expect(wrapper.text()).toContain('重要性')
     expect(wrapper.get('button[aria-label="归档记忆"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="删除记忆"]').exists()).toBe(true)
 
     await wrapper.get('button[aria-label="归档记忆"]').trigger('click')
     expect(governMemory).toHaveBeenCalledWith('m1', 'archive')
+
+    await wrapper.get('button[aria-label="删除记忆"]').trigger('click')
+    expect(governMemory).toHaveBeenCalledWith('m1', 'delete')
   })
 
   it('shows source and governance history for a selected memory', async () => {
@@ -189,9 +206,9 @@ describe('MemoryPlanetPanel', () => {
     expect(wrapper.text()).toContain('来源')
     expect(wrapper.text()).toContain('c1')
     expect(wrapper.text()).toContain('用户说自己喜欢短句。')
-    expect(wrapper.text()).toContain('状态 active')
-    expect(wrapper.text()).toContain('最近治理动作')
-    expect(wrapper.text()).toContain('confirm')
+    expect(wrapper.text()).toContain('状态 已确认')
+    expect(wrapper.text()).toContain('最近记录')
+    expect(wrapper.text()).toContain('确认')
   })
 
   it('switches between planet, timeline, and works views', async () => {
@@ -210,6 +227,21 @@ describe('MemoryPlanetPanel', () => {
 
     await wrapper.get('button[aria-label="查看智能体作品"]').trigger('click')
     expect(wrapper.text()).toContain('月光图')
+  })
+
+  it('hides legacy timeline and works tabs in memory-only mode', () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        memoryOnly: true,
+      },
+      global,
+    })
+
+    expect(wrapper.find('button[aria-label="查看星球时间线"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="查看智能体作品"]').exists()).toBe(false)
+    expect(wrapper.find('.memory-planet-panel__layout').exists()).toBe(true)
   })
 
   it('renders grouped timeline and opens matching memory detail', async () => {
@@ -264,6 +296,13 @@ describe('MemoryPlanetPanel', () => {
             previewUrl: 'https://example.com/moon.png',
             visibility: 'private',
             sourceConversationId: 'c1',
+            payload: {
+              disclosure: {
+                aiGenerated: true,
+                explicitLabel: 'AI 生成',
+                generatedAt: '2026-05-17T00:00:00.000Z',
+              },
+            },
             createdAt: '2026-05-17T00:00:00.000Z',
           },
           {
@@ -271,7 +310,7 @@ describe('MemoryPlanetPanel', () => {
             type: 'letter',
             title: '短句回信',
             summary: '一封短信。',
-            visibility: 'private',
+            visibility: 'public',
             createdAt: '2026-05-17T00:01:00.000Z',
           },
         ],
@@ -284,6 +323,8 @@ describe('MemoryPlanetPanel', () => {
     await wrapper.get('button[aria-label="筛选图片作品"]').trigger('click')
 
     expect(wrapper.text()).toContain('月光图')
+    expect(wrapper.text()).toContain('私密')
+    expect(wrapper.text()).toContain('AI 生成')
     expect(wrapper.text()).not.toContain('短句回信')
     expect(wrapper.get('.memory-planet-panel__work-preview[alt="月光图"]').attributes('src')).toBe('https://example.com/moon.png')
 
@@ -294,6 +335,30 @@ describe('MemoryPlanetPanel', () => {
 
     await wrapper.get('button[aria-label="公开作品"]').trigger('click')
     expect(updateWorkVisibility).toHaveBeenCalledWith('w1', 'public')
+  })
+
+  it('labels public works as already published', async () => {
+    const wrapper = mount(MemoryPlanetPanel, {
+      props: {
+        core,
+        open: true,
+        works: [
+          {
+            id: 'w1',
+            type: 'letter',
+            title: '短句回信',
+            summary: '一封短信。',
+            visibility: 'public',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+      },
+      global,
+    })
+
+    await wrapper.get('button[aria-label="查看智能体作品"]').trigger('click')
+
+    expect(wrapper.text()).toContain('已公开')
   })
 
   it('normalizes legacy base64 image previews before rendering works', async () => {

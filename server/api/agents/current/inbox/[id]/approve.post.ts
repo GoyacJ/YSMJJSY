@@ -5,35 +5,45 @@ import {
   createAgentEvolutionRepository,
   createAgentInstanceRepository,
   createAgentObservationRepository,
+  createAgentReflectionRepository,
+  createAgentSleepRepository,
   createAgentTaskRepository,
+  createConversationRepository,
+  createKeyDesignRepository,
   createMemoryEventRepository,
   createAgentSnapshotRepository,
   createAgentStateRepository,
   createAgentWorkRepository,
   createKeyProfileRepository,
   createMemoryRepository,
+  createMediaTaskRepository,
   type AgentEventRecord,
   type AgentEvolutionProposalRecord,
   type AgentObservationRecord,
   type AgentStateRecord,
   type AgentStateSnapshotRecord,
   type AgentTaskRecord,
+  type AgentTaskType,
   type AgentWorkRecord,
   type AgentWorkVisibility,
+  type KeyDesignRecord,
   type MemoryEventRecord,
-  type MemoryGovernanceAction,
   type MemoryRecord,
+  type StarBoundarySettings,
 } from '../../../../../db/sqlite'
 import { applyAgentProposalAction } from '../../../../agent/proposals/[id].put'
-import { updateAgentWorkVisibilityAction } from '../../../../agent/works/[id].put'
 import { restoreAgentSnapshotAction } from '../../../../agent/snapshots/[id]/restore.post'
 import { requireAgentKey } from '../../../../agent/core.get'
 import { buildAgentEvent } from '../../../../../services/agent-events'
-import { applyMemoryGovernanceAction } from '../../../../agent/memories/[id].put'
-import { defaultAgentPolicy } from '../../../../../services/agent-policy'
-import { cancelAgentTask } from '../../../../../services/agent-task-queue'
+import { createAgentPolicyFromBoundarySettings, defaultAgentPolicy, type AgentPolicy } from '../../../../../services/agent-policy'
+import { cancelAgentTask, enqueueAgentTask } from '../../../../../services/agent-task-queue'
 import { createAgentLoop } from '../../../../../services/agent-loop'
 import { createAgentToolRegistry, type AgentToolRegistry } from '../../../../../services/agent-runtime'
+import { createDefaultAgentProviderRegistry } from '../../../../../services/agent-providers'
+import { runManualAgentSleep } from '../../../../../services/agent-sleep'
+import { commitKeyDesign } from '../../../../../services/design-commit'
+import { parseDesignSchema } from '../../../../../services/design-schema'
+import { markKeyActivity } from '../../../../../services/key-activity'
 import { registerDefaultStarAgentTools } from '../../../../../services/star-agent-runtime'
 
 export type InboxActionInput = {
@@ -54,21 +64,29 @@ export type InboxActionInput = {
     addSnapshot: (record: AgentStateSnapshotRecord) => void
     getSnapshotByKey?: (keyId: string, id: string) => AgentStateSnapshotRecord | undefined
   }
+  designs?: {
+    getLatestDesign: (keyId: string) => Pick<KeyDesignRecord, 'version'> | undefined
+    addKeyDesign: (record: { keyId: string, version: number, schemaJson: string, prompt: string, createdAt: string }) => void
+  }
   states: {
     updateAgentState: (keyId: string, updates: Partial<Omit<AgentStateRecord, 'keyId'>> & { updatedAt: string }) => void
   }
   memories: {
     getMemoryByKey?: (keyId: string, id: string) => MemoryRecord | undefined
-    updateMemory: (id: string, updates: { importance?: number, status?: 'active' | 'archived' | 'rejected', updatedAt: string }) => void
+    updateMemory: (id: string, updates: { importance?: number, status?: 'active' | 'pending' | 'archived' | 'rejected', updatedAt: string }) => void
+    deleteMemoryByKey?: (keyId: string, id: string) => number
   }
   memoryEvents?: {
     addMemoryEvent: (record: MemoryEventRecord) => void
   }
   tasks?: {
+    addTask?: (record: AgentTaskRecord) => void
     getTask: (id: string) => AgentTaskRecord | undefined
     updateTask: (id: string, updates: Partial<Pick<AgentTaskRecord, 'status' | 'resultJson' | 'error' | 'updatedAt'>>) => void
   }
   registry?: Pick<AgentToolRegistry, 'get' | 'execute'>
+  policy?: AgentPolicy
+  boundarySettings?: StarBoundarySettings
   works: {
     getWorkByKey: (keyId: string, id: string) => AgentWorkRecord | undefined
     updateWorkVisibility: (keyId: string, id: string, visibility: AgentWorkVisibility, updatedAt: string) => void
@@ -151,6 +169,42 @@ export function addApprovalEvent(input: InboxActionInput, parsed: ParsedInboxIte
   }))
 }
 
+async function runApprovedInboxTask(input: InboxActionInput, taskInput: {
+  type: AgentTaskType
+  title: string
+  summary: string
+  toolName: string
+  toolInput: Record<string, unknown>
+}) {
+  if (!input.tasks?.addTask || !input.registry) {
+    throw createError({ statusCode: 400, statusMessage: 'Task approval action unavailable' })
+  }
+
+  const task = enqueueAgentTask({
+    agentId: input.agentId,
+    type: taskInput.type,
+    title: taskInput.title,
+    summary: taskInput.summary,
+    input: {
+      toolName: taskInput.toolName,
+      input: taskInput.toolInput,
+    },
+    now: input.now,
+    tasks: { addTask: input.tasks.addTask },
+    events: input.events,
+  })
+
+  await createAgentLoop({
+    now: input.now,
+    tasks: input.tasks,
+    events: input.events,
+    registry: input.registry,
+    policy: input.policy ?? defaultAgentPolicy,
+  }).runTask(task, { approvalGranted: true })
+
+  return task
+}
+
 export function approveAgentInboxItem(input: InboxActionInput) {
   const parsed = parseInboxItemId(input.itemId)
 
@@ -161,6 +215,7 @@ export function approveAgentInboxItem(input: InboxActionInput) {
       action: 'accept',
       now: input.now,
       profile: input.profile,
+      boundarySettings: input.boundarySettings,
       agentState: input.agentState,
       proposals: input.proposals,
       snapshots: input.snapshots,
@@ -185,46 +240,47 @@ export function approveAgentInboxItem(input: InboxActionInput) {
   }
 
   if (parsed.type === 'work_visibility') {
-    updateAgentWorkVisibilityAction({
-      keyId: input.keyId,
-      workId: parsed.id,
-      visibility: 'public',
-      now: input.now,
-      works: input.works,
-    })
-    addApprovalEvent(input, parsed, true)
+    return runApprovedInboxTask(input, {
+      type: 'publish_artifact',
+      title: '公开作品',
+      summary: '公开一个作品。',
+      toolName: 'star.publishWork',
+      toolInput: { workId: parsed.id },
+    }).then(() => {
+      addApprovalEvent(input, parsed, true)
 
-    return {
-      id: parsed.id,
-      type: parsed.type,
-      status: 'approved',
-    }
+      return {
+        id: parsed.id,
+        type: parsed.type,
+        status: 'approved',
+      }
+    })
   }
 
   if (parsed.type === 'memory_governance') {
-    if (!input.memories.getMemoryByKey || !input.memoryEvents || !parsed.action) {
+    if (!parsed.action) {
       throw createError({ statusCode: 400, statusMessage: 'Memory governance action unavailable' })
     }
 
-    const result = applyMemoryGovernanceAction({
-      keyId: input.keyId,
-      memoryId: parsed.id,
-      action: parsed.action as MemoryGovernanceAction,
-      reason: 'Agent OS inbox approval',
-      now: input.now,
-      memories: {
-        getMemoryByKey: input.memories.getMemoryByKey,
-        updateMemory: input.memories.updateMemory,
+    return runApprovedInboxTask(input, {
+      type: 'govern_memory',
+      title: '治理记忆',
+      summary: '执行记忆治理。',
+      toolName: 'star.governMemory',
+      toolInput: {
+        memoryId: parsed.id,
+        action: parsed.action,
+        reason: 'Agent OS inbox approval',
       },
-      events: input.memoryEvents,
-    })
-    addApprovalEvent(input, parsed, true)
+    }).then(() => {
+      addApprovalEvent(input, parsed, true)
 
-    return {
-      id: result.id,
-      type: parsed.type,
-      status: result.status,
-    }
+      return {
+        id: parsed.id,
+        type: parsed.type,
+        status: parsed.action === 'reject' ? 'rejected' : parsed.action,
+      }
+    })
   }
 
   if (parsed.type === 'task_approval') {
@@ -243,7 +299,7 @@ export function approveAgentInboxItem(input: InboxActionInput) {
       tasks: input.tasks,
       events: input.events,
       registry: input.registry,
-      policy: defaultAgentPolicy,
+      policy: input.policy ?? defaultAgentPolicy,
     }).runTask(task, { approvalGranted: true }).then(() => {
       addApprovalEvent(input, parsed, true)
 
@@ -267,6 +323,7 @@ export function approveAgentInboxItem(input: InboxActionInput) {
         getSnapshotByKey: input.snapshots.getSnapshotByKey,
       },
       states: input.states,
+      designs: input.designs,
       now: input.now,
     })
 
@@ -311,23 +368,6 @@ export function cancelTaskApproval(input: InboxActionInput, parsed: ParsedInboxI
   })
 }
 
-export function approveWorkVisibility(input: InboxActionInput, parsed: ParsedInboxItem) {
-  updateAgentWorkVisibilityAction({
-    keyId: input.keyId,
-    workId: parsed.id,
-    visibility: 'public',
-    now: input.now,
-    works: input.works,
-  })
-  addApprovalEvent(input, parsed, true)
-
-  return {
-    id: parsed.id,
-    type: parsed.type,
-    status: 'approved',
-  }
-}
-
 function buildRouteInput(event: H3Event, itemId: string): InboxActionInput {
   const keyId = requireAgentKey(event)
   const config = useRuntimeConfig(event)
@@ -361,6 +401,7 @@ function buildRouteInput(event: H3Event, itemId: string): InboxActionInput {
     agentState: states.getOrCreateAgentState(keyId, now),
     proposals: createAgentEvolutionRepository(config.sqlitePath),
     snapshots: createAgentSnapshotRepository(config.sqlitePath),
+    designs: createKeyDesignRepository(config.sqlitePath),
     states,
     memories: createMemoryRepository(config.sqlitePath),
     memoryEvents: createMemoryEventRepository(config.sqlitePath),
@@ -369,6 +410,8 @@ function buildRouteInput(event: H3Event, itemId: string): InboxActionInput {
     events: createAgentEventRepository(config.sqlitePath),
     observations: createAgentObservationRepository(config.sqlitePath),
     registry: createAgentToolRegistry(),
+    policy: createAgentPolicyFromBoundarySettings(profile.boundarySettings),
+    boundarySettings: profile.boundarySettings,
   }
 }
 
@@ -393,6 +436,10 @@ export default defineEventHandler((event) => {
 
   if (input.registry) {
     const config = useRuntimeConfig(event)
+    const providerRegistry = createDefaultAgentProviderRegistry({
+      minimaxApiKey: config.minimaxApiKey,
+      minimaxGroupId: config.minimaxGroupId,
+    })
 
     registerDefaultStarAgentTools(input.registry as AgentToolRegistry, {
       keyId: input.keyId,
@@ -400,13 +447,50 @@ export default defineEventHandler((event) => {
       minimaxApiKey: config.minimaxApiKey,
       minimaxGroupId: config.minimaxGroupId,
       works: input.works,
-      memories: input.memories.getMemoryByKey
+      mediaTasks: createMediaTaskRepository(config.sqlitePath),
+      memories: input.memories.getMemoryByKey && input.memories.deleteMemoryByKey
         ? {
             getMemoryByKey: input.memories.getMemoryByKey,
             updateMemory: input.memories.updateMemory,
+            deleteMemoryByKey: input.memories.deleteMemoryByKey,
           }
         : undefined,
       memoryEvents: input.memoryEvents,
+      boundarySettings: input.boundarySettings,
+      sleep: () => runManualAgentSleep({
+        keyId: input.keyId,
+        now: input.now,
+        client: providerRegistry.getDefault(),
+        profile: input.profile,
+        agentState: input.agentState,
+        memories: createMemoryRepository(config.sqlitePath),
+        conversations: createConversationRepository(config.sqlitePath),
+        reflections: createAgentReflectionRepository(config.sqlitePath),
+        proposals: createAgentEvolutionRepository(config.sqlitePath),
+        sleeps: createAgentSleepRepository(config.sqlitePath),
+        states: input.states,
+      }),
+      commitDesign: (toolInput) => {
+        const record = toolInput && typeof toolInput === 'object' && !Array.isArray(toolInput)
+          ? toolInput as { schema?: unknown, prompt?: unknown }
+          : {}
+        const schema = parseDesignSchema(record.schema)
+
+        return commitKeyDesign({
+          keyId: input.keyId,
+          schema,
+          prompt: typeof record.prompt === 'string' ? record.prompt : '',
+          now: input.now,
+          designs: createKeyDesignRepository(config.sqlitePath),
+          works: createAgentWorkRepository(config.sqlitePath),
+          markActivity: (keyId, kind) => markKeyActivity(config.sqlitePath, keyId, kind),
+          observation: {
+            agentId: input.agentId,
+            observations: createAgentObservationRepository(config.sqlitePath),
+            events: createAgentEventRepository(config.sqlitePath),
+          },
+        })
+      },
     })
   }
 

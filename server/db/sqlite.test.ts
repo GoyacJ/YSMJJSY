@@ -15,6 +15,8 @@ import {
   createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
+  createKeySessionRepository,
+  listDatabaseIndexes,
   createMediaTaskRepository,
   createMemoryEventRepository,
   createMemoryRepository,
@@ -304,7 +306,86 @@ describe('sqlite repositories', () => {
       updatedAt: '2026-05-16T00:00:00.000Z',
     })
 
-    expect(repo.findByLookupHash('lookup')?.id).toBe('key_1')
+    expect(repo.findByLookupHash('lookup')).toMatchObject({
+      id: 'key_1',
+      boundarySettings: {
+        memoryWriteMode: 'assisted',
+        generatedWorksDefaultVisibility: 'private',
+        requireApprovalForPublishing: true,
+        requireApprovalForPersonaChange: true,
+        requireApprovalForSensitiveMemory: true,
+        disallowedMemoryTopics: [],
+        allowedMemoryTopics: [],
+        minorMode: false,
+      },
+    })
+  })
+
+  it('stores key boundary settings', () => {
+    const repo = createKeyProfileRepository(':memory:')
+
+    repo.addKeyProfile({
+      id: 'key_1',
+      keyLookupHash: 'lookup',
+      assistantName: '',
+      mbti: '',
+      configuredAt: null,
+      createdIpHash: 'ip_hash',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+      boundarySettings: {
+        memoryWriteMode: 'manual',
+        generatedWorksDefaultVisibility: 'private',
+        requireApprovalForPublishing: true,
+        requireApprovalForPersonaChange: true,
+        requireApprovalForSensitiveMemory: true,
+        disallowedMemoryTopics: ['身份证号'],
+        allowedMemoryTopics: ['写作偏好'],
+        minorMode: true,
+      },
+    })
+
+    expect(repo.getKeyProfile('key_1')?.boundarySettings).toMatchObject({
+      memoryWriteMode: 'manual',
+      disallowedMemoryTopics: ['身份证号'],
+      allowedMemoryTopics: ['写作偏好'],
+      minorMode: true,
+    })
+  })
+
+  it('stores revocable key sessions', () => {
+    const path = join(tmpdir(), `ysmjjsy-session-${Date.now()}-${Math.random()}.sqlite`)
+    const keys = createKeyProfileRepository(path)
+    const repo = createKeySessionRepository(path)
+
+    keys.addKeyProfile({
+      id: 'key_1',
+      keyLookupHash: 'lookup',
+      assistantName: '',
+      mbti: '',
+      configuredAt: null,
+      createdIpHash: 'ip_hash',
+      createdAt: '2026-05-19T00:00:00.000Z',
+      updatedAt: '2026-05-19T00:00:00.000Z',
+    })
+
+    repo.addSession({
+      id: 'session_1',
+      keyId: 'key_1',
+      csrfHash: 'csrf_hash',
+      createdAt: '2026-05-19T00:00:00.000Z',
+      expiresAt: '2026-05-19T12:00:00.000Z',
+      revokedAt: null,
+    })
+
+    expect(repo.getSession('session_1')).toMatchObject({
+      id: 'session_1',
+      keyId: 'key_1',
+      revokedAt: null,
+    })
+
+    repo.revokeSession('session_1', '2026-05-19T01:00:00.000Z')
+    expect(repo.getSession('session_1')?.revokedAt).toBe('2026-05-19T01:00:00.000Z')
   })
 
   it('lists configured public stars without private key fields', () => {
@@ -427,6 +508,30 @@ describe('sqlite repositories', () => {
     expect(repo.getConversationByKey('key_2', 'c1')).toBeUndefined()
   })
 
+  it('lists and clears conversations by key only', () => {
+    const repo = createConversationRepository(':memory:')
+
+    repo.addConversation({
+      id: 'c1',
+      keyId: 'key_1',
+      role: 'user',
+      content: 'key 1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+    repo.addConversation({
+      id: 'c2',
+      keyId: 'key_2',
+      role: 'user',
+      content: 'key 2',
+      createdAt: '2026-05-16T00:01:00.000Z',
+    })
+
+    expect(repo.listConversationsByKey('key_1').map(item => item.id)).toEqual(['c1'])
+    expect(repo.clearConversationsByKey('key_1')).toBe(1)
+    expect(repo.listConversationsByKey('key_1')).toEqual([])
+    expect(repo.listConversationsByKey('key_2').map(item => item.id)).toEqual(['c2'])
+  })
+
   it('stores structured conversation message json', () => {
     const repo = createConversationRepository(':memory:')
 
@@ -467,6 +572,31 @@ describe('sqlite repositories', () => {
     })
 
     expect(repo.listMemoriesByKey('key_1').map(item => item.content)).toEqual(['key 1 memory'])
+  })
+
+  it('deletes memories by key without touching other keys', () => {
+    const repo = createMemoryRepository(':memory:')
+
+    repo.addMemory({
+      id: 'm1',
+      keyId: 'key_1',
+      type: 'emotion',
+      content: 'key 1 memory',
+      importance: 0.8,
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+    repo.addMemory({
+      id: 'm2',
+      keyId: 'key_2',
+      type: 'emotion',
+      content: 'key 2 memory',
+      importance: 0.8,
+      createdAt: '2026-05-16T00:00:00.000Z',
+    })
+
+    expect(repo.deleteMemoryByKey('key_1', 'm1')).toBe(1)
+    expect(repo.listMemoriesByKey('key_1')).toEqual([])
+    expect(repo.listMemoriesByKey('key_2').map(item => item.content)).toEqual(['key 2 memory'])
   })
 
   it('stores agent reflections by key', () => {
@@ -615,5 +745,22 @@ describe('sqlite repositories', () => {
 
     expect(repo.listAttachmentsByConversation('key_1', 'c1')).toHaveLength(1)
     expect(repo.listAttachmentsByConversation('key_2', 'c1')).toHaveLength(0)
+  })
+
+  it('creates indexes for key-scoped and agent-scoped reads', () => {
+    const indexes = listDatabaseIndexes(':memory:')
+
+    expect(indexes).toEqual(expect.arrayContaining([
+      'idx_conversations_key_created',
+      'idx_memories_key_status',
+      'idx_agent_tasks_agent_created',
+      'idx_agent_events_agent_created',
+      'idx_agent_observations_agent_created',
+      'idx_agent_works_key_created',
+      'idx_agent_proposals_key_status',
+      'idx_agent_sleep_runs_key_started',
+      'idx_attachments_key_conversation',
+      'idx_key_designs_key_version',
+    ]))
   })
 })

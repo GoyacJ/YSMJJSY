@@ -166,7 +166,8 @@ export const schemaStatements = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     activity_at TEXT,
-    activity_kind TEXT
+    activity_kind TEXT,
+    boundary_settings_json TEXT NOT NULL DEFAULT '{}'
   )`,
   `CREATE TABLE IF NOT EXISTS key_designs (
     key_id TEXT NOT NULL,
@@ -198,4 +199,23 @@ export const schemaStatements = [
     created_at TEXT NOT NULL,
     FOREIGN KEY (key_id) REFERENCES key_profiles(id)
   )`,
+  `CREATE TABLE IF NOT EXISTS key_sessions (
+    id TEXT PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    csrf_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT,
+    FOREIGN KEY (key_id) REFERENCES key_profiles(id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_conversations_key_created ON conversations (key_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_memories_key_status ON memories (key_id, status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_tasks_agent_created ON agent_tasks (agent_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_events_agent_created ON agent_events (agent_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_observations_agent_created ON agent_observations (agent_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_works_key_created ON agent_works (key_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_proposals_key_status ON agent_evolution_proposals (key_id, status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_sleep_runs_key_started ON agent_sleep_runs (key_id, started_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_attachments_key_conversation ON attachments (key_id, conversation_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_key_designs_key_version ON key_designs (key_id, version)`,
 ]

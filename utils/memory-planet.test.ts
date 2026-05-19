@@ -25,6 +25,16 @@ const core: AgentCore = {
       content: '用户喜欢短句。',
       importance: 0.9,
       confidence: 0.92,
+      status: 'active',
+      sourceConversationId: 'c1',
+      governanceEvents: [
+        {
+          id: 'event_1',
+          action: 'confirm',
+          reason: '用户明确表达。',
+          createdAt: '2026-05-17T00:07:00.000Z',
+        },
+      ],
       createdAt: '2026-05-17T00:00:00.000Z',
     },
     {
@@ -100,6 +110,14 @@ describe('buildMemoryPlanetState', () => {
       id: 'm1',
       label: '用户喜欢短句。',
       type: 'preference',
+      status: 'active',
+      sourceConversationId: 'c1',
+      latestGovernanceEvent: {
+        id: 'event_1',
+        action: 'confirm',
+        reason: '用户明确表达。',
+        createdAt: '2026-05-17T00:07:00.000Z',
+      },
       bright: true,
     })
     expect(state.memoryStars[1]).toMatchObject({
@@ -125,6 +143,39 @@ describe('buildMemoryPlanetState', () => {
         status: 'pending',
       }),
     ])
+  })
+
+  it('keeps visual nodes inside the safe stage area', () => {
+    const manyMemoriesCore: AgentCore = {
+      ...core,
+      memories: Array.from({ length: 18 }, (_, index) => ({
+        id: `memory_${index}`,
+        type: 'preference',
+        content: `记忆 ${index}`,
+        importance: 0.7,
+        confidence: 0.8,
+        createdAt: '2026-05-17T00:00:00.000Z',
+      })),
+      latestReflections: Array.from({ length: 6 }, (_, index) => ({
+        id: `reflection_${index}`,
+        summary: `反思 ${index}`,
+        createdAt: '2026-05-17T00:00:00.000Z',
+      })),
+    }
+    const state = buildMemoryPlanetState(manyMemoriesCore)
+    const positions = [
+      ...state.memoryStars.map(star => star.position),
+      ...state.reflectionNebulas.map(nebula => nebula.position),
+      ...state.proposalLights.map(light => light.position),
+    ]
+
+    expect(positions.length).toBeGreaterThan(0)
+    expect(positions.every(position => (
+      position.x >= 14
+      && position.x <= 86
+      && position.y >= 14
+      && position.y <= 86
+    ))).toBe(true)
   })
 
   it('turns accepted and applied proposals into orbit rings but excludes rejected proposals', () => {

@@ -26,6 +26,10 @@ export function buildAgentTaskInputFromIntent(input: {
     throw createError({ statusCode: 400, statusMessage: 'Unsupported artifact type' })
   }
 
+  if (input.type === 'sleep') {
+    return { toolName: 'star.sleep', input: input.input }
+  }
+
   if (input.type === 'publish_artifact') {
     return {
       toolName: 'star.publishWork',
@@ -47,6 +51,13 @@ export function buildAgentTaskInputFromIntent(input: {
   if (input.type === 'preview_design') {
     return {
       toolName: 'star.previewDesign',
+      input: input.input,
+    }
+  }
+
+  if (input.type === 'commit_design') {
+    return {
+      toolName: 'star.commitDesign',
       input: input.input,
     }
   }

@@ -58,6 +58,32 @@ describe('agent runtime seams', () => {
     })
   })
 
+  it('lists capability metadata for registered tools', () => {
+    const registry = createAgentToolRegistry()
+
+    registry.register({
+      name: 'star.generateMusic',
+      description: 'Generate music.',
+      category: 'media',
+      behavior: 'create',
+      capabilities: ['generate_music', 'generate_song'],
+      aliases: ['唱首歌'],
+      whenToUse: '用户要求唱歌或生成音乐时使用。',
+      cannotDo: '不保证实时真人演唱。',
+      outputTypes: ['music'],
+      riskLevel: 'medium',
+      approvalRequired: false,
+      execute: async () => ({ ok: true }),
+    })
+
+    expect(registry.list()[0]).toMatchObject({
+      name: 'star.generateMusic',
+      capabilities: ['generate_music', 'generate_song'],
+      cannotDo: '不保证实时真人演唱。',
+      outputTypes: ['music'],
+    })
+  })
+
   it('lists tools without metadata safely', () => {
     const registry = createAgentToolRegistry()
     const execute = vi.fn()

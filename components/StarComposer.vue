@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import type { AttachmentKind, StarChatIntent } from '../composables/useStarChat'
-
-type MediaIntent = Exclude<StarChatIntent, 'auto' | 'chat'>
+import type { AttachmentKind } from '../composables/useStarChat'
 
 defineProps<{
   input: string
   pending: boolean
   listening: boolean
-  selectedMediaKinds: MediaIntent[]
   attachmentMenuOpen: boolean
 }>()
 
@@ -18,15 +15,7 @@ const emit = defineEmits<{
   'toggle-attachments': []
   'attachment-change': [event: Event, kind: AttachmentKind]
   'start-voice': []
-  'toggle-media-kind': [kind: MediaIntent]
 }>()
-
-const mediaActions: Array<{ kind: MediaIntent, label: string, icon: string }> = [
-  { kind: 'audio', label: '生成语音', icon: 'M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4' },
-  { kind: 'image', label: '生成图片', icon: 'M4 5h16v14H4zM8 14l2.5-3 2 2.5L15 10l5 6M8 9h.01' },
-  { kind: 'video', label: '生成视频', icon: 'M4 6h11v12H4zM15 10l5-3v10l-5-3z' },
-  { kind: 'music', label: '生成音乐', icon: 'M9 18V5l10-2v13M9 9l10-2M7 18a2 2 0 1 0 4 0 2 2 0 0 0-4 0M17 16a2 2 0 1 0 4 0 2 2 0 0 0-4 0' },
-]
 
 function handleInputEnter(event: KeyboardEvent) {
   if (event.shiftKey || event.isComposing) {
@@ -102,20 +91,6 @@ function handleInputEnter(event: KeyboardEvent) {
               </svg>
               <span>{{ listening ? '正在听' : '语音输入' }}</span>
             </button>
-            <button
-              v-for="action in mediaActions"
-              :key="`mobile-${action.kind}`"
-              type="button"
-              class="star-chat__icon-button"
-              :data-active="selectedMediaKinds.includes(action.kind)"
-              :aria-label="action.label"
-              @click="emit('toggle-media-kind', action.kind)"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path :d="action.icon" />
-              </svg>
-              <span>{{ action.label }}</span>
-            </button>
           </div>
         </div>
       </div>
@@ -134,20 +109,6 @@ function handleInputEnter(event: KeyboardEvent) {
             <path d="M12 18v3" />
           </svg>
           <span class="sr-only">{{ listening ? '正在听' : '语音输入' }}</span>
-        </button>
-        <button
-          v-for="action in mediaActions"
-          :key="action.kind"
-          type="button"
-          class="star-chat__icon-button"
-          :data-active="selectedMediaKinds.includes(action.kind)"
-          :aria-label="action.label"
-          @click="emit('toggle-media-kind', action.kind)"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path :d="action.icon" />
-          </svg>
-          <span class="sr-only">{{ action.label }}</span>
         </button>
       </div>
     </div>

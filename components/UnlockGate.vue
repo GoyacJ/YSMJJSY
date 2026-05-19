@@ -78,17 +78,17 @@ async function submitCreate() {
           autocomplete="off"
           maxlength="64"
           minlength="6"
-          placeholder="输入钥匙"
+          placeholder="输入星球钥匙"
           class="unlock-gate__code-line"
         >
         <button
           class="unlock-gate__enter"
           type="button"
           :disabled="pending || !code.trim()"
-          aria-label="进入"
+          aria-label="进入星球"
           @click="submitUnlock"
         >
-          {{ pending ? '请稍等' : '进入' }}
+          {{ pending ? '请稍等' : '进入星球' }}
         </button>
         <button
           class="unlock-gate__create"

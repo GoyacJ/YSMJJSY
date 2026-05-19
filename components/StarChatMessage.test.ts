@@ -24,7 +24,7 @@ describe('StarChatMessage', () => {
     expect(wrapper.emitted('copy')).toEqual([[message]])
   })
 
-  it('renders image, audio, music, video, status, and download actions', () => {
+  it('renders image, audio, music, video, and download actions without completed process status', () => {
     const wrapper = mount(StarChatMessage, {
       props: {
         message: {
@@ -42,7 +42,7 @@ describe('StarChatMessage', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('正在生成')
+    expect(wrapper.text()).not.toContain('正在生成')
     expect(wrapper.get('img[alt="生成的图片"]').attributes('src')).toBe('data:image/png;base64,img')
     expect(wrapper.get('audio[data-kind="audio"]').attributes('src')).toBe('data:audio/mpeg;base64,audio')
     expect(wrapper.get('audio[data-kind="music"]').attributes('src')).toBe('data:audio/mpeg;base64,song')
@@ -51,6 +51,21 @@ describe('StarChatMessage', () => {
     expect(wrapper.get('a[download="star-audio.mp3"]').attributes('href')).toBe('data:audio/mpeg;base64,audio')
     expect(wrapper.get('a[download="star-music.mp3"]').attributes('href')).toBe('data:audio/mpeg;base64,song')
     expect(wrapper.get('a[download="star-video.mp4"]').attributes('href')).toBe('https://example.com/star.mp4')
+  })
+
+  it('renders status-only progress messages while waiting', () => {
+    const wrapper = mount(StarChatMessage, {
+      props: {
+        message: {
+          role: 'assistant',
+          content: '正在判断是否需要工具。',
+          parts: [{ type: 'status', text: '正在判断是否需要工具。' }],
+        },
+        active: false,
+      },
+    })
+
+    expect(wrapper.text()).toContain('正在判断是否需要工具。')
   })
 
   it('uses theater message classes for visual states', () => {

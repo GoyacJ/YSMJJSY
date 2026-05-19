@@ -23,6 +23,7 @@ describe('DesignPreviewSheet', () => {
     })
 
     expect(wrapper.text()).toContain('新的页面')
+    expect(wrapper.text()).toContain('AI 生成')
     expect(wrapper.get('button[aria-label="保存这个设计"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="放弃"]').exists()).toBe(true)
   })

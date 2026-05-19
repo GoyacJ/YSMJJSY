@@ -103,6 +103,57 @@ describe('chat history api helpers', () => {
     })
   })
 
+  it('hydrates completed async music parts from media tasks', () => {
+    expect(buildChatHistoryResponse([
+      {
+        id: 'c1',
+        keyId: 'key_1',
+        role: 'assistant',
+        content: '音乐生成已开始。',
+        messageJson: JSON.stringify({
+          role: 'assistant',
+          content: '音乐生成已开始。',
+          parts: [
+            { type: 'text', text: '音乐生成已开始。' },
+            { type: 'music', status: 'processing', taskId: 'media_task_1' },
+          ],
+        }),
+        createdAt: '2026-05-16T00:00:00.000Z',
+      },
+    ], {
+      keyId: 'key_1',
+      mediaTasks: {
+        getMediaTaskByKey: () => ({
+          id: 'media_task_1',
+          keyId: 'key_1',
+          type: 'music',
+          providerTaskId: 'provider_1',
+          status: 'succeeded',
+          prompt: '写一首歌',
+          resultUrl: 'https://example.com/song.mp3',
+          error: null,
+          createdAt: '2026-05-16T00:00:00.000Z',
+          updatedAt: '2026-05-16T00:01:00.000Z',
+        }),
+      },
+    })).toEqual({
+      messages: [{
+        role: 'assistant',
+        content: '音乐生成已开始。',
+        parts: [
+          { type: 'text', text: '音乐生成已开始。' },
+          {
+            type: 'music',
+            status: 'succeeded',
+            taskId: 'media_task_1',
+            providerTaskId: 'provider_1',
+            url: 'https://example.com/song.mp3',
+          },
+        ],
+      }],
+    })
+  })
+
   it('clamps requested history limits', () => {
     expect(normalizeHistoryLimit('2')).toBe(2)
     expect(normalizeHistoryLimit('1000')).toBe(100)

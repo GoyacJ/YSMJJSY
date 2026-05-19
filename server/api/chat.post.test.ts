@@ -1,12 +1,36 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildWorksFromAssistantMessage, recordChatObservations, runAgentLearning, scheduleAgentSleepAfterChat } from './chat/stream.post'
-import { buildStarChatMessages, planStarChatToolsForIntent, starChatStreamEventSchema, streamStarChatReply } from '../services/star-chat'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { buildStarChatSleepRunner, buildStoredAssistantMessage, buildUserMessageJson, buildWorksFromAssistantMessage, recordChatObservations, resolveStarChatAgentPolicy, runAgentLearning, scheduleAgentSleepAfterChat, selectRecentStarChatToolNames } from './chat/stream.post'
+import { defaultStarBoundarySettings } from '../db/sqlite'
+import { buildStarChatMessages, chatBodySchema, starChatStreamEventSchema } from '../services/star-chat'
 
 describe('chat api helpers', () => {
+  it('derives chat tool execution policy from profile boundary settings', () => {
+    const policy = resolveStarChatAgentPolicy({
+      boundarySettings: {
+        ...defaultStarBoundarySettings,
+        requireApprovalForPublishing: false,
+        requireApprovalForSensitiveMemory: false,
+        disallowedMemoryTopics: ['secret'],
+      },
+    })
+
+    expect(policy.requireApprovalForPublishing).toBe(false)
+    expect(policy.requireApprovalForSensitiveMemory).toBe(false)
+    expect(policy.disallowedMemoryTopics).toEqual(['secret'])
+  })
+
   it('accepts chat tool stream events', () => {
-    expect(starChatStreamEventSchema.parse({ type: 'tool-status', text: '正在准备工具。' })).toEqual({
+    expect(starChatStreamEventSchema.parse({ type: 'tool-status', text: '正在准备工具。', visibility: 'user' })).toEqual({
       type: 'tool-status',
       text: '正在准备工具。',
+      visibility: 'user',
+    })
+    expect(starChatStreamEventSchema.parse({ type: 'tool-status', text: 'raw error', visibility: 'debug' })).toEqual({
+      type: 'tool-status',
+      text: 'raw error',
+      visibility: 'debug',
     })
     expect(starChatStreamEventSchema.parse({
       type: 'tool-confirmation',
@@ -23,69 +47,111 @@ describe('chat api helpers', () => {
     })
   })
 
-  it('uses the planner for automatic tool routing', async () => {
-    const provider = {
-      chat: vi.fn(async () => ({
-        reply: JSON.stringify({
-          reply: '可以，我来处理。',
-          toolCalls: [{
-            toolName: 'star.generateImage',
-            input: { prompt: '星空' },
-            mode: 'execute',
-            evidence: '用户要求生成图片。',
-            reason: '明确图片请求。',
-          }],
-        }),
-      })),
-    }
-
-    const result = await planStarChatToolsForIntent({
-      intent: 'auto',
-      prompt: '画一张星空',
-      baseMessages: [{ role: 'user', content: '画一张星空' }],
-      provider: provider as never,
-      registry: {
-        list: () => [{
-          name: 'star.generateImage',
-          title: '生成图片',
-          description: 'Generate image.',
-          category: 'media',
-          behavior: 'create',
-          riskLevel: 'medium',
-          approvalRequired: false,
-        }],
+  it('builds a runnable sleep tool context for chat tools', async () => {
+    const addSleepRun = vi.fn()
+    const updateSleepRun = vi.fn()
+    const addReflection = vi.fn()
+    const updateAgentState = vi.fn()
+    const runner = buildStarChatSleepRunner({
+      keyId: 'key_1',
+      now: '2026-05-19T00:00:00.000Z',
+      client: {
+        reflect: vi.fn(async () => JSON.stringify({
+          dailySummary: '整理完成。',
+          memoryActions: [],
+          proposals: [],
+          workIdeas: [],
+          nextConversationHints: [],
+        })),
       },
-      commonToolNames: ['star.generateImage'],
+      profile: { assistantName: '星信', mbti: 'INTJ' },
+      agentState: { tone: '克制', relationshipRole: '守护者' },
+      memories: { listMemoriesByKey: vi.fn(() => []) },
+      conversations: { listRecentConversationsByKey: vi.fn(() => []) },
+      reflections: {
+        listReflectionsByKey: vi.fn(() => []),
+        addReflection,
+      },
+      proposals: { addProposal: vi.fn() },
+      sleeps: { addSleepRun, updateSleepRun },
+      states: { updateAgentState },
     })
 
-    expect(provider.chat).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({
-      fallbackToChat: false,
-      plan: expect.objectContaining({
-        reply: '可以，我来处理。',
-        toolCalls: [expect.objectContaining({ toolName: 'star.generateImage' })],
-      }),
+    await expect(runner({})).resolves.toMatchObject({
+      run: {
+        keyId: 'key_1',
+        status: 'completed',
+        summary: '整理完成。',
+      },
+    })
+    expect(addSleepRun).toHaveBeenCalled()
+    expect(updateSleepRun).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ status: 'completed' }))
+    expect(addReflection).toHaveBeenCalledWith(expect.objectContaining({ summary: '整理完成。' }))
+    expect(updateAgentState).toHaveBeenCalledWith('key_1', expect.objectContaining({ lastSleepAt: '2026-05-19T00:00:00.000Z' }))
+  })
+
+  it('strips removed compatibility routing fields from chat requests', () => {
+    expect(chatBodySchema.parse({
+      message: '画一张星空',
+      intent: 'image',
+      imageDataUrl: 'data:image/png;base64,abc',
+    })).toEqual({
+      message: '画一张星空',
+      attachments: [],
     })
   })
 
-  it('falls back to normal chat when automatic planning fails', async () => {
-    const provider = {
-      chat: vi.fn(async () => {
-        throw new Error('planner failed')
-      }),
-    }
+  it('stores user attachment message parts as attachment references', () => {
+    const message = buildUserMessageJson('看这个', [{
+      kind: 'image',
+      attachmentId: 'att_1',
+      url: '/api/attachments/att_1',
+    }])
 
-    await expect(planStarChatToolsForIntent({
-      intent: 'auto',
-      prompt: '画一张星空',
-      baseMessages: [{ role: 'user', content: '画一张星空' }],
-      provider: provider as never,
-      registry: { list: () => [] },
-      commonToolNames: [],
-    })).resolves.toEqual({
-      fallbackToChat: true,
-      plan: { reply: '', toolSearches: [], toolCalls: [] },
+    expect(JSON.stringify(message)).not.toContain('data:image')
+    expect(message.parts[1]).toEqual({
+      type: 'image',
+      url: '/api/attachments/att_1',
+      attachmentId: 'att_1',
     })
+  })
+
+  it('selects recent chat tool names from agent tasks', () => {
+    expect(selectRecentStarChatToolNames([
+      { inputJson: JSON.stringify({ toolName: 'star.generateMusic', input: { prompt: '歌' } }) },
+      { inputJson: JSON.stringify({ toolName: 'star.generateImage', input: { prompt: '封面' } }) },
+      { inputJson: JSON.stringify({ toolName: 'star.generateMusic', input: { prompt: '歌' } }) },
+      { inputJson: 'not json' },
+    ])).toEqual(['star.generateMusic', 'star.generateImage'])
+  })
+
+  it('stores assistant inline media as attachment references', () => {
+    const addAttachment = vi.fn()
+    const message = buildStoredAssistantMessage({
+      keyId: 'key_1',
+      conversationId: 'conversation_1',
+      now: '2026-05-19T00:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: '画好了。',
+        parts: [{ type: 'image', base64: 'abc' }],
+      },
+      blobRoot: join(tmpdir(), `ysmjjsy-chat-blob-${Date.now()}-${Math.random()}`),
+      attachments: { addAttachment },
+    })
+
+    expect(JSON.stringify(message)).not.toContain('abc')
+    expect(message.parts[0]).toMatchObject({
+      type: 'image',
+      url: expect.stringMatching(/^\/api\/attachments\//),
+      attachmentId: expect.any(String),
+    })
+    expect(addAttachment).toHaveBeenCalledWith(expect.objectContaining({
+      keyId: 'key_1',
+      conversationId: 'conversation_1',
+      type: 'image',
+      dataUrl: expect.stringMatching(/^blob:/),
+    }))
   })
 
   it('records chat observations for user and assistant messages', () => {
@@ -124,6 +190,14 @@ describe('chat api helpers', () => {
       title: '画好了。',
       previewUrl: 'https://example.com/moon.png',
       visibility: 'private',
+    })
+    expect(JSON.parse(works[0].payloadJson)).toMatchObject({
+      type: 'image',
+      disclosure: {
+        aiGenerated: true,
+        explicitLabel: 'AI 生成',
+        generatedAt: '2026-05-17T00:00:00.000Z',
+      },
     })
   })
 
@@ -170,9 +244,14 @@ describe('chat api helpers', () => {
       previewUrl: null,
       visibility: 'private',
     })
-    expect(JSON.parse(works[0].payloadJson)).toEqual({
+    expect(JSON.parse(works[0].payloadJson)).toMatchObject({
       taskId: 'task-1',
       parts: [{ type: 'status', text: '视频开始生成了。' }],
+      disclosure: {
+        aiGenerated: true,
+        explicitLabel: 'AI 生成',
+        generatedAt: '2026-05-17T00:00:00.000Z',
+      },
     })
   })
 
@@ -243,179 +322,6 @@ describe('chat api helpers', () => {
 
     expect(String(messages.at(-1)?.content)).toContain('voice.mp3')
     expect(String(messages.at(-1)?.content)).toContain('clip.mp4')
-  })
-
-  it('streams chat deltas and finishes with a structured message', async () => {
-    const client = {
-      chat: vi.fn(),
-      chatStream: vi.fn(async function* () {
-        yield '你'
-        yield '好'
-      }),
-      textToSpeech: vi.fn(),
-      textToSpeechStream: vi.fn(),
-      generateImage: vi.fn(),
-      generateMusic: vi.fn(),
-      generateMusicStream: vi.fn(),
-      createVideoTask: vi.fn(),
-    }
-    const events: any[] = []
-
-    await streamStarChatReply({
-      client,
-      intent: 'chat',
-      messages: [{ role: 'user', content: '在吗' }],
-      prompt: '在吗',
-      emit: event => events.push(event),
-    })
-
-    expect(events).toEqual([
-      { type: 'delta', text: '你' },
-      { type: 'delta', text: '好' },
-      {
-        type: 'message',
-        reply: '你好',
-        message: {
-          role: 'assistant',
-          content: '你好',
-          parts: [{ type: 'text', text: '你好' }],
-        },
-      },
-    ])
-  })
-
-  it('streams audio text first and finishes with audio in the message', async () => {
-    const client = {
-      chat: vi.fn(),
-      chatStream: vi.fn(async function* () {
-        yield '星信回复'
-      }),
-      textToSpeech: vi.fn(),
-      textToSpeechStream: vi.fn(async function* () {
-        yield '4944'
-        yield '33'
-      }),
-      generateImage: vi.fn(),
-      generateMusic: vi.fn(),
-      generateMusicStream: vi.fn(),
-      createVideoTask: vi.fn(),
-    }
-    const events: any[] = []
-
-    await streamStarChatReply({
-      client,
-      intent: 'audio',
-      messages: [{ role: 'user', content: '读给我听' }],
-      prompt: '读给我听',
-      emit: event => events.push(event),
-    })
-
-    expect(client.textToSpeechStream).toHaveBeenCalledWith('星信回复')
-    expect(events).toContainEqual({ type: 'audio-delta', hex: '4944' })
-    expect(events).toContainEqual({ type: 'audio-delta', hex: '33' })
-    expect(events.at(-1)).toEqual({
-      type: 'message',
-      reply: '星信回复',
-      message: {
-        role: 'assistant',
-        content: '星信回复',
-        parts: [
-          { type: 'text', text: '星信回复' },
-          { type: 'audio', base64: 'SUQz' },
-        ],
-      },
-    })
-  })
-
-  it('returns one-shot image through stream events without calling chat', async () => {
-    const client = {
-      chat: vi.fn(),
-      chatStream: vi.fn(),
-      textToSpeech: vi.fn(),
-      textToSpeechStream: vi.fn(),
-      generateImage: vi.fn(async () => ({ url: 'https://example.com/star.png' })),
-      generateMusic: vi.fn(),
-      generateMusicStream: vi.fn(),
-      createVideoTask: vi.fn(),
-    }
-    const events: any[] = []
-
-    const response = await streamStarChatReply({
-      client,
-      intent: 'image',
-      messages: [{ role: 'user', content: '画一张星空' }],
-      prompt: '画一张星空',
-      emit: event => events.push(event),
-    })
-
-    expect(client.chat).not.toHaveBeenCalled()
-    expect(client.chatStream).not.toHaveBeenCalled()
-    expect(client.generateImage).toHaveBeenCalled()
-    expect(events[0]).toEqual({ type: 'status', text: '正在画一张。' })
-    expect(response.message.parts).toEqual([
-      { type: 'text', text: '画好了。' },
-      { type: 'image', url: 'https://example.com/star.png' },
-    ])
-  })
-
-  it('streams music and returns a final music message', async () => {
-    const client = {
-      chat: vi.fn(),
-      chatStream: vi.fn(),
-      textToSpeech: vi.fn(),
-      textToSpeechStream: vi.fn(),
-      generateImage: vi.fn(),
-      generateMusic: vi.fn(),
-      generateMusicStream: vi.fn(async function* () {
-        yield '4944'
-        yield '33'
-      }),
-      createVideoTask: vi.fn(async () => ({ providerTaskId: 'task-1' })),
-    }
-    const events: any[] = []
-
-    const music = await streamStarChatReply({
-      client,
-      intent: 'music',
-      messages: [{ role: 'user', content: '写一首歌' }],
-      prompt: '写一首歌',
-      emit: event => events.push(event),
-    })
-
-    expect(client.generateMusicStream).toHaveBeenCalledWith('写一首歌')
-    expect(client.generateMusic).not.toHaveBeenCalled()
-    expect(events).toContainEqual({ type: 'music-delta', hex: '4944' })
-    expect(events).toContainEqual({ type: 'music-delta', hex: '33' })
-    expect(music.message.parts).toEqual([
-      { type: 'text', text: '写好了。' },
-      { type: 'music', base64: 'SUQz' },
-    ])
-  })
-
-  it('returns video task status through stream events', async () => {
-    const client = {
-      chat: vi.fn(),
-      chatStream: vi.fn(),
-      textToSpeech: vi.fn(),
-      textToSpeechStream: vi.fn(),
-      generateImage: vi.fn(),
-      generateMusic: vi.fn(),
-      generateMusicStream: vi.fn(),
-      createVideoTask: vi.fn(async () => ({ providerTaskId: 'task-1' })),
-    }
-    const events: any[] = []
-
-    const video = await streamStarChatReply({
-      client,
-      intent: 'video',
-      messages: [{ role: 'user', content: '做一段视频' }],
-      prompt: '做一段视频',
-      emit: event => events.push(event),
-    })
-
-    expect(events[0]).toEqual({ type: 'status', text: '视频开始生成了。' })
-    expect(video.message.parts).toEqual([{ type: 'status', text: '视频开始生成了。' }])
-    expect(video.taskId).toBe('task-1')
   })
 
   it('stores one reflection after a successful chat', async () => {
@@ -644,6 +550,37 @@ describe('chat api helpers', () => {
       },
       proposals: {
         addProposal: vi.fn(),
+      },
+    })).resolves.toBeUndefined()
+  })
+
+  it('swallows learning failure reporting failures after the chat reply', async () => {
+    await expect(runAgentLearning({
+      keyId: 'key_1',
+      conversationId: 'c_assistant',
+      userMessage: '你好',
+      assistantReply: '你好。',
+      existingMemories: [],
+      profile: { assistantName: '星信', mbti: 'INTJ' },
+      client: {
+        reflectAgent: vi.fn(async () => {
+          throw new Error('reflection failed')
+        }),
+      },
+      reflections: {
+        addReflection: vi.fn(),
+      },
+      memories: {
+        addMemory: vi.fn(),
+      },
+      proposals: {
+        addProposal: vi.fn(),
+      },
+      agentId: 'agent_1',
+      events: {
+        addEvent: vi.fn(() => {
+          throw new Error('event insert failed')
+        }),
       },
     })).resolves.toBeUndefined()
   })

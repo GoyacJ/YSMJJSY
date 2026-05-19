@@ -91,6 +91,123 @@ describe('agent os service', () => {
     expect(result.inbox).toMatchObject([{ id: 'proposal:proposal_1', type: 'proposal', title: '更短' }])
   })
 
+  it('builds user-facing records from existing events without raw payloads', () => {
+    const result = buildAgentOsResponse({
+      agent: {
+        id: 'agent_1',
+        status: 'active',
+        createdAt: '2026-05-18T00:00:00.000Z',
+        updatedAt: '2026-05-18T00:00:00.000Z',
+        bindingId: 'binding_1',
+        ownerType: 'key',
+        ownerId: 'key_1',
+        domain: 'star',
+      },
+      tasks: [],
+      events: [
+        {
+          id: 'event_1',
+          agentId: 'agent_1',
+          type: 'organizing_report.completed',
+          title: '整理报告',
+          summary: '整理出 2 条建议。',
+          targetType: 'sleep',
+          targetId: 'sleep_1',
+          payloadJson: JSON.stringify({
+            sections: [
+              { title: '新记忆', items: ['用户喜欢短句。'], rawProviderBody: 'hidden' },
+              { title: '行动建议', items: ['下次回复更短。'] },
+              { title: '无效', items: [''] },
+            ],
+          }),
+          visibility: 'private',
+          createdAt: '2026-05-18T00:05:00.000Z',
+        },
+        {
+          id: 'event_2',
+          agentId: 'agent_1',
+          type: 'approval.approved',
+          title: '公开作品',
+          summary: '月光图已公开。',
+          targetType: 'work',
+          targetId: 'work_1',
+          payloadJson: '{"sourceMemory":"private"}',
+          visibility: 'private',
+          createdAt: '2026-05-18T00:04:00.000Z',
+        },
+        {
+          id: 'event_3',
+          agentId: 'agent_1',
+          type: 'provider.failed',
+          title: 'Provider failed',
+          summary: '模型失败。',
+          targetType: 'provider',
+          targetId: null,
+          payloadJson: '{"rawProviderBody":"hidden"}',
+          visibility: 'private',
+          createdAt: '2026-05-18T00:03:00.000Z',
+        },
+        {
+          id: 'event_4',
+          agentId: 'agent_1',
+          type: 'task.completed',
+          title: '记忆确认',
+          summary: '记忆已确认。',
+          targetType: 'memory',
+          targetId: 'memory_1',
+          payloadJson: '{"payloadJson":"hidden"}',
+          visibility: 'private',
+          createdAt: '2026-05-18T00:02:00.000Z',
+        },
+      ],
+      pendingProposals: [],
+      publicWorkCandidates: [],
+    })
+
+    expect(result.records).toEqual([
+      {
+        id: 'event_1',
+        type: '整理',
+        title: '整理报告',
+        summary: '整理出 2 条建议。',
+        status: '完成',
+        createdAt: '2026-05-18T00:05:00.000Z',
+        details: {
+          sections: [
+            { title: '新记忆', items: ['用户喜欢短句。'] },
+            { title: '行动建议', items: ['下次回复更短。'] },
+          ],
+        },
+      },
+      {
+        id: 'event_2',
+        type: '发布',
+        title: '公开作品',
+        summary: '月光图已公开。',
+        status: '已确认',
+        createdAt: '2026-05-18T00:04:00.000Z',
+      },
+      {
+        id: 'event_3',
+        type: '失败',
+        title: '模型调用失败',
+        summary: '模型失败。',
+        status: '失败',
+        createdAt: '2026-05-18T00:03:00.000Z',
+      },
+      {
+        id: 'event_4',
+        type: '记忆',
+        title: '记忆确认',
+        summary: '记忆已确认。',
+        status: '完成',
+        createdAt: '2026-05-18T00:02:00.000Z',
+      },
+    ])
+    expect(result.events).toHaveLength(4)
+    expectNoForbiddenResponseSubstrings(result.records)
+  })
+
   it('redacts sensitive task result fields from os responses', () => {
     const result = buildAgentOsResponse({
       agent: {

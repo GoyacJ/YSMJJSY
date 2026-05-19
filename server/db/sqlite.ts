@@ -23,12 +23,12 @@ export type MemoryRecord = {
   confidence?: number
   sourceConversationId?: string | null
   sourceAttachmentId?: string | null
-  status?: 'active' | 'archived' | 'rejected'
+  status?: 'active' | 'pending' | 'archived' | 'rejected'
   updatedAt?: string | null
   createdAt: string
 }
 
-export type MemoryGovernanceAction = 'confirm' | 'downgrade' | 'archive' | 'reject'
+export type MemoryGovernanceAction = 'confirm' | 'downgrade' | 'archive' | 'reject' | 'delete'
 
 export type MemoryEventRecord = {
   id: string
@@ -90,7 +90,7 @@ export type AgentForOwnerRecord = AgentInstanceRecord & {
 }
 
 export type AgentTaskStatus = 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
-export type AgentTaskType = 'reflect' | 'sleep' | 'govern_memory' | 'propose_evolution' | 'generate_artifact' | 'preview_design' | 'publish_artifact'
+export type AgentTaskType = 'reflect' | 'sleep' | 'govern_memory' | 'propose_evolution' | 'generate_artifact' | 'preview_design' | 'commit_design' | 'publish_artifact'
 
 export type AgentTaskRecord = {
   id: string
@@ -202,6 +202,41 @@ export type MediaTaskRecord = {
 
 export type KeyActivityKind = 'created' | 'profile' | 'chat' | 'design' | 'media'
 
+export type StarBoundarySettings = {
+  memoryWriteMode: 'manual' | 'assisted' | 'auto'
+  generatedWorksDefaultVisibility: 'private' | 'public'
+  requireApprovalForPublishing: boolean
+  requireApprovalForPersonaChange: boolean
+  requireApprovalForSensitiveMemory: boolean
+  disallowedMemoryTopics: string[]
+  allowedMemoryTopics: string[]
+  minorMode: boolean
+}
+
+export const defaultStarBoundarySettings: StarBoundarySettings = {
+  memoryWriteMode: 'assisted',
+  generatedWorksDefaultVisibility: 'private',
+  requireApprovalForPublishing: true,
+  requireApprovalForPersonaChange: true,
+  requireApprovalForSensitiveMemory: true,
+  disallowedMemoryTopics: [],
+  allowedMemoryTopics: [],
+  minorMode: false,
+}
+
+export function normalizeStarBoundarySettings(input?: Partial<StarBoundarySettings> | null): StarBoundarySettings {
+  return {
+    memoryWriteMode: input?.memoryWriteMode ?? defaultStarBoundarySettings.memoryWriteMode,
+    generatedWorksDefaultVisibility: input?.generatedWorksDefaultVisibility ?? defaultStarBoundarySettings.generatedWorksDefaultVisibility,
+    requireApprovalForPublishing: input?.requireApprovalForPublishing ?? defaultStarBoundarySettings.requireApprovalForPublishing,
+    requireApprovalForPersonaChange: input?.requireApprovalForPersonaChange ?? defaultStarBoundarySettings.requireApprovalForPersonaChange,
+    requireApprovalForSensitiveMemory: input?.requireApprovalForSensitiveMemory ?? defaultStarBoundarySettings.requireApprovalForSensitiveMemory,
+    disallowedMemoryTopics: input?.disallowedMemoryTopics ?? [],
+    allowedMemoryTopics: input?.allowedMemoryTopics ?? [],
+    minorMode: input?.minorMode ?? defaultStarBoundarySettings.minorMode,
+  }
+}
+
 export type PublicStarRecord = {
   id: string
   name: string
@@ -209,7 +244,7 @@ export type PublicStarRecord = {
   createdAt: string
   activityAt?: string | null
   activityKind?: KeyActivityKind | null
-  publicWorks?: Array<Pick<AgentWorkRecord, 'id' | 'type' | 'title' | 'summary'>>
+  publicWorks?: Array<Pick<AgentWorkRecord, 'id' | 'type' | 'title' | 'summary' | 'payloadJson'>>
 }
 
 export type KeyProfileRecord = {
@@ -223,6 +258,7 @@ export type KeyProfileRecord = {
   updatedAt: string
   activityAt?: string | null
   activityKind?: KeyActivityKind | null
+  boundarySettings?: StarBoundarySettings
 }
 
 export type KeyDesignRecord = {
@@ -256,6 +292,15 @@ export type AttachmentRecord = {
   createdAt: string
 }
 
+export type KeySessionRecord = {
+  id: string
+  keyId: string
+  csrfHash: string
+  createdAt: string
+  expiresAt: string
+  revokedAt?: string | null
+}
+
 function ensureColumn(db: Database.Database, table: string, column: string, definition: string) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
 
@@ -286,6 +331,7 @@ function openDatabase(path: string) {
   ensureColumn(db, 'media_tasks', 'key_id', 'TEXT')
   ensureColumn(db, 'key_profiles', 'activity_at', 'TEXT')
   ensureColumn(db, 'key_profiles', 'activity_kind', 'TEXT')
+  ensureColumn(db, 'key_profiles', 'boundary_settings_json', `TEXT NOT NULL DEFAULT '{}'`)
   ensureColumn(db, 'agent_sleep_runs', 'memory_actions_json', 'TEXT')
   ensureColumn(db, 'agent_sleep_runs', 'work_ideas_json', 'TEXT')
   ensureColumn(db, 'agent_sleep_runs', 'next_conversation_hints_json', 'TEXT')
@@ -323,12 +369,30 @@ export function createConversationRepository(path: string) {
       `).all(keyId, limit).reverse() as ConversationRecord[]
     },
 
+    listConversationsByKey(keyId: string): ConversationRecord[] {
+      return db.prepare(`
+        SELECT id, key_id AS keyId, role, content, message_json AS messageJson, created_at AS createdAt
+        FROM conversations
+        WHERE key_id = ?
+        ORDER BY created_at ASC
+      `).all(keyId) as ConversationRecord[]
+    },
+
     getConversationByKey(keyId: string, id: string): ConversationRecord | undefined {
       return db.prepare(`
         SELECT id, key_id AS keyId, role, content, message_json AS messageJson, created_at AS createdAt
         FROM conversations
         WHERE key_id = ? AND id = ?
       `).get(keyId, id) as ConversationRecord | undefined
+    },
+
+    clearConversationsByKey(keyId: string) {
+      const result = db.prepare(`
+        DELETE FROM conversations
+        WHERE key_id = ?
+      `).run(keyId)
+
+      return result.changes
     },
   }
 }
@@ -436,7 +500,7 @@ export function createMemoryRepository(path: string) {
 
     updateMemory(id: string, updates: {
       importance?: number
-      status?: 'active' | 'archived' | 'rejected'
+      status?: 'active' | 'pending' | 'archived' | 'rejected'
       updatedAt: string
     }) {
       const current = db.prepare(`
@@ -473,6 +537,24 @@ export function createMemoryRepository(path: string) {
         status: updates.status ?? current.status ?? 'active',
         updatedAt: updates.updatedAt,
       })
+    },
+
+    deleteMemoryByKey(keyId: string, id: string) {
+      const result = db.prepare(`
+        DELETE FROM memories
+        WHERE key_id = ? AND id = ?
+      `).run(keyId, id)
+
+      return result.changes
+    },
+
+    clearMemoriesByKey(keyId: string) {
+      const result = db.prepare(`
+        DELETE FROM memories
+        WHERE key_id = ?
+      `).run(keyId)
+
+      return result.changes
     },
   }
 }
@@ -1460,6 +1542,36 @@ export function createMediaTaskRepository(path: string) {
 export function createKeyProfileRepository(path: string) {
   const db = openDatabase(path)
 
+  type KeyProfileRow = Omit<KeyProfileRecord, 'boundarySettings'> & {
+    boundarySettingsJson?: string | null
+  }
+
+  function parseBoundarySettings(value?: string | null): StarBoundarySettings {
+    if (!value) {
+      return normalizeStarBoundarySettings()
+    }
+
+    try {
+      return normalizeStarBoundarySettings(JSON.parse(value) as Partial<StarBoundarySettings>)
+    }
+    catch {
+      return normalizeStarBoundarySettings()
+    }
+  }
+
+  function mapKeyProfile(row?: KeyProfileRow): KeyProfileRecord | undefined {
+    if (!row) {
+      return undefined
+    }
+
+    const { boundarySettingsJson, ...profile } = row
+
+    return {
+      ...profile,
+      boundarySettings: parseBoundarySettings(boundarySettingsJson),
+    }
+  }
+
   return {
     addKeyProfile(record: KeyProfileRecord) {
       db.prepare(`
@@ -1473,7 +1585,8 @@ export function createKeyProfileRepository(path: string) {
           created_at,
           updated_at,
           activity_at,
-          activity_kind
+          activity_kind,
+          boundary_settings_json
         )
         VALUES (
           @id,
@@ -1485,18 +1598,20 @@ export function createKeyProfileRepository(path: string) {
           @createdAt,
           @updatedAt,
           @activityAt,
-          @activityKind
+          @activityKind,
+          @boundarySettingsJson
         )
       `).run({
         ...record,
         configuredAt: record.configuredAt ?? null,
         activityAt: record.activityAt ?? null,
         activityKind: record.activityKind ?? null,
+        boundarySettingsJson: JSON.stringify(normalizeStarBoundarySettings(record.boundarySettings)),
       })
     },
 
     findByLookupHash(keyLookupHash: string): KeyProfileRecord | undefined {
-      return db.prepare(`
+      const row = db.prepare(`
         SELECT
           id,
           key_lookup_hash AS keyLookupHash,
@@ -1507,14 +1622,17 @@ export function createKeyProfileRepository(path: string) {
           created_at AS createdAt,
           updated_at AS updatedAt,
           activity_at AS activityAt,
-          activity_kind AS activityKind
+          activity_kind AS activityKind,
+          boundary_settings_json AS boundarySettingsJson
         FROM key_profiles
         WHERE key_lookup_hash = ?
-      `).get(keyLookupHash) as KeyProfileRecord | undefined
+      `).get(keyLookupHash) as KeyProfileRow | undefined
+
+      return mapKeyProfile(row)
     },
 
     getKeyProfile(id: string): KeyProfileRecord | undefined {
-      return db.prepare(`
+      const row = db.prepare(`
         SELECT
           id,
           key_lookup_hash AS keyLookupHash,
@@ -1525,21 +1643,32 @@ export function createKeyProfileRepository(path: string) {
           created_at AS createdAt,
           updated_at AS updatedAt,
           activity_at AS activityAt,
-          activity_kind AS activityKind
+          activity_kind AS activityKind,
+          boundary_settings_json AS boundarySettingsJson
         FROM key_profiles
         WHERE id = ?
-      `).get(id) as KeyProfileRecord | undefined
+      `).get(id) as KeyProfileRow | undefined
+
+      return mapKeyProfile(row)
     },
 
-    updateKeyProfile(id: string, updates: Pick<KeyProfileRecord, 'assistantName' | 'mbti' | 'configuredAt' | 'updatedAt'>) {
+    updateKeyProfile(id: string, updates: Pick<KeyProfileRecord, 'assistantName' | 'mbti' | 'configuredAt' | 'updatedAt'> & { boundarySettings?: StarBoundarySettings }) {
+      const current = this.getKeyProfile(id)
+
       db.prepare(`
         UPDATE key_profiles
         SET assistant_name = @assistantName,
             mbti = @mbti,
             configured_at = @configuredAt,
-            updated_at = @updatedAt
+            updated_at = @updatedAt,
+            boundary_settings_json = @boundarySettingsJson
         WHERE id = @id
-      `).run({ id, ...updates, configuredAt: updates.configuredAt ?? null })
+      `).run({
+        id,
+        ...updates,
+        configuredAt: updates.configuredAt ?? null,
+        boundarySettingsJson: JSON.stringify(normalizeStarBoundarySettings(updates.boundarySettings ?? current?.boundarySettings)),
+      })
     },
 
     listPublicStars(limit = 80): PublicStarRecord[] {
@@ -1681,5 +1810,71 @@ export function createAttachmentRepository(path: string) {
         ORDER BY created_at ASC
       `).all(keyId, conversationId) as AttachmentRecord[]
     },
+
+    getAttachmentByKey(keyId: string, id: string): AttachmentRecord | undefined {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          conversation_id AS conversationId,
+          type,
+          mime_type AS mimeType,
+          filename,
+          data_url AS dataUrl,
+          created_at AS createdAt
+        FROM attachments
+        WHERE key_id = ? AND id = ?
+      `).get(keyId, id) as AttachmentRecord | undefined
+    },
   }
+}
+
+export function createKeySessionRepository(path: string) {
+  const db = openDatabase(path)
+
+  return {
+    addSession(record: KeySessionRecord) {
+      db.prepare(`
+        INSERT INTO key_sessions (id, key_id, csrf_hash, created_at, expires_at, revoked_at)
+        VALUES (@id, @keyId, @csrfHash, @createdAt, @expiresAt, @revokedAt)
+      `).run({
+        ...record,
+        revokedAt: record.revokedAt ?? null,
+      })
+    },
+
+    getSession(id: string): KeySessionRecord | undefined {
+      return db.prepare(`
+        SELECT
+          id,
+          key_id AS keyId,
+          csrf_hash AS csrfHash,
+          created_at AS createdAt,
+          expires_at AS expiresAt,
+          revoked_at AS revokedAt
+        FROM key_sessions
+        WHERE id = ?
+      `).get(id) as KeySessionRecord | undefined
+    },
+
+    revokeSession(id: string, revokedAt: string) {
+      db.prepare(`
+        UPDATE key_sessions
+        SET revoked_at = @revokedAt
+        WHERE id = @id
+      `).run({ id, revokedAt })
+    },
+  }
+}
+
+export function listDatabaseIndexes(path: string) {
+  const db = openDatabase(path)
+  const rows = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'index'
+    ORDER BY name
+  `).all() as Array<{ name: string }>
+
+  return rows.map(row => row.name)
 }

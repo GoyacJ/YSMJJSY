@@ -5,6 +5,7 @@ import {
   createAgentInstanceRepository,
   createAgentObservationRepository,
   createAgentTaskRepository,
+  createKeyProfileRepository,
   createMemoryEventRepository,
   createMemoryRepository,
   type AgentEventRecord,
@@ -16,7 +17,7 @@ import {
 } from '../../../db/sqlite'
 import { buildAgentEvent } from '../../../services/agent-events'
 import { createAgentLoop } from '../../../services/agent-loop'
-import { defaultAgentPolicy } from '../../../services/agent-policy'
+import { createAgentPolicyFromBoundarySettings, defaultAgentPolicy, type AgentPolicy } from '../../../services/agent-policy'
 import { enqueueAgentTask } from '../../../services/agent-task-queue'
 import { createAgentToolRegistry, type AgentToolRegistry } from '../../../services/agent-runtime'
 import { registerStarAgentTools } from '../../../services/star-agent-tools'
@@ -30,7 +31,8 @@ type MemoryGovernanceInput = {
   now: string
   memories: {
     getMemoryByKey: (keyId: string, id: string) => MemoryRecord | undefined
-    updateMemory: (id: string, updates: { importance?: number, status?: 'active' | 'archived' | 'rejected', updatedAt: string }) => void
+    updateMemory: (id: string, updates: { importance?: number, status?: 'active' | 'pending' | 'archived' | 'rejected', updatedAt: string }) => void
+    deleteMemoryByKey?: (keyId: string, id: string) => number
   }
   events: {
     addMemoryEvent: (record: MemoryEventRecord) => void
@@ -89,7 +91,14 @@ export function applyMemoryGovernanceAction(input: MemoryGovernanceInput) {
   const beforeJson = serializeMemoryGovernanceState(memory)
   const nextMemory = { ...memory }
 
-  if (input.action === 'downgrade') {
+  if (input.action === 'confirm') {
+    nextMemory.status = 'active'
+    input.memories.updateMemory(memory.id, {
+      status: 'active',
+      updatedAt: input.now,
+    })
+  }
+  else if (input.action === 'downgrade') {
     nextMemory.importance = Math.max(0, memory.importance - 0.2)
     input.memories.updateMemory(memory.id, {
       importance: nextMemory.importance,
@@ -110,6 +119,23 @@ export function applyMemoryGovernanceAction(input: MemoryGovernanceInput) {
       updatedAt: input.now,
     })
   }
+  else if (input.action === 'delete') {
+    if (!input.memories.deleteMemoryByKey) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Memory deletion unavailable',
+      })
+    }
+
+    const deleted = input.memories.deleteMemoryByKey(input.keyId, memory.id)
+
+    if (deleted < 1) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Memory deletion failed',
+      })
+    }
+  }
 
   input.events.addMemoryEvent({
     id: nanoid(),
@@ -117,14 +143,20 @@ export function applyMemoryGovernanceAction(input: MemoryGovernanceInput) {
     memoryId: input.memoryId,
     action: input.action,
     beforeJson,
-    afterJson: serializeMemoryGovernanceState(nextMemory),
+    afterJson: input.action === 'delete'
+      ? JSON.stringify({
+          importance: memory.importance,
+          status: memory.status ?? 'active',
+          deleted: true,
+        })
+      : serializeMemoryGovernanceState(nextMemory),
     reason: input.reason,
     createdAt: input.now,
   })
 
   return {
     id: input.memoryId,
-    status: nextMemory.status ?? 'active',
+    status: input.action === 'delete' ? 'deleted' : nextMemory.status ?? 'active',
     importance: nextMemory.importance,
   }
 }
@@ -161,6 +193,7 @@ export async function governMemoryActionOrTask(input: MemoryGovernanceInput & {
   }
   events: { addEvent: (record: AgentEventRecord) => void }
   registry: Pick<AgentToolRegistry, 'get' | 'execute'>
+  policy?: AgentPolicy
 }) {
   if (input.action === 'archive' || input.action === 'reject') {
     const task = enqueueAgentTask({
@@ -186,7 +219,7 @@ export async function governMemoryActionOrTask(input: MemoryGovernanceInput & {
       tasks: input.tasks,
       events: input.events,
       registry: input.registry,
-      policy: defaultAgentPolicy,
+      policy: input.policy ?? defaultAgentPolicy,
     }).runTask(task)
 
     return {
@@ -213,6 +246,7 @@ function parseMemoryGovernanceBody(body: unknown) {
       || input.action === 'downgrade'
       || input.action === 'archive'
       || input.action === 'reject'
+      || input.action === 'delete'
     ) {
       return {
         action: input.action,
@@ -251,11 +285,18 @@ export default defineEventHandler(async (event) => {
     domain: 'star',
     now,
   })
+  const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
+
+  if (!profile) {
+    throw createError({ statusCode: 404, statusMessage: 'Profile not found' })
+  }
+
   const registry = createAgentToolRegistry()
 
   registerStarAgentTools(registry, {
     keyId,
     now,
+    boundarySettings: profile.boundarySettings,
     memories,
     memoryEvents,
   })
@@ -272,6 +313,7 @@ export default defineEventHandler(async (event) => {
     tasks: createAgentTaskRepository(config.sqlitePath),
     events: agentEvents,
     registry,
+    policy: createAgentPolicyFromBoundarySettings(profile.boundarySettings),
   })
 
   try {

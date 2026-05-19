@@ -1,24 +1,22 @@
 import { readonly, ref } from 'vue'
+import { withCsrfHeaders } from './useCsrf'
 
 export type StarChatMessage = {
   role: 'user' | 'assistant'
   content: string
-  imageDataUrl?: string
   parts?: StarChatPart[]
 }
 
 export type AttachmentKind = 'image' | 'video' | 'audio'
 
-export type StarChatIntent = 'auto' | 'chat' | 'audio' | 'image' | 'music' | 'video'
-
 export type StarChatPart =
   | { type: 'text'; text: string }
   | { type: 'audio'; url?: string; base64?: string }
   | { type: 'image'; url?: string; base64?: string }
-  | { type: 'music'; url?: string; base64?: string }
-  | { type: 'video'; url?: string }
+  | { type: 'music'; url?: string; base64?: string; taskId?: string; providerTaskId?: string; status?: string; error?: string }
+  | { type: 'video'; url?: string; base64?: string; providerTaskId?: string; status?: string }
   | { type: 'status'; text: string }
-  | { type: 'tool_confirmation'; taskId: string; inboxItemId: string; title: string; summary: string; status?: 'pending' | 'approved' | 'rejected' }
+  | { type: 'tool_confirmation'; taskId: string; inboxItemId: string; title: string; summary: string; status?: 'pending' | 'submitting' | 'approved' | 'rejected' }
 
 export type StarChatAttachment = {
   kind: AttachmentKind
@@ -30,7 +28,6 @@ export type StarChatAttachment = {
 export type StarChatSendPayload = {
   message: string
   attachments: StarChatAttachment[]
-  intent?: StarChatIntent
 }
 
 export type StarChatReply = {
@@ -44,10 +41,8 @@ export type StarChatHistoryResponse = {
 
 export type StarChatStreamEvent =
   | { type: 'delta'; text: string }
-  | { type: 'audio-delta'; hex: string }
-  | { type: 'music-delta'; hex: string }
   | { type: 'status'; text: string }
-  | { type: 'tool-status'; text: string }
+  | { type: 'tool-status'; text: string; visibility?: 'user' | 'debug' }
   | { type: 'tool-confirmation'; taskId: string; inboxItemId: string; title: string; summary: string }
   | { type: 'message'; reply: string; message: StarChatMessage }
   | { type: 'error'; message: string }
@@ -67,6 +62,19 @@ export function useStarChat() {
   const pending = ref(false)
   const error = ref('')
 
+  function buildLocalUserParts(text: string, attachments: StarChatAttachment[]) {
+    const parts: StarChatPart[] = text ? [{ type: 'text', text }] : []
+
+    for (const attachment of attachments) {
+      parts.push({
+        type: attachment.kind,
+        url: attachment.dataUrl,
+      })
+    }
+
+    return parts
+  }
+
   async function loadMessages(limit = 50): Promise<StarChatMessage[]> {
     try {
       const result = await $fetch<StarChatHistoryResponse>('/api/chat/history', {
@@ -83,7 +91,6 @@ export function useStarChat() {
 
   async function sendMessageStream(payload: StarChatSendPayload, onEvent: StarChatStreamHandler): Promise<StarChatReply> {
     const text = payload.message.trim()
-    const image = payload.attachments.find(attachment => attachment.kind === 'image')
 
     if (!text && payload.attachments.length === 0) {
       return { reply: '' }
@@ -91,19 +98,21 @@ export function useStarChat() {
 
     pending.value = true
     error.value = ''
-    messages.value.push({ role: 'user', content: text || '发送了一个附件', imageDataUrl: image?.dataUrl })
+    messages.value.push({
+      role: 'user',
+      content: text || '发送了一个附件',
+      parts: buildLocalUserParts(text || '发送了一个附件', payload.attachments),
+    })
 
     try {
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
-        headers: {
+        headers: withCsrfHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
         body: JSON.stringify({
           message: text,
           attachments: payload.attachments,
-          imageDataUrl: image?.dataUrl,
-          intent: payload.intent,
         }),
       })
 

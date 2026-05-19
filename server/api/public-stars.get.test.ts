@@ -81,4 +81,44 @@ describe('public stars api helpers', () => {
     expect(JSON.stringify(mapped)).not.toContain('sourceConversationId')
     expectNoForbiddenPublicSubstrings(mapped)
   })
+
+  it('maps only safe AI disclosure from public work payloads', () => {
+    const mapped = mapPublicStar({
+      id: 'key_1',
+      name: '月光',
+      mbti: 'INTJ',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      publicWorks: [
+        {
+          id: 'w1',
+          type: 'image',
+          title: '月光图',
+          summary: '公开作品。',
+          payloadJson: JSON.stringify({
+            prompt: 'private prompt',
+            sourceConversationId: 'c1',
+            disclosure: {
+              aiGenerated: true,
+              explicitLabel: 'AI 生成',
+              provider: 'hidden',
+            },
+          }),
+        } as any,
+      ],
+    })
+
+    expect(mapped.publicWorks[0]).toEqual({
+      id: 'w1',
+      type: 'image',
+      title: '月光图',
+      summary: '公开作品。',
+      disclosure: {
+        aiGenerated: true,
+        explicitLabel: 'AI 生成',
+      },
+    })
+    expect(JSON.stringify(mapped)).not.toContain('private prompt')
+    expect(JSON.stringify(mapped)).not.toContain('provider')
+    expectNoForbiddenPublicSubstrings(mapped)
+  })
 })

@@ -119,6 +119,30 @@ export function completeAgentTask(input: {
   }))
 }
 
+export function requestAgentTaskApproval(input: {
+  task: AgentTaskRecord
+  toolName: string
+  now: string
+  tasks: Pick<TaskRepository, 'updateTask'>
+  events: EventRepository
+}) {
+  input.tasks.updateTask(input.task.id, {
+    status: 'waiting_approval',
+    updatedAt: input.now,
+  })
+  input.events.addEvent(buildAgentEvent({
+    id: `event_${nanoid()}`,
+    agentId: input.task.agentId,
+    type: 'approval.required',
+    title: '需要审批',
+    summary: input.task.summary,
+    targetType: 'task',
+    targetId: input.task.id,
+    payload: { toolName: input.toolName },
+    createdAt: input.now,
+  }))
+}
+
 export function failAgentTask(input: {
   task: AgentTaskRecord
   error: string
@@ -198,6 +222,13 @@ function mergePolicy(policy: Partial<AgentPolicy>): AgentPolicy {
   }
 }
 
+export type AgentTaskRunResult = {
+  status: 'completed' | 'failed' | 'waiting_approval' | 'denied'
+  output?: unknown
+  chatParts?: Array<Record<string, unknown>>
+  error?: string
+}
+
 export async function runAgentTask(input: {
   task: AgentTaskRecord
   now: string
@@ -206,7 +237,7 @@ export async function runAgentTask(input: {
   registry: Pick<AgentToolRegistry, 'get' | 'execute'>
   policy: Partial<AgentPolicy>
   approvalGranted?: boolean
-}) {
+}): Promise<AgentTaskRunResult> {
   const taskInput = parseTaskInputJson(input.task.inputJson)
   const toolName = typeof taskInput.toolName === 'string' ? taskInput.toolName : undefined
   const toolInput = taskInput.input ?? {}
@@ -219,7 +250,7 @@ export async function runAgentTask(input: {
       tasks: input.tasks,
       events: input.events,
     })
-    return
+    return { status: 'failed', error: 'Task input is missing toolName' }
   }
 
   const tool = input.registry.get(toolName)
@@ -232,10 +263,10 @@ export async function runAgentTask(input: {
       tasks: input.tasks,
       events: input.events,
     })
-    return
+    return { status: 'failed', error: `Agent tool not found: ${toolName}` }
   }
 
-  const decision = evaluateAgentToolPolicy(mergePolicy(input.policy), tool)
+  const decision = evaluateAgentToolPolicy(mergePolicy(input.policy), tool, toolInput)
 
   if (!decision.allowed) {
     input.tasks.updateTask(input.task.id, {
@@ -254,26 +285,18 @@ export async function runAgentTask(input: {
       payload: { toolName },
       createdAt: input.now,
     }))
-    return
+    return { status: 'denied', error: decision.reason ?? 'Policy denied' }
   }
 
   if (decision.approvalRequired && !input.approvalGranted) {
-    input.tasks.updateTask(input.task.id, {
-      status: 'waiting_approval',
-      updatedAt: input.now,
+    requestAgentTaskApproval({
+      task: input.task,
+      toolName,
+      now: input.now,
+      tasks: input.tasks,
+      events: input.events,
     })
-    input.events.addEvent(buildAgentEvent({
-      id: `event_${nanoid()}`,
-      agentId: input.task.agentId,
-      type: 'approval.required',
-      title: '需要审批',
-      summary: input.task.summary,
-      targetType: 'task',
-      targetId: input.task.id,
-      payload: { toolName },
-      createdAt: input.now,
-    }))
-    return
+    return { status: 'waiting_approval' }
   }
 
   startAgentTask({
@@ -318,7 +341,7 @@ export async function runAgentTask(input: {
       tasks: input.tasks,
       events: input.events,
     })
-    return
+    return { status: 'failed', error: message }
   }
 
   if (!result.ok) {
@@ -341,7 +364,7 @@ export async function runAgentTask(input: {
       tasks: input.tasks,
       events: input.events,
     })
-    return
+    return { status: 'failed', error: message }
   }
 
   addToolEvent({
@@ -361,4 +384,9 @@ export async function runAgentTask(input: {
     tasks: input.tasks,
     events: input.events,
   })
+  return {
+    status: 'completed',
+    output: result.output ?? {},
+    chatParts: result.chatParts,
+  }
 }

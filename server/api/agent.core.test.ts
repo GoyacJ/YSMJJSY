@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { defaultStarBoundarySettings } from '../db/sqlite'
 import { buildAgentCoreResponse, requireAgentKey } from './agent/core.get'
 import { applyAgentProposalAction } from './agent/proposals/[id].put'
 import { restoreAgentSnapshotAction } from './agent/snapshots/[id]/restore.post'
@@ -284,6 +285,7 @@ describe('agent core api helpers', () => {
       memoryCounts: {
         total: 3,
         active: 1,
+        pending: 0,
         archived: 1,
         rejected: 1,
       },
@@ -386,6 +388,48 @@ describe('agent core api helpers', () => {
         },
       },
     })
+  })
+
+  it('includes pending memories in core response and counts', () => {
+    const result = buildAgentCoreResponse({
+      profile: {
+        id: 'key_1',
+        keyLookupHash: 'lookup',
+        assistantName: '阿月',
+        mbti: 'INTJ',
+        configuredAt: '2026-05-17T00:00:00.000Z',
+        createdIpHash: 'ip',
+        createdAt: '2026-05-17T00:00:00.000Z',
+        updatedAt: '2026-05-17T00:00:00.000Z',
+      },
+      agentState: {
+        keyId: 'key_1',
+        tone: '更短',
+        relationshipRole: '长期记忆守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+        lastSleepAt: null,
+        nextSleepAt: null,
+        updatedAt: '2026-05-17T00:00:00.000Z',
+      },
+      memories: [
+        {
+          id: 'm1',
+          keyId: 'key_1',
+          type: 'preference',
+          content: '用户喜欢短句。',
+          importance: 0.8,
+          confidence: 0.9,
+          status: 'pending',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      reflections: [],
+      proposals: [],
+    })
+
+    expect(result.memoryCounts).toMatchObject({ total: 1, active: 0, pending: 1 })
+    expect(result.memories).toMatchObject([{ id: 'm1', status: 'pending' }])
   })
 
   it('accepts a proposal and writes a snapshot', () => {
@@ -579,6 +623,60 @@ describe('agent core api helpers', () => {
       updatedAt: '2026-05-17T00:10:00.000Z',
     })
     expect(addSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('blocks intimate persona proposals in minor mode without state mutation', () => {
+    const updateProposal = vi.fn()
+    const addSnapshot = vi.fn()
+    const updateAgentState = vi.fn()
+
+    const result = applyAgentProposalAction({
+      keyId: 'key_1',
+      proposalId: 'p1',
+      action: 'accept',
+      now: '2026-05-17T00:10:00.000Z',
+      profile: { assistantName: '阿月', mbti: 'INTJ' },
+      boundarySettings: {
+        ...defaultStarBoundarySettings,
+        minorMode: true,
+      },
+      agentState: {
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
+      proposals: {
+        listProposalsByKey: () => [{
+          id: 'p1',
+          keyId: 'key_1',
+          reflectionId: 'r1',
+          type: 'relationship_role',
+          title: '亲密关系',
+          summary: '关系定位为恋人。',
+          payloadJson: '{"relationshipRole":"虚拟恋人"}',
+          status: 'pending',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        }],
+        updateProposal,
+      },
+      snapshots: { addSnapshot },
+      states: { updateAgentState },
+      memories: { updateMemory: vi.fn() },
+    })
+
+    expect(result).toMatchObject({
+      id: 'p1',
+      status: 'rejected',
+      blocked: true,
+    })
+    expect(updateProposal).toHaveBeenCalledWith('p1', {
+      status: 'rejected',
+      updatedAt: '2026-05-17T00:10:00.000Z',
+    })
+    expect(addSnapshot).not.toHaveBeenCalled()
+    expect(updateAgentState).not.toHaveBeenCalled()
   })
 
   it('does not mutate another key proposal', () => {

@@ -1,16 +1,13 @@
 import { nanoid } from 'nanoid'
+import { join } from 'node:path'
 import { createError, defineEventHandler, readBody, setResponseHeaders } from 'h3'
 import {
   buildStarChatMessages,
   chatBodySchema,
-  planStarChatToolsForIntent,
   selectAcceptedEvolutionNotes,
   selectActiveMemoryContents,
   selectRecentReflectionSummaries,
-  streamStarChatTextReply,
-  streamStarChatReply,
   type StarChatApiReply,
-  type StarChatMessagePart,
 } from '../../services/star-chat'
 import {
   createAgentEvolutionRepository,
@@ -18,6 +15,7 @@ import {
   createAgentInstanceRepository,
   createAgentObservationRepository,
   createAgentReflectionRepository,
+  createAgentSleepRepository,
   createAgentStateRepository,
   createAgentTaskRepository,
   createAgentWorkRepository,
@@ -26,6 +24,7 @@ import {
   createKeyProfileRepository,
   createMemoryRepository,
   createMemoryEventRepository,
+  createMediaTaskRepository,
   createUsageLimitRepository,
   type AgentEvolutionProposalRecord,
   type AgentEventRecord,
@@ -34,6 +33,7 @@ import {
   type AgentStateRecord,
   type AgentWorkRecord,
   type MemoryRecord,
+  type StarBoundarySettings,
 } from '../../db/sqlite'
 import { buildAgentEvent } from '../../services/agent-events'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
@@ -41,16 +41,19 @@ import { createIpHash } from '../../services/key-access'
 import { markKeyActivity } from '../../services/key-activity'
 import { createMiniMaxClient } from '../../services/minimax'
 import { createDefaultAgentProviderRegistry } from '../../services/agent-providers'
-import { defaultAgentPolicy } from '../../services/agent-policy'
+import { writeBlobDataUrl } from '../../services/blob-storage'
+import { attachGeneratedContentDisclosure } from '../../services/design-schema'
+import { createAgentPolicyFromBoundarySettings, defaultAgentPolicy } from '../../services/agent-policy'
+import type { AgentPolicy } from '../../services/agent-policy'
 import { createAgentToolRegistry } from '../../services/agent-runtime'
 import { registerStarAgentTools } from '../../services/star-agent-tools'
-import { executeStarChatToolCalls, normalizeStarChatToolCalls } from '../../services/star-chat-tool-execution'
+import { runStarChatToolOrchestrator } from '../../services/star-chat-orchestrator'
+import { runManualAgentSleep, type ManualAgentSleepInput } from '../../services/agent-sleep'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
 import {
   buildAgentReflectionMessages,
   calculateNextSleepAt,
-  filterConflictingLearnedMemories,
-  filterRejectedLearnedMemories,
+  applyBoundaryToLearnedMemories,
   parseAgentReflectionResult,
   shouldScheduleAgentSleep,
 } from '../../services/agent-learning'
@@ -71,8 +74,6 @@ const commonStarChatToolNames = [
   'star.generateImage',
   'star.generateMusic',
   'star.generateVideo',
-  'star.searchMemories',
-  'star.searchWorks',
 ]
 
 function matchesSearchText(query: string, values: string[]) {
@@ -81,46 +82,63 @@ function matchesSearchText(query: string, values: string[]) {
   return !normalized || values.some(value => value.toLowerCase().includes(normalized))
 }
 
-function buildToolStatusPart(text: string): StarChatMessagePart {
-  return { type: 'status', text }
+export function resolveStarChatAgentPolicy(profile?: { boundarySettings?: StarBoundarySettings | null }): AgentPolicy {
+  return profile?.boundarySettings
+    ? createAgentPolicyFromBoundarySettings(profile.boundarySettings)
+    : defaultAgentPolicy
 }
 
-function buildToolStatusText(input: { status: string, title?: string, error?: string }) {
-  if (input.status === 'completed') {
-    return `${input.title ?? '工具'}已完成。`
-  }
-
-  if (input.status === 'waiting_approval') {
-    return `${input.title ?? '工具'}等待确认。`
-  }
-
-  if (input.status === 'denied' || input.status === 'rejected') {
-    return input.error ?? `${input.title ?? '工具'}未执行。`
-  }
-
-  if (input.status === 'failed') {
-    return input.error ?? `${input.title ?? '工具'}执行失败。`
-  }
-
-  return `${input.title ?? '工具'}已更新。`
+export function buildStarChatSleepRunner(input: ManualAgentSleepInput) {
+  return (_toolInput: unknown) => runManualAgentSleep(input)
 }
 
-function buildUserMessageJson(content: string, attachments: Array<{ kind: 'image' | 'audio' | 'video', dataUrl: string }>) {
+export function selectRecentStarChatToolNames(tasks: Array<{ inputJson: string }>, limit = 4): string[] {
+  const names: string[] = []
+  const seen = new Set<string>()
+
+  for (const task of tasks) {
+    try {
+      const parsed = JSON.parse(task.inputJson) as { toolName?: unknown }
+      const toolName = typeof parsed.toolName === 'string' ? parsed.toolName : ''
+
+      if (!toolName || seen.has(toolName)) {
+        continue
+      }
+
+      seen.add(toolName)
+      names.push(toolName)
+
+      if (names.length >= limit) {
+        break
+      }
+    }
+    catch {
+      // Ignore malformed historical task input.
+    }
+  }
+
+  return names
+}
+
+export function buildUserMessageJson(content: string, attachments: Array<{ kind: 'image' | 'audio' | 'video', dataUrl?: string, url?: string, attachmentId?: string }>) {
   return {
     role: 'user' as const,
     content,
     parts: [
       { type: 'text' as const, text: content },
       ...attachments.map((attachment) => {
+        const url = attachment.url ?? attachment.dataUrl
+        const meta = attachment.attachmentId ? { attachmentId: attachment.attachmentId } : {}
+
         if (attachment.kind === 'image') {
-          return { type: 'image' as const, url: attachment.dataUrl }
+          return { type: 'image' as const, url, ...meta }
         }
 
         if (attachment.kind === 'audio') {
-          return { type: 'audio' as const, url: attachment.dataUrl }
+          return { type: 'audio' as const, url, ...meta }
         }
 
-        return { type: 'video' as const, url: attachment.dataUrl }
+        return { type: 'video' as const, url, ...meta }
       }),
     ],
   }
@@ -150,6 +168,115 @@ function buildAgentWorkPreviewUrl(part: { type: string, url?: string, base64?: s
   return `data:audio/mpeg;base64,${part.base64}`
 }
 
+function getInlineMediaDataUrl(part: { type: string, url?: string, base64?: string }) {
+  if (part.url?.startsWith('data:')) {
+    return part.url
+  }
+
+  if (!part.base64) {
+    return null
+  }
+
+  if (part.base64.startsWith('data:')) {
+    return part.base64
+  }
+
+  if (part.type === 'image') {
+    return `data:image/png;base64,${part.base64}`
+  }
+
+  if (part.type === 'video') {
+    return `data:video/mp4;base64,${part.base64}`
+  }
+
+  return `data:audio/mpeg;base64,${part.base64}`
+}
+
+function getAttachmentType(type: string) {
+  if (type === 'image' || type === 'video') {
+    return type
+  }
+
+  return 'audio'
+}
+
+function getAttachmentMimeType(type: string) {
+  if (type === 'image') {
+    return 'image/png'
+  }
+
+  if (type === 'video') {
+    return 'video/mp4'
+  }
+
+  return 'audio/mpeg'
+}
+
+export function buildStoredAssistantMessage(input: {
+  keyId: string
+  conversationId: string
+  now: string
+  message: {
+    role: 'assistant'
+    content: string
+    parts: Array<{ type: string, text?: string, url?: string, base64?: string }>
+  }
+  blobRoot?: string
+  attachments: {
+    addAttachment: (record: {
+      id: string
+      keyId: string
+      conversationId: string
+      type: 'image' | 'video' | 'audio'
+      mimeType: string
+      filename: string
+      dataUrl: string
+      createdAt: string
+    }) => void
+  }
+}) {
+  return {
+    ...input.message,
+    parts: input.message.parts.map((part) => {
+      if (!['audio', 'image', 'music', 'video'].includes(part.type)) {
+        return part
+      }
+
+      const dataUrl = getInlineMediaDataUrl(part)
+
+      if (!dataUrl) {
+        return part
+      }
+
+      const id = nanoid()
+      const blob = writeBlobDataUrl({
+        root: input.blobRoot ?? join(process.cwd(), 'data/uploads'),
+        keyId: input.keyId,
+        id,
+        dataUrl,
+      })
+      const type = getAttachmentType(part.type)
+
+      input.attachments.addAttachment({
+        id,
+        keyId: input.keyId,
+        conversationId: input.conversationId,
+        type,
+        mimeType: getAttachmentMimeType(part.type),
+        filename: `generated-${part.type}`,
+        dataUrl: `blob:${blob.relativePath}`,
+        createdAt: input.now,
+      })
+
+      return {
+        type: part.type,
+        url: `/api/attachments/${id}`,
+        attachmentId: id,
+      }
+    }),
+  }
+}
+
 export function buildWorksFromAssistantMessage(input: {
   keyId: string
   conversationId: string
@@ -164,7 +291,7 @@ export function buildWorksFromAssistantMessage(input: {
   const title = input.message.content.trim() || '智能体作品'
   const normalizedTitle = title.length > 32 ? `${title.slice(0, 32)}...` : title
   const mediaWorks = input.message.parts
-    .filter(part => part.type === 'image' || part.type === 'music' || part.type === 'video')
+    .filter(part => (part.type === 'image' || part.type === 'music' || part.type === 'video') && (part.url || part.base64))
     .map(part => ({
       id: nanoid(),
       keyId: input.keyId,
@@ -175,7 +302,9 @@ export function buildWorksFromAssistantMessage(input: {
       sourceMediaTaskId: input.taskId ?? null,
       sourceDesignVersion: null,
       previewUrl: buildAgentWorkPreviewUrl(part),
-      payloadJson: JSON.stringify(part),
+      payloadJson: JSON.stringify(attachGeneratedContentDisclosure(part, {
+        generatedAt: input.now,
+      })),
       visibility: 'private' as const,
       createdAt: input.now,
       updatedAt: input.now,
@@ -196,10 +325,12 @@ export function buildWorksFromAssistantMessage(input: {
       sourceMediaTaskId: input.taskId,
       sourceDesignVersion: null,
       previewUrl: null,
-      payloadJson: JSON.stringify({
+      payloadJson: JSON.stringify(attachGeneratedContentDisclosure({
         taskId: input.taskId,
         parts: input.message.parts,
-      }),
+      }, {
+        generatedAt: input.now,
+      })),
       visibility: 'private',
       createdAt: input.now,
       updatedAt: input.now,
@@ -262,6 +393,7 @@ type AgentLearningInput = {
   assistantReply: string
   existingMemories: string[]
   rejectedMemories?: string[]
+  boundarySettings?: StarBoundarySettings
   profile: {
     assistantName?: string
     mbti?: string
@@ -339,10 +471,11 @@ export async function runAgentLearning(input: AgentLearningInput) {
       createdAt: now,
     })
 
-    const governedMemories = filterConflictingLearnedMemories(
-      filterRejectedLearnedMemories(result.learned, input.rejectedMemories ?? []),
-      input.existingMemories,
-    )
+    const governedMemories = applyBoundaryToLearnedMemories(result.learned, {
+      boundarySettings: input.boundarySettings,
+      activeMemories: input.existingMemories,
+      rejectedMemories: input.rejectedMemories ?? [],
+    })
 
     for (const memory of governedMemories) {
       input.memories.addMemory({
@@ -375,20 +508,25 @@ export async function runAgentLearning(input: AgentLearningInput) {
     }
   }
   catch (error) {
-    if (input.agentId && input.events) {
-      input.events.addEvent(buildAgentEvent({
-        id: `event_${nanoid()}`,
-        agentId: input.agentId,
-        type: 'provider.failed',
-        title: 'Provider failed',
-        summary: '学习反思失败。',
-        targetType: 'reflection',
-        targetId: input.conversationId,
-        payload: {
-          message: error instanceof Error ? error.message : 'unknown',
-        },
-        createdAt: new Date().toISOString(),
-      }))
+    try {
+      if (input.agentId && input.events) {
+        input.events.addEvent(buildAgentEvent({
+          id: `event_${nanoid()}`,
+          agentId: input.agentId,
+          type: 'provider.failed',
+          title: 'Provider failed',
+          summary: '学习反思失败。',
+          targetType: 'reflection',
+          targetId: input.conversationId,
+          payload: {
+            message: error instanceof Error ? error.message : 'unknown',
+          },
+          createdAt: new Date().toISOString(),
+        }))
+      }
+    }
+    catch {
+      // Failure reporting is secondary too.
     }
     // Agent learning is secondary. A failed reflection should not hide the reply.
   }
@@ -426,6 +564,8 @@ export default defineEventHandler(async (event) => {
   const agentEvents = createAgentEventRepository(config.sqlitePath)
   const attachmentRepo = createAttachmentRepository(config.sqlitePath)
   const memoryEvents = createMemoryEventRepository(config.sqlitePath)
+  const mediaTasks = createMediaTaskRepository(config.sqlitePath)
+  const sleeps = createAgentSleepRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
   const usage = createUsageLimitRepository(config.sqlitePath)
   const client = createMiniMaxClient({
@@ -479,10 +619,10 @@ export default defineEventHandler(async (event) => {
   const recentReflections = selectRecentReflectionSummaries(reflections.listReflectionsByKey(keyId, 5))
   const acceptedEvolutionNotes = selectAcceptedEvolutionNotes(proposals.listProposalsByKey(keyId))
   const firstImage = body.data.attachments.find(attachment => attachment.kind === 'image')
-  const imageDataUrl = body.data.imageDataUrl || firstImage?.dataUrl
-  const imageDescription = imageDataUrl
+  const firstImageDataUri = firstImage?.dataUrl
+  const imageDescription = firstImageDataUri
     ? await withMiniMaxErrorBoundary(
-        () => client.describeImage(imageDataUrl, body.data.message || '请描述这张图片，保留和情绪、场景、文字有关的信息。'),
+        () => client.describeImage(firstImageDataUri, body.data.message || '请描述这张图片，保留和情绪、场景、文字有关的信息。'),
         'Image understanding failed',
       )
     : undefined
@@ -508,6 +648,23 @@ export default defineEventHandler(async (event) => {
   })
   const now = new Date().toISOString()
   const userConversationId = nanoid()
+  const storedAttachments = body.data.attachments.map((attachment) => {
+    const id = nanoid()
+    const blob = writeBlobDataUrl({
+      root: join(process.cwd(), 'data/uploads'),
+      keyId,
+      id,
+      dataUrl: attachment.dataUrl,
+    })
+
+    return {
+      ...attachment,
+      id,
+      attachmentId: id,
+      url: `/api/attachments/${id}`,
+      blobRef: `blob:${blob.relativePath}`,
+    }
+  })
   const encoder = new TextEncoder()
 
   conversations.addConversation({
@@ -515,18 +672,18 @@ export default defineEventHandler(async (event) => {
     keyId,
     role: 'user',
     content: body.data.message || '[附件消息]',
-    messageJson: JSON.stringify(buildUserMessageJson(body.data.message || '[附件消息]', body.data.attachments)),
+    messageJson: JSON.stringify(buildUserMessageJson(body.data.message || '[附件消息]', storedAttachments)),
     createdAt: now,
   })
-  for (const attachment of body.data.attachments) {
+  for (const attachment of storedAttachments) {
     attachmentRepo.addAttachment({
-      id: nanoid(),
+      id: attachment.id,
       keyId,
       conversationId: userConversationId,
       type: attachment.kind,
       mimeType: attachment.mimeType,
       filename: attachment.name,
-      dataUrl: attachment.dataUrl,
+      dataUrl: attachment.blobRef,
       createdAt: now,
     })
   }
@@ -553,6 +710,7 @@ export default defineEventHandler(async (event) => {
               now,
             })
             currentAgentId = agent.id
+            const recentToolNames = selectRecentStarChatToolNames(agentTasks.listTasksByAgent(agent.id, 8))
 
             const registry = createAgentToolRegistry()
 
@@ -565,6 +723,7 @@ export default defineEventHandler(async (event) => {
                 generateMusic: prompt => client.generateMusic(prompt),
                 createVideoTask: prompt => client.createVideoTask(prompt),
               },
+              mediaTasks,
               reply: {
                 speak: text => client.textToSpeech(text),
               },
@@ -580,98 +739,42 @@ export default defineEventHandler(async (event) => {
                   .filter(work => matchesSearchText(query, [work.title, work.summary, work.type]))
                   .slice(0, limit),
               },
+              sleep: buildStarChatSleepRunner({
+                keyId,
+                now,
+                client: agentModelProvider,
+                profile: {
+                  assistantName: profile?.assistantName || '星信',
+                  mbti: profile?.mbti || 'INTJ',
+                },
+                agentState,
+                memories,
+                conversations,
+                reflections,
+                proposals,
+                sleeps,
+                states,
+              }),
               works,
               memories,
               memoryEvents,
             })
 
-            let streamedReply = ''
-
-            if (body.data.intent === 'audio') {
-              streamedReply = await streamStarChatTextReply({
-                client,
-                messages,
-                emit,
-              })
-            }
-
-            const toolPlan = await planStarChatToolsForIntent({
-              intent: body.data.intent,
+            return await runStarChatToolOrchestrator({
               prompt: body.data.message,
-              reply: streamedReply || undefined,
+              attachmentKinds: body.data.attachments.map(attachment => attachment.kind),
               baseMessages: messages,
               provider: agentModelProvider,
               registry,
               commonToolNames: commonStarChatToolNames,
-            })
-
-            if (toolPlan.fallbackToChat) {
-              return streamStarChatReply({
-                client,
-                intent: 'chat',
-                messages,
-                prompt: body.data.message,
-                emit,
-              })
-            }
-
-            const reply = toolPlan.plan.reply || streamedReply || '我来处理。'
-            const parts: StarChatMessagePart[] = [{ type: 'text', text: reply }]
-
-            if (!streamedReply) {
-              await emit({ type: 'delta', text: reply })
-            }
-
-            const calls = normalizeStarChatToolCalls({
-              plan: toolPlan.plan,
-              registry,
-              reply,
-            })
-
-            if (calls.length > 0) {
-              await emit({ type: 'tool-status', text: '正在准备工具。' })
-            }
-
-            const toolResults = await executeStarChatToolCalls({
+              recentToolNames,
               agentId: agent.id,
               now,
-              calls,
               tasks: agentTasks,
               events: agentEvents,
-              registry,
-              policy: defaultAgentPolicy,
+              policy: resolveStarChatAgentPolicy(profile),
+              emit,
             })
-
-            for (const toolResult of toolResults) {
-              const statusText = buildToolStatusText(toolResult)
-
-              parts.push(buildToolStatusPart(statusText))
-
-              if (toolResult.status === 'waiting_approval' && toolResult.taskId && toolResult.inboxItemId) {
-                await emit({
-                  type: 'tool-confirmation',
-                  taskId: toolResult.taskId,
-                  inboxItemId: toolResult.inboxItemId,
-                  title: toolResult.title ?? toolResult.toolName,
-                  summary: toolResult.summary ?? statusText,
-                })
-              }
-              else {
-                await emit({ type: 'tool-status', text: statusText })
-              }
-            }
-
-            const plannedResult: StarChatApiReply = {
-              reply,
-              message: {
-                role: 'assistant',
-                content: reply,
-                parts,
-              },
-            }
-
-            await emit({ type: 'message', ...plannedResult })
-            return plannedResult
           },
           'Chat generation failed',
         )
@@ -680,12 +783,20 @@ export default defineEventHandler(async (event) => {
 
         const assistantCreatedAt = new Date().toISOString()
 
+        const storedAssistantMessage = buildStoredAssistantMessage({
+          keyId,
+          conversationId: assistantConversationId,
+          now: assistantCreatedAt,
+          message: result.message,
+          attachments: attachmentRepo,
+        })
+
         conversations.addConversation({
           id: assistantConversationId,
           keyId,
           role: 'assistant',
           content: result.message.content,
-          messageJson: JSON.stringify(result.message),
+          messageJson: JSON.stringify(storedAssistantMessage),
           createdAt: assistantCreatedAt,
         })
 
@@ -727,7 +838,7 @@ export default defineEventHandler(async (event) => {
             conversationId: assistantConversationId,
             now: createdAt,
             taskId: result.taskId,
-            message: result.message,
+            message: storedAssistantMessage,
           })) {
             works.addWork(work)
           }
@@ -750,6 +861,7 @@ export default defineEventHandler(async (event) => {
           assistantReply: result.reply,
           existingMemories: savedMemories,
           rejectedMemories,
+          boundarySettings: profile?.boundarySettings,
           profile: {
             assistantName: profile?.assistantName || '星信',
             mbti: profile?.mbti || 'INTJ',
