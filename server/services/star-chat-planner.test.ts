@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentToolDefinition } from './agent-runtime'
-import { buildStarChatPlannerMessages, parseStarChatTurnPlan } from './star-chat-planner'
+import { buildStarChatPlannerMessages, parseStarChatTurnPlan, planStarChatTurn } from './star-chat-planner'
 
 const toolCards: AgentToolDefinition[] = [
   {
@@ -132,5 +132,105 @@ describe('star chat planner', () => {
     expect(content).not.toContain('key_1')
     expect(content).not.toContain('payloadJson')
     expect(content).not.toContain('base64')
+  })
+
+  it('plans a turn with tool search results', async () => {
+    const provider = {
+      chat: vi.fn()
+        .mockResolvedValueOnce({
+          reply: JSON.stringify({
+            reply: '我先找工具。',
+            toolSearches: [{ query: '发布', category: 'publish', behavior: 'publish', limit: 5 }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          reply: JSON.stringify({
+            reply: '可以帮你发布。',
+            toolCalls: [{
+              toolName: 'star.publishWork',
+              input: { workId: 'work_1' },
+              mode: 'propose',
+              evidence: '用户说发布。',
+              reason: '发布需要确认。',
+            }],
+          }),
+        }),
+    }
+
+    await expect(planStarChatTurn({
+      provider,
+      baseMessages: [{ role: 'user', content: '发布这张图' }],
+      registry: { list: () => toolCards },
+      commonToolNames: ['star.generateImage'],
+    })).resolves.toMatchObject({
+      reply: '可以帮你发布。',
+      toolCalls: [{ toolName: 'star.publishWork' }],
+    })
+    expect(provider.chat).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(provider.chat.mock.calls[1][0])).toContain('star.publishWork')
+  })
+
+  it('uses at most two tool searches', async () => {
+    const provider = {
+      chat: vi.fn()
+        .mockResolvedValueOnce({
+          reply: JSON.stringify({
+            toolSearches: [
+              { query: '发布', category: 'publish' },
+              { query: '图片', category: 'media' },
+              { query: '记忆', category: 'memory' },
+            ],
+          }),
+        })
+        .mockResolvedValueOnce({ reply: JSON.stringify({ reply: 'done' }) }),
+    }
+
+    await planStarChatTurn({
+      provider,
+      baseMessages: [],
+      registry: {
+        list: () => [
+          ...toolCards,
+          {
+            name: 'star.searchMemories',
+            title: '搜索记忆',
+            description: 'Search memories.',
+            category: 'memory',
+            behavior: 'retrieve',
+            riskLevel: 'low',
+            approvalRequired: false,
+          },
+        ],
+      },
+      commonToolNames: [],
+    })
+
+    const secondPrompt = JSON.stringify(provider.chat.mock.calls[1][0])
+    expect(secondPrompt).toContain('star.publishWork')
+    expect(secondPrompt).toContain('star.generateImage')
+    expect(secondPrompt).not.toContain('star.searchMemories')
+  })
+
+  it('ignores invalid searched categories', async () => {
+    const provider = {
+      chat: vi.fn().mockResolvedValueOnce({
+        reply: JSON.stringify({
+          reply: 'fallback',
+          toolSearches: [{ query: '发布', category: 'unknown' }],
+        }),
+      }),
+    }
+
+    await expect(planStarChatTurn({
+      provider,
+      baseMessages: [],
+      registry: { list: () => toolCards },
+      commonToolNames: [],
+    })).resolves.toEqual({
+      reply: '',
+      toolSearches: [],
+      toolCalls: [],
+    })
+    expect(provider.chat).toHaveBeenCalledTimes(1)
   })
 })

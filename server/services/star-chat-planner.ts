@@ -1,8 +1,9 @@
 import { z } from 'zod'
 
 import type { AgentToolBehavior, AgentToolCategory } from './agent-runtime'
-import type { AgentToolDefinition } from './agent-runtime'
+import type { AgentToolDefinition, AgentToolRegistry, NamedAgentModelProvider } from './agent-runtime'
 import type { MiniMaxMessage } from './minimax'
+import { searchAgentTools } from './agent-tool-catalog'
 
 const fallbackPlan = {
   reply: '',
@@ -29,7 +30,7 @@ const toolCallSchema = z.object({
 
 export const starChatTurnPlanSchema = z.object({
   reply: z.string().trim().default(''),
-  toolSearches: z.array(toolSearchSchema).max(2).default([]),
+  toolSearches: z.array(toolSearchSchema).default([]).transform(searches => searches.slice(0, 2)),
   toolCalls: z.array(toolCallSchema).max(4).default([]),
 })
 
@@ -110,4 +111,44 @@ export function buildStarChatPlannerMessages(input: {
     },
     ...input.messages,
   ]
+}
+
+export async function planStarChatTurn(input: {
+  provider: Pick<NamedAgentModelProvider, 'chat'>
+  baseMessages: MiniMaxMessage[]
+  registry: Pick<AgentToolRegistry, 'list'>
+  commonToolNames: string[]
+}): Promise<StarChatTurnPlan> {
+  const tools = input.registry.list()
+  const commonTools = input.commonToolNames
+    .map(name => tools.find(tool => tool.name === name))
+    .filter((tool): tool is AgentToolDefinition => Boolean(tool))
+
+  const first = parseStarChatTurnPlan((await input.provider.chat(buildStarChatPlannerMessages({
+    messages: input.baseMessages,
+    commonTools,
+  }))).reply)
+
+  if (first.toolSearches.length < 1) {
+    return first
+  }
+
+  const searchedTools = first.toolSearches.slice(0, 2).flatMap(search =>
+    searchAgentTools({
+      tools,
+      query: search.query,
+      category: search.category,
+      behavior: search.behavior,
+      limit: search.limit,
+    }),
+  )
+  const uniqueSearchedTools = Array.from(
+    new Map(searchedTools.map(tool => [tool.name, tool])).values(),
+  )
+
+  return parseStarChatTurnPlan((await input.provider.chat(buildStarChatPlannerMessages({
+    messages: input.baseMessages,
+    commonTools,
+    searchedTools: uniqueSearchedTools,
+  }))).reply)
 }
