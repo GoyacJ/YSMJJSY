@@ -24,7 +24,7 @@ describe('StarChatMessage', () => {
     expect(wrapper.emitted('copy')).toEqual([[message]])
   })
 
-  it('renders image, audio, music, video, status, and download actions', () => {
+  it('renders image, audio, music, video, and download actions without completed process status', () => {
     const wrapper = mount(StarChatMessage, {
       props: {
         message: {
@@ -42,7 +42,7 @@ describe('StarChatMessage', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('正在生成')
+    expect(wrapper.text()).not.toContain('正在生成')
     expect(wrapper.get('img[alt="生成的图片"]').attributes('src')).toBe('data:image/png;base64,img')
     expect(wrapper.get('audio[data-kind="audio"]').attributes('src')).toBe('data:audio/mpeg;base64,audio')
     expect(wrapper.get('audio[data-kind="music"]').attributes('src')).toBe('data:audio/mpeg;base64,song')
@@ -51,6 +51,21 @@ describe('StarChatMessage', () => {
     expect(wrapper.get('a[download="star-audio.mp3"]').attributes('href')).toBe('data:audio/mpeg;base64,audio')
     expect(wrapper.get('a[download="star-music.mp3"]').attributes('href')).toBe('data:audio/mpeg;base64,song')
     expect(wrapper.get('a[download="star-video.mp4"]').attributes('href')).toBe('https://example.com/star.mp4')
+  })
+
+  it('renders status-only progress messages while waiting', () => {
+    const wrapper = mount(StarChatMessage, {
+      props: {
+        message: {
+          role: 'assistant',
+          content: '正在判断是否需要工具。',
+          parts: [{ type: 'status', text: '正在判断是否需要工具。' }],
+        },
+        active: false,
+      },
+    })
+
+    expect(wrapper.text()).toContain('正在判断是否需要工具。')
   })
 
   it('uses theater message classes for visual states', () => {
@@ -98,5 +113,34 @@ describe('StarChatMessage', () => {
     expect(wrapper.classes()).toContain('star-chat-message--magic')
     expect(wrapper.get('.star-chat-message__orb').exists()).toBe(true)
     expect(wrapper.get('.star-glyph-text[data-role="assistant"]').text()).toContain('我在。')
+  })
+
+  it('renders tool confirmation cards and emits decisions', async () => {
+    const part = {
+      type: 'tool_confirmation' as const,
+      taskId: 'task_1',
+      inboxItemId: 'task_approval:task_1',
+      title: '发布作品',
+      summary: '发布前需要确认。',
+    }
+    const wrapper = mount(StarChatMessage, {
+      props: {
+        message: {
+          role: 'assistant',
+          content: '需要确认。',
+          parts: [part],
+        },
+        active: false,
+      },
+    })
+
+    expect(wrapper.text()).toContain('发布作品')
+    expect(wrapper.text()).toContain('发布前需要确认。')
+
+    await wrapper.get('button[aria-label="批准工具请求"]').trigger('click')
+    await wrapper.get('button[aria-label="拒绝工具请求"]').trigger('click')
+
+    expect(wrapper.emitted('approveTool')).toEqual([[part]])
+    expect(wrapper.emitted('rejectTool')).toEqual([[part]])
   })
 })

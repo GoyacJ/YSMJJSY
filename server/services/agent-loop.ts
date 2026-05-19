@@ -3,6 +3,7 @@ import type { AgentPolicy } from './agent-policy'
 import { planAgentTasksFromObservations } from './agent-loop-planner'
 import type { PlannedAgentTask } from './agent-loop-planner'
 import { runAgentTask } from './agent-task-queue'
+import type { AgentTaskRunResult } from './agent-task-queue'
 import type { AgentToolRegistry } from './agent-runtime'
 
 type TaskRepository = {
@@ -14,7 +15,7 @@ type EventRepository = {
 }
 
 export type AgentLoop = {
-  runTask: (task: AgentTaskRecord, options?: { approvalGranted?: boolean }) => Promise<void>
+  runTask: (task: AgentTaskRecord, options?: { approvalGranted?: boolean }) => Promise<AgentTaskRunResult>
   planTasks: (input: {
     observations: Parameters<typeof planAgentTasksFromObservations>[0]['observations']
     existingTasks: Parameters<typeof planAgentTasksFromObservations>[0]['existingTasks']

@@ -10,7 +10,7 @@ describe('StarMemoryMap', () => {
 
     expect(wrapper.get('button[aria-label="打开记忆星球"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('记忆星球')
-    expect(wrapper.text()).toContain('记忆、反思和进化轨道')
+    expect(wrapper.text()).toContain('记忆、来源和确认记录')
 
     await wrapper.get('button[aria-label="打开记忆星球"]').trigger('click')
 

@@ -38,6 +38,18 @@ function getMediaDownloadName(part: StarChatPart) {
 
 const source = computed(() => getMediaSource(props.part))
 const downloadName = computed(() => getMediaDownloadName(props.part))
+const isProcessing = computed(() =>
+  ['music', 'video'].includes(props.part.type)
+  && !source.value
+  && 'status' in props.part
+  && props.part.status === 'processing',
+)
+const isFailed = computed(() =>
+  ['music', 'video'].includes(props.part.type)
+  && !source.value
+  && 'status' in props.part
+  && props.part.status === 'failed',
+)
 </script>
 
 <template>
@@ -59,6 +71,7 @@ const downloadName = computed(() => getMediaDownloadName(props.part))
       :src="source"
     />
     <figcaption class="star-media-card__actions">
+      <span class="star-media-card__disclosure">AI 生成</span>
       <a
         :href="source"
         :download="downloadName"
@@ -69,6 +82,18 @@ const downloadName = computed(() => getMediaDownloadName(props.part))
       >
         下载
       </a>
+    </figcaption>
+  </figure>
+  <figure v-else-if="isProcessing" class="star-media-card" :data-kind="part.type" data-status="processing">
+    <figcaption class="star-media-card__actions">
+      <span class="star-media-card__disclosure">AI 生成</span>
+      <span>{{ part.type === 'music' ? '音乐生成中' : '视频生成中' }}</span>
+    </figcaption>
+  </figure>
+  <figure v-else-if="isFailed" class="star-media-card" :data-kind="part.type" data-status="failed">
+    <figcaption class="star-media-card__actions">
+      <span class="star-media-card__disclosure">AI 生成</span>
+      <span>{{ part.type === 'music' ? '音乐生成失败' : '视频生成失败' }}</span>
     </figcaption>
   </figure>
 </template>

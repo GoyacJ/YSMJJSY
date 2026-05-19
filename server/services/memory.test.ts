@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { detectMemoryConflict, isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory } from './memory'
+import { defaultStarBoundarySettings } from '../db/sqlite'
+import {
+  detectMemoryConflict,
+  isSensitiveMemoryContent,
+  isSimilarRejectedMemory,
+  normalizeMemory,
+  resolveMemoryWriteStatus,
+  shouldPersistMemory,
+} from './memory'
 
 describe('memory filtering', () => {
   it('keeps explicit high-importance memories', () => {
@@ -75,6 +83,75 @@ describe('memory filtering', () => {
       confidence: 0.9,
       status: 'active',
     })
+  })
+
+  it('detects sensitive long-term memory content', () => {
+    expect(isSensitiveMemoryContent('用户的身份证号是 110101199001010011。')).toBe(true)
+    expect(isSensitiveMemoryContent('用户喜欢短句回复。')).toBe(false)
+  })
+
+  it('keeps normal memory active in auto mode', () => {
+    expect(resolveMemoryWriteStatus({
+      type: 'preference',
+      content: '用户喜欢短句回复。',
+      importance: 0.8,
+      confidence: 0.9,
+      status: 'active',
+    }, {
+      ...defaultStarBoundarySettings,
+      memoryWriteMode: 'auto',
+    })).toBe('active')
+  })
+
+  it('stages normal memory in manual mode', () => {
+    expect(resolveMemoryWriteStatus({
+      type: 'preference',
+      content: '用户喜欢短句回复。',
+      importance: 0.8,
+      confidence: 0.9,
+      status: 'active',
+    }, {
+      ...defaultStarBoundarySettings,
+      memoryWriteMode: 'manual',
+    })).toBe('pending')
+  })
+
+  it('stages sensitive memory when approval is required', () => {
+    expect(resolveMemoryWriteStatus({
+      type: 'person',
+      content: '用户的手机号是 13800138000。',
+      importance: 0.9,
+      confidence: 0.95,
+      status: 'active',
+    }, defaultStarBoundarySettings)).toBe('pending')
+  })
+
+  it('stages memories outside an explicit allowed topic list', () => {
+    expect(resolveMemoryWriteStatus({
+      type: 'preference',
+      content: '用户喜欢蓝色。',
+      importance: 0.8,
+      confidence: 0.9,
+      status: 'active',
+    }, {
+      ...defaultStarBoundarySettings,
+      memoryWriteMode: 'auto',
+      allowedMemoryTopics: ['写作偏好'],
+    })).toBe('pending')
+  })
+
+  it('keeps matching allowed topic memories active after other checks pass', () => {
+    expect(resolveMemoryWriteStatus({
+      type: 'preference',
+      content: '用户的写作偏好是短句。',
+      importance: 0.8,
+      confidence: 0.9,
+      status: 'active',
+    }, {
+      ...defaultStarBoundarySettings,
+      memoryWriteMode: 'auto',
+      allowedMemoryTopics: [' 写作偏好 '],
+    })).toBe('active')
   })
 
   it('detects exact repeated rejected memory content', () => {

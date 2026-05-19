@@ -1,5 +1,6 @@
 import { readonly, ref } from 'vue'
 import type { StarPageDesignSchema } from '../types/design-schema'
+import { withCsrfHeaders } from './useCsrf'
 
 type DesignLoadResponse = {
   schema: StarPageDesignSchema
@@ -45,6 +46,7 @@ export function useKeyDesign() {
     try {
       const result = await $fetch<{ schema: StarPageDesignSchema }>('/api/design/preview', {
         method: 'POST',
+        headers: withCsrfHeaders(),
         body: { instruction: text },
       })
       previewSchema.value = result.schema
@@ -70,6 +72,7 @@ export function useKeyDesign() {
     try {
       await $fetch('/api/design/commit', {
         method: 'POST',
+        headers: withCsrfHeaders(),
         body: {
           schema: previewSchema.value,
           prompt,

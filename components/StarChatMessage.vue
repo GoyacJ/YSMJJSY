@@ -12,12 +12,21 @@ const props = defineProps<{
 const emit = defineEmits<{
   copy: [message: StarChatMessage]
   activate: []
+  approveTool: [part: Extract<StarChatPart, { type: 'tool_confirmation' }>]
+  rejectTool: [part: Extract<StarChatPart, { type: 'tool_confirmation' }>]
 }>()
 
 const messageClass = computed(() => ({
   'star-chat-message--spell': props.message.role === 'user',
   'star-chat-message--magic': props.message.role === 'assistant',
 }))
+
+const displayParts = computed(() => {
+  const parts = props.message.parts ?? []
+  const hasMedia = parts.some(isMediaPart)
+
+  return hasMedia ? parts.filter(part => part.type !== 'status') : parts
+})
 
 function isMediaPart(part: StarChatPart) {
   return ['audio', 'image', 'music', 'video'].includes(part.type)
@@ -34,25 +43,8 @@ function isMediaPart(part: StarChatPart) {
   >
     <span v-if="message.role === 'assistant'" class="star-chat-message__orb" aria-hidden="true" />
 
-    <img
-      v-if="message.imageDataUrl"
-      class="star-chat-message__legacy-image"
-      :src="message.imageDataUrl"
-      alt=""
-    >
-    <a
-      v-if="message.imageDataUrl"
-      class="star-chat-message__download"
-      :href="message.imageDataUrl"
-      download="star-attachment.png"
-      aria-label="下载图片"
-      @click.stop
-    >
-      下载
-    </a>
-
-    <template v-if="message.parts?.length">
-      <template v-for="(part, partIndex) in message.parts" :key="partIndex">
+    <template v-if="displayParts.length">
+      <template v-for="(part, partIndex) in displayParts" :key="partIndex">
         <StarGlyphText
           v-if="part.type === 'text'"
           class="star-chat-message__text"
@@ -60,6 +52,28 @@ function isMediaPart(part: StarChatPart) {
           :role="message.role"
         />
         <span v-else-if="part.type === 'status'" class="star-chat-message__status">{{ part.text }}</span>
+        <section v-else-if="part.type === 'tool_confirmation'" class="star-chat-message__tool-confirmation">
+          <strong>{{ part.title }}</strong>
+          <p>{{ part.summary }}</p>
+          <div class="star-chat-message__tool-actions">
+            <button
+              type="button"
+              aria-label="批准工具请求"
+              :disabled="part.status === 'submitting' || part.status === 'approved' || part.status === 'rejected'"
+              @click.stop="emit('approveTool', part)"
+            >
+              批准
+            </button>
+            <button
+              type="button"
+              aria-label="拒绝工具请求"
+              :disabled="part.status === 'submitting' || part.status === 'approved' || part.status === 'rejected'"
+              @click.stop="emit('rejectTool', part)"
+            >
+              拒绝
+            </button>
+          </div>
+        </section>
         <StarMediaCard v-else-if="isMediaPart(part)" :part="part" />
       </template>
     </template>

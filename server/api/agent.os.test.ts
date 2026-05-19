@@ -7,6 +7,7 @@ import { buildAgentInboxResponse } from './agents/current/inbox.get'
 import { buildCurrentAgentOsResponse } from './agents/current/os.get'
 import { buildAgentTasksResponse, enqueueCurrentAgentTask } from './agents/current/tasks.post'
 import { updateCurrentAgentTask } from './agents/current/tasks/[id].put'
+import { createDefaultDesignSchema } from '../services/design-schema'
 
 describe('agent os api helpers', () => {
   const forbiddenResponseSubstrings = [
@@ -205,13 +206,84 @@ describe('agent os api helpers', () => {
         }),
       },
       tasks: { listTasksByAgent: () => [] },
-      events: { listEventsByAgent: () => [] },
+      events: {
+        listEventsByAgent: () => [{
+          id: 'event_1',
+          agentId: 'agent_1',
+          type: 'provider.failed',
+          title: 'Provider failed',
+          summary: '模型失败。',
+          targetType: 'provider',
+          targetId: null,
+          payloadJson: '{"rawProviderBody":"hidden"}',
+          visibility: 'private',
+          createdAt: '2026-05-18T00:00:00.000Z',
+        }],
+      },
       proposals: { listProposalsByKey: () => [] },
       works: { listWorksByKey: () => [] },
     })
 
     expect(result.agent).toMatchObject({ id: 'agent_1', ownerId: 'key_1' })
+    expect(result.records).toMatchObject([{
+      type: '失败',
+      title: '模型调用失败',
+      status: '失败',
+    }])
+    expect(result.events).toHaveLength(1)
     expectNoForbiddenResponseSubstrings(result)
+  })
+
+  it('recovers stale running tasks before returning os state', () => {
+    const updateTask = vi.fn()
+    const addEvent = vi.fn()
+
+    buildCurrentAgentOsResponse({
+      keyId: 'key_1',
+      now: '2026-05-18T01:00:00.000Z',
+      agents: {
+        getOrCreateAgentForOwner: () => ({
+          id: 'agent_1',
+          status: 'active',
+          createdAt: '2026-05-18T00:00:00.000Z',
+          updatedAt: '2026-05-18T00:00:00.000Z',
+          bindingId: 'binding_1',
+          ownerType: 'key',
+          ownerId: 'key_1',
+          domain: 'star',
+        }),
+      },
+      tasks: {
+        listTasksByAgent: () => [],
+        listTasksByStatus: () => [{
+          id: 'task_1',
+          agentId: 'agent_1',
+          type: 'generate_artifact',
+          status: 'running',
+          title: '生成作品',
+          summary: '生成。',
+          inputJson: '{}',
+          resultJson: null,
+          error: null,
+          createdAt: '2026-05-18T00:00:00.000Z',
+          updatedAt: '2026-05-18T00:00:00.000Z',
+        }],
+        updateTask,
+      },
+      events: {
+        listEventsByAgent: () => [],
+        addEvent,
+      },
+      proposals: { listProposalsByKey: () => [] },
+      works: { listWorksByKey: () => [] },
+    } as any)
+
+    expect(updateTask).toHaveBeenCalledWith('task_1', expect.objectContaining({
+      status: 'failed',
+    }))
+    expect(addEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'task.failed',
+    }))
   })
 
   it('includes planned tasks from recent observations without executing them', () => {
@@ -348,8 +420,10 @@ describe('agent os api helpers', () => {
     }))
   })
 
-  it('approves work visibility inbox items and writes an event', () => {
+  it('approves work visibility inbox items through the task runner and writes an event', async () => {
     const updateWorkVisibility = vi.fn()
+    const addTask = vi.fn()
+    const updateTask = vi.fn()
     const addEvent = vi.fn()
     const works = {
       getWorkByKey: () => ({
@@ -366,7 +440,7 @@ describe('agent os api helpers', () => {
       updateWorkVisibility,
     }
 
-    expect(approveAgentInboxItem({
+    await expect(approveAgentInboxItem({
       itemId: 'work_visibility:work_1',
       keyId: 'key_1',
       agentId: 'agent_1',
@@ -386,15 +460,98 @@ describe('agent os api helpers', () => {
       states: { updateAgentState: vi.fn() },
       memories: { updateMemory: vi.fn() },
       works,
+      tasks: { addTask, getTask: vi.fn(), updateTask },
       events: { addEvent },
-    })).toEqual({ id: 'work_1', type: 'work_visibility', status: 'approved' })
+      registry: {
+        get: () => ({
+          name: 'star.publishWork',
+          description: 'Publish work',
+          riskLevel: 'high',
+          approvalRequired: true,
+        }),
+        execute: vi.fn(async () => {
+          updateWorkVisibility('key_1', 'work_1', 'public', '2026-05-18T00:00:00.000Z')
+          return { ok: true, output: { id: 'work_1', visibility: 'public' } }
+        }),
+      },
+    } as any)).resolves.toEqual({ id: 'work_1', type: 'work_visibility', status: 'approved' })
 
+    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'publish_artifact',
+    }))
+    expect(updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'completed',
+    }))
     expect(updateWorkVisibility).toHaveBeenCalledWith('key_1', 'work_1', 'public', '2026-05-18T00:00:00.000Z')
     expect(addEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'approval.approved',
       targetType: 'work',
       targetId: 'work_1',
     }))
+  })
+
+  it('approves memory governance inbox items through the task runner', async () => {
+    const updateMemory = vi.fn()
+    const addTask = vi.fn()
+    const updateTask = vi.fn()
+    const addEvent = vi.fn()
+
+    await expect(approveAgentInboxItem({
+      itemId: 'memory_governance:memory_1:reject',
+      keyId: 'key_1',
+      agentId: 'agent_1',
+      now: '2026-05-18T00:00:00.000Z',
+      profile: { assistantName: '月光', mbti: 'INTJ' },
+      agentState: {
+        tone: '克制、温柔、安静',
+        relationshipRole: '记忆星球守护者',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
+      proposals: {
+        listProposalsByKey: () => [],
+        updateProposal: vi.fn(),
+      },
+      snapshots: { addSnapshot: vi.fn() },
+      states: { updateAgentState: vi.fn() },
+      memories: {
+        getMemoryByKey: vi.fn(),
+        updateMemory,
+      },
+      memoryEvents: { addMemoryEvent: vi.fn() },
+      works: {
+        getWorkByKey: vi.fn(),
+        updateWorkVisibility: vi.fn(),
+      },
+      tasks: { addTask, getTask: vi.fn(), updateTask },
+      events: { addEvent },
+      registry: {
+        get: () => ({
+          name: 'star.governMemory',
+          description: 'Govern memory',
+          riskLevel: 'medium',
+          approvalRequired: true,
+        }),
+        execute: vi.fn(async () => {
+          updateMemory('memory_1', {
+            status: 'rejected',
+            updatedAt: '2026-05-18T00:00:00.000Z',
+          })
+          return { ok: true, output: { id: 'memory_1', status: 'rejected' } }
+        }),
+      },
+    } as any)).resolves.toEqual({ id: 'memory_1', type: 'memory_governance', status: 'rejected' })
+
+    expect(addTask).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'govern_memory',
+    }))
+    expect(updateTask).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'completed',
+    }))
+    expect(updateMemory).toHaveBeenCalledWith('memory_1', {
+      status: 'rejected',
+      updatedAt: '2026-05-18T00:00:00.000Z',
+    })
   })
 
   it('approves rollback inbox items by restoring the snapshot', () => {
@@ -452,6 +609,66 @@ describe('agent os api helpers', () => {
       type: 'approval.approved',
       targetType: 'snapshot',
       targetId: 'snapshot_1',
+    }))
+  })
+
+  it('approves page design rollback inbox items by creating a restored design version', () => {
+    const addKeyDesign = vi.fn()
+    const schema = {
+      ...createDefaultDesignSchema(),
+      title: '旧页面',
+    }
+
+    expect(approveAgentInboxItem({
+      itemId: 'rollback:snapshot_1',
+      keyId: 'key_1',
+      agentId: 'agent_1',
+      now: '2026-05-18T00:00:00.000Z',
+      profile: { assistantName: '月光', mbti: 'INTJ' },
+      agentState: {
+        tone: '当前',
+        relationshipRole: '当前关系',
+        learningMode: 'assisted',
+        contentStrategy: {},
+      },
+      proposals: {
+        listProposalsByKey: () => [],
+        updateProposal: vi.fn(),
+      },
+      snapshots: {
+        addSnapshot: vi.fn(),
+        getSnapshotByKey: () => ({
+          id: 'snapshot_1',
+          keyId: 'key_1',
+          proposalId: 'proposal_1',
+          profileJson: JSON.stringify({
+            acceptedProposal: {
+              type: 'page_design',
+              payload: {
+                version: 2,
+                schema,
+              },
+            },
+          }),
+          createdAt: '2026-05-18T00:00:00.000Z',
+        }),
+      },
+      states: { updateAgentState: vi.fn() },
+      designs: {
+        getLatestDesign: () => ({ version: 3 }),
+        addKeyDesign,
+      },
+      memories: { updateMemory: vi.fn() },
+      works: {
+        getWorkByKey: vi.fn(),
+        updateWorkVisibility: vi.fn(),
+      },
+      events: { addEvent: vi.fn() },
+    } as any)).toEqual({ id: 'snapshot_1', type: 'rollback', status: 'restored' })
+
+    expect(addKeyDesign).toHaveBeenCalledWith(expect.objectContaining({
+      keyId: 'key_1',
+      version: 4,
     }))
   })
 })

@@ -1,3 +1,5 @@
+import type { StarBoundarySettings } from '../db/sqlite'
+
 export type ExtractedMemory = {
   shouldRemember: boolean
   type: string
@@ -18,7 +20,7 @@ export type NormalizedMemory = {
   content: string
   importance: number
   confidence: number
-  status: 'active'
+  status: 'active' | 'pending'
 }
 
 const allowedMemoryTypes = new Set<AgentMemoryType>(['emotion', 'preference', 'event', 'person', 'creative_asset'])
@@ -28,6 +30,28 @@ const inferencePatterns = [
   '已经喜欢',
   '必然',
   '说明她喜欢',
+]
+const sensitiveTextPatterns = [
+  /身份证/,
+  /护照/,
+  /银行卡/,
+  /银行账户/,
+  /支付密码/,
+  /登录密码/,
+  /密码/,
+  /手机号/,
+  /手机号码/,
+  /电话号码/,
+  /住址/,
+  /家庭地址/,
+  /家庭住址/,
+  /身份证号/,
+  /社保/,
+  /病历/,
+  /诊断/,
+  /用药/,
+  /\b1[3-9]\d{9}\b/,
+  /\b\d{17}[\dXx]\b/,
 ]
 
 function normalizeComparableText(value: string) {
@@ -133,6 +157,47 @@ export function shouldPersistMemory(memory: ExtractedMemory) {
   }
 
   return !inferencePatterns.some(pattern => memory.content.includes(pattern))
+}
+
+export function isSensitiveMemoryContent(content: string) {
+  return sensitiveTextPatterns.some(pattern => pattern.test(content))
+}
+
+function matchesTopic(content: string, topics: string[]) {
+  const text = content.toLowerCase()
+
+  return topics.some((topic) => {
+    const normalized = topic.trim().toLowerCase()
+    return normalized && text.includes(normalized)
+  })
+}
+
+export function isDisallowedMemoryContent(content: string, boundarySettings: StarBoundarySettings) {
+  return matchesTopic(content, boundarySettings.disallowedMemoryTopics)
+}
+
+export function resolveMemoryWriteStatus(memory: Pick<NormalizedMemory, 'content' | 'importance'>, boundarySettings: StarBoundarySettings): NormalizedMemory['status'] {
+  const allowedTopics = boundarySettings.allowedMemoryTopics
+    .map(topic => topic.trim())
+    .filter(Boolean)
+
+  if (allowedTopics.length > 0 && !matchesTopic(memory.content, allowedTopics)) {
+    return 'pending'
+  }
+
+  if (boundarySettings.requireApprovalForSensitiveMemory && isSensitiveMemoryContent(memory.content)) {
+    return 'pending'
+  }
+
+  if (boundarySettings.memoryWriteMode === 'manual') {
+    return 'pending'
+  }
+
+  if (boundarySettings.memoryWriteMode === 'assisted' && memory.importance >= 0.9) {
+    return 'pending'
+  }
+
+  return 'active'
 }
 
 export function normalizeMemoryType(type: string): AgentMemoryType {

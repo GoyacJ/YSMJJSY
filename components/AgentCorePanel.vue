@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useAgentCore, type AgentCore, type AgentCoreProposal, type AgentCoreProposalAction } from '../composables/useAgentCore'
-import { useAgentOs, type AgentOsInboxItem, type AgentOsPlannedTaskItem, type AgentOsState, type AgentOsTaskItem, type AgentTaskCreateInput } from '../composables/useAgentOs'
+import { useAgentOs, type AgentOsEventItem, type AgentOsInboxItem, type AgentOsPlannedTaskItem, type AgentOsRecordItem, type AgentOsState, type AgentOsTaskItem, type AgentTaskCreateInput } from '../composables/useAgentOs'
 
 const props = defineProps<{
   embedded?: boolean
@@ -32,9 +32,12 @@ const panelOpen = computed(() => props.embedded || open.value)
 const inboxItems = computed(() => loadedOs.value?.inbox ?? [])
 const osTasks = computed(() => loadedOs.value?.tasks ?? [])
 const osEvents = computed(() => loadedOs.value?.events ?? [])
+const osRecords = computed(() => loadedOs.value?.records?.length
+  ? loadedOs.value.records
+  : osEvents.value.map(eventToRecord))
 const plannedTasks = computed(() => loadedOs.value?.plannedTasks ?? [])
 const pendingProposals = computed(() => core.value?.proposals.pending ?? [])
-const pendingProposalLabel = computed(() => inboxItems.value.length ? '进化细节' : '待确认进化')
+const pendingProposalLabel = computed(() => inboxItems.value.length ? '调整细节' : '待确认调整')
 const proposalHistory = computed(() => core.value?.proposals.history ?? [])
 const snapshotsByProposalId = computed(() => new Map((core.value?.snapshots ?? [])
   .filter(snapshot => snapshot.proposalId)
@@ -58,7 +61,7 @@ async function loadPanel() {
     loadedOs.value = nextOs
   }
   catch {
-    error.value = 'Agent Core 没有加载成功。'
+    error.value = '记录没有加载成功。'
   }
   finally {
     pending.value = false
@@ -275,7 +278,7 @@ async function triggerSleep() {
     }
   }
   catch {
-    error.value = '睡眠周期没有执行成功。'
+    error.value = '整理报告没有执行成功。'
   }
   finally {
     pending.value = false
@@ -329,6 +332,42 @@ function getInboxApproveLabel(item: AgentOsInboxItem) {
   return '批准'
 }
 
+function eventToRecord(event: AgentOsEventItem): AgentOsRecordItem {
+  const failed = event.type === 'task.failed' || event.type === 'tool.failed' || event.type === 'provider.failed' || event.type === 'policy.denied'
+  const type: AgentOsRecordItem['type'] = failed
+    ? '失败'
+    : event.type === 'organizing_report.completed' || event.targetType === 'sleep'
+      ? '整理'
+      : event.targetType === 'memory'
+        ? '记忆'
+        : event.targetType === 'work' && (event.type === 'approval.required' || event.type === 'approval.approved')
+          ? '发布'
+          : event.targetType === 'work'
+            ? '作品'
+            : '行动'
+
+  const status = failed
+    ? '失败'
+    : event.type === 'task.completed' || event.type === 'tool.completed' || event.type === 'organizing_report.completed'
+      ? '完成'
+      : event.type === 'approval.required'
+        ? '待确认'
+        : event.type === 'approval.approved'
+          ? '已确认'
+          : event.type === 'approval.rejected'
+            ? '已拒绝'
+            : '已记录'
+
+  return {
+    id: event.id,
+    type,
+    title: event.type === 'provider.failed' ? '模型调用失败' : event.title,
+    summary: event.summary,
+    status,
+    createdAt: event.createdAt,
+  }
+}
+
 onMounted(() => {
   if (props.embedded) {
     void loadPanel()
@@ -337,7 +376,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <aside class="agent-core-panel" :class="{ 'agent-core-panel--embedded': embedded }" aria-label="星AI">
+  <aside class="agent-core-panel" :class="{ 'agent-core-panel--embedded': embedded }" aria-label="待确认">
     <button
       v-if="!embedded"
       type="button"
@@ -345,15 +384,14 @@ onMounted(() => {
       :aria-expanded="open"
       @click="openPanel"
     >
-      打开星AI
+      待确认
     </button>
 
     <section v-if="panelOpen" class="agent-core-panel__sheet">
       <header>
         <div>
-          <p>星AI</p>
+          <p>待确认</p>
           <span v-if="core">{{ core.profile.assistantName }} · {{ core.profile.mbti }}</span>
-          <span v-if="loadedOs">{{ loadedOs.agent.status }} · {{ loadedOs.agent.domain }}</span>
         </div>
         <button v-if="!embedded" type="button" class="dialog-close-button" aria-label="关闭面板" @click="open = false">
           ×
@@ -406,7 +444,7 @@ onMounted(() => {
 
         <section class="agent-core-panel__tasks">
           <p class="agent-core-panel__label">
-            任务中心
+            行动
           </p>
           <div class="agent-core-panel__task-create">
             <input v-model="taskPrompt" aria-label="任务提示词" maxlength="120">
@@ -463,17 +501,17 @@ onMounted(() => {
 
         <section class="agent-core-panel__events">
           <p class="agent-core-panel__label">
-            审计事件
+            记录
           </p>
-          <ul v-if="osEvents.length">
-            <li v-for="event in osEvents" :key="event.id">
-              <strong>{{ event.title }}</strong>
-              <span>{{ event.summary }}</span>
-              <small>{{ event.type }} · {{ formatTime(event.createdAt) }}</small>
+          <ul v-if="osRecords.length">
+            <li v-for="record in osRecords" :key="record.id">
+              <strong>{{ record.title }}</strong>
+              <span>{{ record.summary }}</span>
+              <small>{{ record.type }} · {{ record.status }} · {{ formatTime(record.createdAt) }}</small>
             </li>
           </ul>
           <p v-else class="agent-core-panel__muted">
-            还没有事件
+            还没有记录
           </p>
         </section>
 
@@ -499,7 +537,7 @@ onMounted(() => {
 
         <section>
           <p class="agent-core-panel__label">
-            睡眠周期
+            整理报告
           </p>
           <dl class="agent-core-panel__status">
             <div>
@@ -575,7 +613,7 @@ onMounted(() => {
               <div v-if="proposal.type === 'page_design'">
                 <button
                   type="button"
-                  aria-label="生成设计预览"
+                  aria-label="生成页面预览"
                   :disabled="pending"
                   @click="previewProposal(proposal.id)"
                 >

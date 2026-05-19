@@ -1,6 +1,11 @@
 import { defineEventHandler, getQuery } from 'h3'
 import { createAgentWorkRepository, createKeyProfileRepository, type AgentWorkType, type PublicStarRecord } from '../db/sqlite'
 
+export type PublicWorkDisclosure = {
+  aiGenerated: true
+  explicitLabel: string
+}
+
 export type PublicStarResponseItem = {
   id: string
   name: string
@@ -13,7 +18,42 @@ export type PublicStarResponseItem = {
     type: AgentWorkType
     title: string
     summary: string
+    disclosure?: PublicWorkDisclosure
   }>
+}
+
+function extractPublicWorkDisclosure(payloadJson?: string | null): PublicWorkDisclosure | undefined {
+  if (!payloadJson) {
+    return undefined
+  }
+
+  try {
+    const parsed = JSON.parse(payloadJson) as unknown
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined
+    }
+
+    const disclosure = (parsed as { disclosure?: unknown }).disclosure
+
+    if (!disclosure || typeof disclosure !== 'object' || Array.isArray(disclosure)) {
+      return undefined
+    }
+
+    const record = disclosure as { aiGenerated?: unknown, explicitLabel?: unknown }
+
+    if (record.aiGenerated !== true || typeof record.explicitLabel !== 'string' || !record.explicitLabel.trim()) {
+      return undefined
+    }
+
+    return {
+      aiGenerated: true,
+      explicitLabel: record.explicitLabel.trim().slice(0, 40),
+    }
+  }
+  catch {
+    return undefined
+  }
 }
 
 export function mapPublicStar(record: PublicStarRecord): PublicStarResponseItem {
@@ -29,6 +69,9 @@ export function mapPublicStar(record: PublicStarRecord): PublicStarResponseItem 
       type: work.type,
       title: work.title,
       summary: work.summary,
+      ...(extractPublicWorkDisclosure(work.payloadJson)
+        ? { disclosure: extractPublicWorkDisclosure(work.payloadJson) }
+        : {}),
     })),
   }
 }
@@ -50,6 +93,7 @@ export default defineEventHandler((event) => {
       type: work.type,
       title: work.title,
       summary: work.summary,
+      payloadJson: work.payloadJson,
     })
     publicWorksByKey.set(work.keyId, works)
   }

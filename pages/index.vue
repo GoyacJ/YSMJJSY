@@ -54,6 +54,14 @@ function handleUnlocked(result: UnlockResult) {
           <h1 class="home-entry__title">
             余生梦见皆是缘
           </h1>
+          <p class="home-entry__copy">
+            一把钥匙，进入只属于你的私人星球。
+          </p>
+          <ul class="home-entry__signals" aria-label="星球能力">
+            <li>私密记忆</li>
+            <li>私人作品</li>
+            <li>可改边界</li>
+          </ul>
           <UnlockGate
             :unlock="unlock"
             :create-key="createKey"
@@ -67,6 +75,14 @@ function handleUnlocked(result: UnlockResult) {
           <h1 class="home-entry__title">
             余生梦见皆是缘
           </h1>
+          <p class="home-entry__copy">
+            一把钥匙，进入只属于你的私人星球。
+          </p>
+          <ul class="home-entry__signals" aria-label="星球能力">
+            <li>私密记忆</li>
+            <li>私人作品</li>
+            <li>可改边界</li>
+          </ul>
           <UnlockGate
             :unlock="unlock"
             :create-key="createKey"

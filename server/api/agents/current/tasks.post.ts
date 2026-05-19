@@ -18,6 +18,7 @@ const taskLabels: Record<AgentTaskType, { title: string, summary: string }> = {
   propose_evolution: { title: '生成进化提案', summary: '生成智能体进化提案。' },
   generate_artifact: { title: '生成作品', summary: '生成星球作品。' },
   preview_design: { title: '预览设计', summary: '生成页面设计预览。' },
+  commit_design: { title: '提交设计', summary: '保存页面设计版本。' },
   publish_artifact: { title: '公开作品', summary: '公开一个作品。' },
 }
 
@@ -25,6 +26,7 @@ const supportedTaskTypes = new Set<AgentTaskType>([
   'sleep',
   'generate_artifact',
   'preview_design',
+  'commit_design',
   'publish_artifact',
   'govern_memory',
 ])

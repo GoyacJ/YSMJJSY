@@ -38,6 +38,18 @@ function getMediaDownloadName(part: StarChatPart) {
 
 const source = computed(() => getMediaSource(props.part))
 const downloadName = computed(() => getMediaDownloadName(props.part))
+const isProcessing = computed(() =>
+  ['music', 'video'].includes(props.part.type)
+  && !source.value
+  && 'status' in props.part
+  && props.part.status === 'processing',
+)
+const isFailed = computed(() =>
+  ['music', 'video'].includes(props.part.type)
+  && !source.value
+  && 'status' in props.part
+  && props.part.status === 'failed',
+)
 </script>
 
 <template>
@@ -70,6 +82,12 @@ const downloadName = computed(() => getMediaDownloadName(props.part))
       >
         下载
       </a>
+    </figcaption>
+  </figure>
+  <figure v-else-if="isProcessing || isFailed" class="star-spectral-media" :data-kind="part.type" :data-status="part.status">
+    <figcaption class="star-spectral-media__actions">
+      <span v-if="isProcessing">{{ part.type === 'music' ? '音乐生成中' : '视频生成中' }}</span>
+      <span v-else>{{ part.type === 'music' ? '音乐生成失败' : '视频生成失败' }}</span>
     </figcaption>
   </figure>
 </template>

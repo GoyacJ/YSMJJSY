@@ -7,13 +7,63 @@ export type AgentModelMessage = {
 
 export type AgentToolRiskLevel = 'low' | 'medium' | 'high'
 
+export type AgentToolCategory =
+  | 'reply'
+  | 'media'
+  | 'memory'
+  | 'design'
+  | 'publish'
+  | 'system'
+
+export type AgentToolBehavior =
+  | 'present_reply'
+  | 'create'
+  | 'retrieve'
+  | 'mutate'
+  | 'publish'
+
+export type AgentToolCapability =
+  | 'text_to_speech'
+  | 'generate_image'
+  | 'generate_music'
+  | 'generate_song'
+  | 'generate_video'
+  | 'search_memory'
+  | 'search_work'
+  | 'preview_design'
+  | 'commit_design'
+  | 'publish_work'
+  | 'govern_memory'
+  | 'sleep_review'
+
+export type AgentToolOutputType =
+  | 'text'
+  | 'status'
+  | 'audio'
+  | 'image'
+  | 'music'
+  | 'video'
+
+export type AgentToolMetadata = {
+  title?: string
+  category?: AgentToolCategory
+  behavior?: AgentToolBehavior
+  capabilities?: AgentToolCapability[]
+  aliases?: string[]
+  whenToUse?: string
+  cannotDo?: string
+  outputTypes?: AgentToolOutputType[]
+  inputSchema?: Record<string, unknown>
+}
+
 export type AgentToolResult<Output = unknown> = {
   ok: boolean
   output?: Output
+  chatParts?: Array<Record<string, unknown>>
   error?: string
 }
 
-export type AgentTool<Input = unknown, Output = unknown> = {
+export type AgentTool<Input = unknown, Output = unknown> = AgentToolMetadata & {
   name: string
   description: string
   riskLevel: AgentToolRiskLevel
@@ -66,7 +116,16 @@ export function createAgentToolRegistry(): AgentToolRegistry {
     list() {
       return Array.from(tools.values()).map(tool => ({
         name: tool.name,
+        title: tool.title,
         description: tool.description,
+        category: tool.category,
+        behavior: tool.behavior,
+        capabilities: tool.capabilities,
+        aliases: tool.aliases,
+        whenToUse: tool.whenToUse,
+        cannotDo: tool.cannotDo,
+        outputTypes: tool.outputTypes,
+        inputSchema: tool.inputSchema,
         riskLevel: tool.riskLevel,
         approvalRequired: tool.approvalRequired,
       }))

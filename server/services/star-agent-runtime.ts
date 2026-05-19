@@ -28,5 +28,8 @@ export function registerDefaultStarAgentTools(
       generateMusic: input.media?.generateMusic ?? (prompt => mediaClient.generateMusic(prompt || getDefaultMusicPrompt())),
       createVideoTask: input.media?.createVideoTask ?? (prompt => mediaClient.createVideoTask(normalizeMediaPrompt(prompt))),
     },
+    reply: {
+      speak: input.reply?.speak ?? (text => mediaClient.textToSpeech(text)),
+    },
   })
 }

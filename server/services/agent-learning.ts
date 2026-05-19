@@ -1,5 +1,14 @@
 import type { AgentModelMessage } from './agent-runtime'
-import { detectMemoryConflict, isSimilarRejectedMemory, normalizeMemory, shouldPersistMemory, type NormalizedMemory } from './memory'
+import { defaultStarBoundarySettings, type StarBoundarySettings } from '../db/sqlite'
+import {
+  detectMemoryConflict,
+  isDisallowedMemoryContent,
+  isSimilarRejectedMemory,
+  normalizeMemory,
+  resolveMemoryWriteStatus,
+  shouldPersistMemory,
+  type NormalizedMemory,
+} from './memory'
 
 export type AgentEvolutionProposalType = 'tone' | 'relationship_role' | 'content_strategy' | 'memory_weight' | 'page_design'
 
@@ -229,6 +238,23 @@ export function filterRejectedLearnedMemories(memories: NormalizedMemory[], reje
 
 export function filterConflictingLearnedMemories(memories: NormalizedMemory[], activeMemories: string[]) {
   return memories.filter(memory => !detectMemoryConflict(memory.content, activeMemories))
+}
+
+export function applyBoundaryToLearnedMemories(memories: NormalizedMemory[], input: {
+  boundarySettings?: StarBoundarySettings
+  activeMemories: string[]
+  rejectedMemories: string[]
+}) {
+  const boundarySettings = input.boundarySettings ?? defaultStarBoundarySettings
+  const filtered = filterConflictingLearnedMemories(
+    filterRejectedLearnedMemories(memories, input.rejectedMemories),
+    input.activeMemories,
+  ).filter(memory => !isDisallowedMemoryContent(memory.content, boundarySettings))
+
+  return filtered.map(memory => ({
+    ...memory,
+    status: resolveMemoryWriteStatus(memory, boundarySettings),
+  }))
 }
 
 export function parseAgentReflectionResult(text: string): ParsedAgentReflection {

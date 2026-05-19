@@ -1,4 +1,5 @@
 import { readonly, ref } from 'vue'
+import { withCsrfHeaders } from './useCsrf'
 
 export type AgentOsInboxItem = {
   id: string
@@ -31,6 +32,21 @@ export type AgentOsEventItem = {
   createdAt: string
 }
 
+export type AgentOsRecordItem = {
+  id: string
+  type: '记忆' | '行动' | '作品' | '发布' | '整理' | '失败'
+  title: string
+  summary: string
+  status: string
+  createdAt: string
+  details?: {
+    sections: Array<{
+      title: string
+      items: string[]
+    }>
+  }
+}
+
 export type AgentOsPlannedTaskItem = {
   type: string
   title: string
@@ -49,6 +65,7 @@ export type AgentOsState = {
   inbox: AgentOsInboxItem[]
   tasks: AgentOsTaskItem[]
   events: AgentOsEventItem[]
+  records?: AgentOsRecordItem[]
   plannedTasks?: AgentOsPlannedTaskItem[]
 }
 
@@ -83,6 +100,7 @@ export function useAgentOs() {
     try {
       await $fetch(`/api/agents/current/inbox/${encodeURIComponent(id)}/approve`, {
         method: 'POST',
+        headers: withCsrfHeaders(),
       })
       await loadOs()
       return true
@@ -97,6 +115,7 @@ export function useAgentOs() {
     try {
       await $fetch(`/api/agents/current/inbox/${encodeURIComponent(id)}/reject`, {
         method: 'POST',
+        headers: withCsrfHeaders(),
       })
       await loadOs()
       return true
@@ -127,6 +146,7 @@ export function useAgentOs() {
     try {
       const result = await $fetch<{ task: AgentOsTaskItem }>('/api/agents/current/tasks', {
         method: 'POST',
+        headers: withCsrfHeaders(),
         body: input,
       })
       await loadTasks()
@@ -142,6 +162,7 @@ export function useAgentOs() {
     try {
       await $fetch(`/api/agents/current/tasks/${encodeURIComponent(id)}`, {
         method: 'PUT',
+        headers: withCsrfHeaders(),
         body: { action: 'run' },
       })
       await loadTasks()
@@ -157,6 +178,7 @@ export function useAgentOs() {
     try {
       await $fetch(`/api/agents/current/tasks/${encodeURIComponent(id)}`, {
         method: 'PUT',
+        headers: withCsrfHeaders(),
         body: { action: 'cancel' },
       })
       await loadTasks()

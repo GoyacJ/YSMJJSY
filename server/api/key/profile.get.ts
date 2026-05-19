@@ -26,5 +26,6 @@ export default defineEventHandler((event) => {
     assistantName: profile.assistantName,
     mbti: profile.mbti,
     configured: Boolean(profile.configuredAt),
+    boundarySettings: profile.boundarySettings,
   }
 })

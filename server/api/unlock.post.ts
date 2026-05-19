@@ -1,9 +1,15 @@
 import { z } from 'zod'
 import { nanoid } from 'nanoid'
-import { getRequestHeader } from 'h3'
-import { createKeyDesignRepository, createKeyProfileRepository } from '../db/sqlite'
+import { getRequestHeader, setCookie } from 'h3'
+import { createKeyDesignRepository, createKeyProfileRepository, createKeySessionRepository } from '../db/sqlite'
 import { createIpHash, createKeyLookupHash, normalizeKey } from '../services/key-access'
-import { createKeySessionToken, getSessionCookieName, isValidUnlockCode } from '../services/session'
+import {
+  createCsrfToken,
+  createOpaqueSessionToken,
+  getCsrfCookieName,
+  getSessionCookieName,
+  isValidUnlockCode,
+} from '../services/session'
 import { createDefaultDesignSchemaJson } from './keys.post'
 
 const unlockBodySchema = z.object({
@@ -74,8 +80,28 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  setCookie(event, getSessionCookieName(), createKeySessionToken(profile.id, secret), {
+  const sessionId = `session_${nanoid()}`
+  const sessionNow = new Date()
+  const csrf = createCsrfToken(sessionId, secret)
+
+  createKeySessionRepository(config.sqlitePath).addSession({
+    id: sessionId,
+    keyId: profile.id,
+    csrfHash: csrf,
+    createdAt: sessionNow.toISOString(),
+    expiresAt: new Date(sessionNow.getTime() + 1000 * 60 * 60 * 12).toISOString(),
+    revokedAt: null,
+  })
+
+  setCookie(event, getSessionCookieName(), createOpaqueSessionToken(sessionId, secret), {
     httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 12,
+    path: '/',
+  })
+  setCookie(event, getCsrfCookieName(), csrf, {
+    httpOnly: false,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     maxAge: 60 * 60 * 12,

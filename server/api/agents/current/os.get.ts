@@ -11,14 +11,15 @@ import {
 } from '../../../db/sqlite'
 import { createAgentLoop } from '../../../services/agent-loop'
 import { buildAgentOsResponse } from '../../../services/agent-os'
+import { recoverStaleRunningTasks } from '../../../services/agent-task-recovery'
 import { requireAgentKey } from '../../agent/core.get'
 
 export function buildCurrentAgentOsResponse(input: {
   keyId: string
   now: string
   agents: Pick<ReturnType<typeof createAgentInstanceRepository>, 'getOrCreateAgentForOwner'>
-  tasks: Pick<ReturnType<typeof createAgentTaskRepository>, 'listTasksByAgent'>
-  events: Pick<ReturnType<typeof createAgentEventRepository>, 'listEventsByAgent'>
+  tasks: Pick<ReturnType<typeof createAgentTaskRepository>, 'listTasksByAgent'> & Partial<Pick<ReturnType<typeof createAgentTaskRepository>, 'listTasksByStatus' | 'updateTask'>>
+  events: Pick<ReturnType<typeof createAgentEventRepository>, 'listEventsByAgent'> & Partial<Pick<ReturnType<typeof createAgentEventRepository>, 'addEvent'>>
   proposals: Pick<ReturnType<typeof createAgentEvolutionRepository>, 'listProposalsByKey'>
   works: Pick<ReturnType<typeof createAgentWorkRepository>, 'listWorksByKey'>
   sleeps?: Pick<ReturnType<typeof createAgentSleepRepository>, 'getLatestSleepRunByKey'>
@@ -31,6 +32,17 @@ export function buildCurrentAgentOsResponse(input: {
     domain: 'star',
     now: input.now,
   })
+
+  if (input.tasks.listTasksByStatus && input.tasks.updateTask && input.events.addEvent) {
+    recoverStaleRunningTasks({
+      now: input.now,
+      staleAfterMs: 30 * 60 * 1000,
+      tasks: input.tasks.listTasksByStatus('running').filter(task => task.agentId === agent.id),
+      taskRepo: { updateTask: input.tasks.updateTask },
+      events: { addEvent: input.events.addEvent },
+    })
+  }
+
   const tasks = input.tasks.listTasksByAgent(agent.id)
   const events = input.events.listEventsByAgent(agent.id)
   const plannedTasks = input.observations

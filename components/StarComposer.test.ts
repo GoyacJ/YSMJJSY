@@ -8,7 +8,6 @@ function mountComposer(props = {}) {
       input: '',
       pending: false,
       listening: false,
-      selectedMediaKinds: [],
       attachmentMenuOpen: false,
       ...props,
     },
@@ -22,10 +21,10 @@ describe('StarComposer', () => {
     expect(wrapper.get('button[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="设计模式"]').exists()).toBe(false)
-    expect(wrapper.get('button[aria-label="听一听"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="画一张"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="做一段"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="写一首"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="生成语音"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="生成图片"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="生成视频"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="生成音乐"]').exists()).toBe(false)
     expect(wrapper.get('textarea').attributes('placeholder')).toBe('把想说的话交给这片星空')
 
     await wrapper.get('textarea').setValue('第一行')
@@ -63,18 +62,13 @@ describe('StarComposer', () => {
     expect(wrapper.get('.star-chat__mobile-actions button[aria-label="语音输入"]').exists()).toBe(true)
     expect(wrapper.find('.star-chat__mobile-actions button[aria-label="设计模式"]').exists()).toBe(false)
     expect(wrapper.get('.star-chat__quick-tools button[aria-label="语音输入"]').exists()).toBe(true)
-
-    await wrapper.get('button[aria-label="画一张"]').trigger('click')
-    expect(wrapper.emitted('toggle-media-kind')).toEqual([['image']])
   })
 
-  it('marks selected media intent on the composer shell', () => {
-    const wrapper = mountComposer({
-      selectedMediaKinds: ['image'],
-    })
+  it('does not expose compatibility media intent state', () => {
+    const wrapper = mountComposer()
 
     expect(wrapper.get('form').attributes('data-mode')).toBeUndefined()
     expect(wrapper.get('textarea').attributes('placeholder')).toBe('把想说的话交给这片星空')
-    expect(wrapper.get('button[aria-label="画一张"]').attributes('data-active')).toBe('true')
+    expect(wrapper.find('[data-active="true"]').exists()).toBe(false)
   })
 })

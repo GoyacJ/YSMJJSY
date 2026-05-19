@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { defaultStarBoundarySettings } from '../db/sqlite'
 import {
+  applyBoundaryToLearnedMemories,
   buildAgentReflectionMessages,
   calculateNextSleepAt,
   filterRejectedLearnedMemories,
@@ -197,5 +199,92 @@ describe('agent learning service', () => {
         status: 'active',
       },
     ], ['用户喜欢短句。']).map(memory => memory.content)).toEqual(['用户喜欢蓝色。'])
+  })
+
+  it('stages sensitive learned memories when confirmation is required', () => {
+    const result = applyBoundaryToLearnedMemories([
+      {
+        type: 'person',
+        content: '用户的身份证号是 110101199001010011。',
+        importance: 0.9,
+        confidence: 0.95,
+        status: 'active',
+      },
+    ], {
+      boundarySettings: defaultStarBoundarySettings,
+      activeMemories: [],
+      rejectedMemories: [],
+    })
+
+    expect(result[0]).toMatchObject({
+      content: '用户的身份证号是 110101199001010011。',
+      status: 'pending',
+    })
+  })
+
+  it('does not recreate rejected learned memories without new user evidence', () => {
+    const result = applyBoundaryToLearnedMemories([
+      {
+        type: 'preference',
+        content: '用户喜欢短句。',
+        importance: 0.8,
+        confidence: 0.9,
+        status: 'active',
+      },
+    ], {
+      boundarySettings: defaultStarBoundarySettings,
+      activeMemories: [],
+      rejectedMemories: ['用户喜欢短句。'],
+    })
+
+    expect(result).toEqual([])
+  })
+
+  it('stages learned memories that do not match allowed topics', () => {
+    const result = applyBoundaryToLearnedMemories([
+      {
+        type: 'preference',
+        content: '用户喜欢蓝色。',
+        importance: 0.8,
+        confidence: 0.9,
+        status: 'active',
+      },
+    ], {
+      boundarySettings: {
+        ...defaultStarBoundarySettings,
+        memoryWriteMode: 'auto',
+        allowedMemoryTopics: ['写作偏好'],
+      },
+      activeMemories: [],
+      rejectedMemories: [],
+    })
+
+    expect(result[0]).toMatchObject({
+      content: '用户喜欢蓝色。',
+      status: 'pending',
+    })
+  })
+
+  it('lets disallowed topics win over allowed topics', () => {
+    const result = applyBoundaryToLearnedMemories([
+      {
+        type: 'person',
+        content: '用户的身份证号是 110101199001010011。',
+        importance: 0.9,
+        confidence: 0.95,
+        status: 'active',
+      },
+    ], {
+      boundarySettings: {
+        ...defaultStarBoundarySettings,
+        memoryWriteMode: 'auto',
+        allowedMemoryTopics: ['身份证号'],
+        disallowedMemoryTopics: ['身份证号'],
+      },
+      activeMemories: [],
+      rejectedMemories: [],
+    })
+
+    expect(result).toEqual([])
   })
 })

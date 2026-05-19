@@ -24,6 +24,18 @@ export type SerializedAgentEvent = {
   createdAt: string
 }
 
+export type OrganizingReportSection = {
+  type: 'new_memory' | 'merge' | 'deletion' | 'action' | 'work'
+  title: string
+  items: string[]
+}
+
+export type OrganizingReport = {
+  title: '整理报告'
+  summary: string
+  sections: OrganizingReportSection[]
+}
+
 export function buildAgentEvent(input: BuildAgentEventInput): AgentEventRecord {
   return {
     id: input.id,
@@ -49,4 +61,26 @@ export function serializeAgentEventForOs(event: AgentEventRecord): SerializedAge
     targetId: event.targetId ?? null,
     createdAt: event.createdAt,
   }
+}
+
+export function buildOrganizingReportEvent(input: {
+  id: string
+  agentId: string
+  sleepRunId: string
+  report: OrganizingReport
+  createdAt: string
+}) {
+  return buildAgentEvent({
+    id: input.id,
+    agentId: input.agentId,
+    type: 'organizing_report.completed',
+    title: input.report.title,
+    summary: input.report.summary,
+    targetType: 'sleep',
+    targetId: input.sleepRunId,
+    payload: {
+      sections: input.report.sections,
+    },
+    createdAt: input.createdAt,
+  })
 }

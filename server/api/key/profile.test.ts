@@ -6,9 +6,29 @@ describe('key profile api helpers', () => {
     expect(parseProfileUpdate({
       assistantName: '星信',
       mbti: 'INTJ',
+      boundarySettings: {
+        memoryWriteMode: 'manual',
+        generatedWorksDefaultVisibility: 'private',
+        requireApprovalForPublishing: true,
+        requireApprovalForPersonaChange: true,
+        requireApprovalForSensitiveMemory: true,
+        disallowedMemoryTopics: ['身份证号'],
+        allowedMemoryTopics: ['写作偏好'],
+        minorMode: true,
+      },
     })).toEqual({
       assistantName: '星信',
       mbti: 'INTJ',
+      boundarySettings: {
+        memoryWriteMode: 'manual',
+        generatedWorksDefaultVisibility: 'private',
+        requireApprovalForPublishing: true,
+        requireApprovalForPersonaChange: true,
+        requireApprovalForSensitiveMemory: true,
+        disallowedMemoryTopics: ['身份证号'],
+        allowedMemoryTopics: ['写作偏好'],
+        minorMode: true,
+      },
     })
   })
 

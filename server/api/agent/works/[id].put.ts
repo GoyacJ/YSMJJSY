@@ -4,13 +4,14 @@ import {
   createAgentInstanceRepository,
   createAgentTaskRepository,
   createAgentWorkRepository,
+  createKeyProfileRepository,
   type AgentEventRecord,
   type AgentTaskRecord,
   type AgentWorkRecord,
   type AgentWorkVisibility,
 } from '../../../db/sqlite'
 import { createAgentLoop } from '../../../services/agent-loop'
-import { defaultAgentPolicy } from '../../../services/agent-policy'
+import { createAgentPolicyFromBoundarySettings, defaultAgentPolicy, type AgentPolicy } from '../../../services/agent-policy'
 import { enqueueAgentTask } from '../../../services/agent-task-queue'
 import { createAgentToolRegistry, type AgentToolRegistry } from '../../../services/agent-runtime'
 import { registerStarAgentTools } from '../../../services/star-agent-tools'
@@ -76,6 +77,7 @@ export async function publishWorkActionOrTask(input: {
   }
   events: { addEvent: (record: AgentEventRecord) => void }
   registry: Pick<AgentToolRegistry, 'get' | 'execute'>
+  policy?: AgentPolicy
 }) {
   if (input.visibility !== 'public') {
     return updateAgentWorkVisibilityAction({
@@ -106,7 +108,7 @@ export async function publishWorkActionOrTask(input: {
     tasks: input.tasks,
     events: input.events,
     registry: input.registry,
-    policy: defaultAgentPolicy,
+    policy: input.policy ?? defaultAgentPolicy,
   }).runTask(task)
 
   return {
@@ -155,10 +157,16 @@ export default defineEventHandler(async (event) => {
       now,
     })
     const registry = createAgentToolRegistry()
+    const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
+
+    if (!profile) {
+      throw createError({ statusCode: 404, statusMessage: 'Profile not found' })
+    }
 
     registerStarAgentTools(registry, {
       keyId,
       now,
+      boundarySettings: profile.boundarySettings,
       works,
     })
 
@@ -172,6 +180,7 @@ export default defineEventHandler(async (event) => {
       tasks: createAgentTaskRepository(config.sqlitePath),
       events: createAgentEventRepository(config.sqlitePath),
       registry,
+      policy: createAgentPolicyFromBoundarySettings(profile.boundarySettings),
     })
   }
 

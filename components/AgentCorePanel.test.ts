@@ -84,13 +84,14 @@ describe('AgentCorePanel', () => {
       },
     })
 
-    expect(wrapper.get('button.agent-core-panel__trigger').text()).toBe('打开星AI')
+    expect(wrapper.get('button.agent-core-panel__trigger').text()).toBe('待确认')
 
     await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('星AI')
+    expect(wrapper.text()).toContain('待确认')
     expect(wrapper.text()).not.toContain('智能体核心')
+    expect(wrapper.text()).not.toContain(['星', 'AI'].join(''))
     expect(wrapper.text()).toContain('阿月')
     expect(wrapper.text()).toContain('INTJ')
     expect(wrapper.text()).toContain('记忆 2/3')
@@ -100,7 +101,7 @@ describe('AgentCorePanel', () => {
     expect(wrapper.text()).toContain('辅助学习')
     expect(wrapper.text()).toContain('最近反思')
     expect(wrapper.text()).toContain('用户喜欢短句。')
-    expect(wrapper.text()).toContain('待确认进化')
+    expect(wrapper.text()).toContain('待确认调整')
     expect(wrapper.text()).toContain('回复更短。')
     expect(wrapper.text()).toContain('接受后：语气会调整为更短')
     expect(wrapper.text()).toContain('进化历史')
@@ -151,7 +152,7 @@ describe('AgentCorePanel', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('决策收件箱')
-    expect(wrapper.text()).toContain('任务中心')
+    expect(wrapper.text()).toContain('行动')
     expect(wrapper.text()).toContain('睡眠整理')
 
     const approveButton = wrapper.findAll('button').find(button => button.text() === '批准')
@@ -210,11 +211,52 @@ describe('AgentCorePanel', () => {
     await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('审计事件')
-    expect(wrapper.text()).toContain('Provider failed')
+    expect(wrapper.text()).toContain('记录')
+    expect(wrapper.text()).toContain('模型调用失败')
     expect(wrapper.text()).toContain('记忆治理')
     expect(wrapper.text()).toContain('执行')
     expect(wrapper.text()).toContain('公开作品')
+    expect(wrapper.text()).not.toContain('provider.failed')
+    expect(wrapper.text()).not.toContain('payloadJson')
+  })
+
+  it('shows product records instead of raw event types', async () => {
+    const wrapper = mount(AgentCorePanel, {
+      props: {
+        loadCore: async () => core,
+        loadOs: async () => ({
+          agent: { id: 'agent_1', status: 'active', ownerType: 'key', ownerId: 'key_1', domain: 'star' },
+          inbox: [],
+          tasks: [],
+          events: [{
+            id: 'event_1',
+            type: 'provider.failed',
+            title: 'Provider failed',
+            summary: '模型失败。',
+            createdAt: '2026-05-18T00:00:00.000Z',
+          }],
+          records: [{
+            id: 'event_1',
+            type: '失败',
+            title: '模型调用失败',
+            summary: '模型失败。',
+            status: '失败',
+            createdAt: '2026-05-18T00:00:00.000Z',
+          }],
+        }),
+        applyProposal: vi.fn(),
+      },
+    })
+
+    await wrapper.get('button.agent-core-panel__trigger').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('记录')
+    expect(wrapper.text()).toContain('失败')
+    expect(wrapper.text()).toContain('模型调用失败')
+    expect(wrapper.text()).toContain('2026-05-18 00:00:00')
+    expect(wrapper.text()).not.toContain('provider.failed')
+    expect(wrapper.text()).not.toContain('Provider failed')
     expect(wrapper.text()).not.toContain('payloadJson')
   })
 
@@ -385,7 +427,7 @@ describe('AgentCorePanel', () => {
     expect(wrapper.text()).toContain('生成预览')
     expect(wrapper.find('button[aria-label="接受提案"]').exists()).toBe(false)
 
-    await wrapper.get('button[aria-label="生成设计预览"]').trigger('click')
+    await wrapper.get('button[aria-label="生成页面预览"]').trigger('click')
 
     expect(previewDesignProposal).toHaveBeenCalledWith('p_design')
     expect(applyProposal).not.toHaveBeenCalled()
@@ -447,7 +489,8 @@ describe('AgentCorePanel', () => {
     await flushPromises()
 
     expect(wrapper.find('button.agent-core-panel__trigger').exists()).toBe(false)
-    expect(wrapper.text()).toContain('星AI')
+    expect(wrapper.text()).toContain('待确认')
+    expect(wrapper.text()).not.toContain(['星', 'AI'].join(''))
     expect(wrapper.text()).not.toContain('智能体核心')
     expect(wrapper.text()).toContain('回复更短。')
   })
@@ -469,7 +512,7 @@ describe('AgentCorePanel', () => {
     await wrapper.get('button.agent-core-panel__trigger').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('睡眠周期')
+    expect(wrapper.text()).toContain('整理报告')
     await wrapper.get('button[aria-label="让智能体思考"]').trigger('click')
     expect(runSleep).toHaveBeenCalled()
   })

@@ -7,6 +7,9 @@ import { buildMemoryPlanetState } from '../utils/memory-planet'
 const props = defineProps<{
   core: AgentCore | null
   open: boolean
+  embedded?: boolean
+  memoryOnly?: boolean
+  initialView?: 'planet' | 'timeline' | 'works'
   governMemory?: (id: string, action: MemoryGovernanceAction) => Promise<boolean>
   timeline?: AgentTimelineItem[]
   timelineGroups?: AgentTimelineGroup[]
@@ -24,7 +27,7 @@ const selectedMemoryId = ref<string | null>(null)
 const selectedProposalId = ref<string | null>(null)
 const selectedWorkId = ref<string | null>(null)
 const workFilter = ref('all')
-const activeView = ref<'planet' | 'timeline' | 'works'>('planet')
+const activeView = ref<'planet' | 'timeline' | 'works'>(props.memoryOnly ? 'planet' : props.initialView ?? 'planet')
 const state = computed(() => buildMemoryPlanetState(props.core))
 const selectedMemory = computed(() => props.core?.memories.find(memory => memory.id === selectedMemoryId.value))
 const selectedProposal = computed(() => state.value.proposalLights.find(proposal => proposal.id === selectedProposalId.value))
@@ -34,6 +37,25 @@ const filteredWorks = computed(() => {
 })
 const selectedWork = computed(() => (props.works ?? []).find(work => work.id === selectedWorkId.value))
 const latestMemoryGovernanceEvent = computed(() => selectedMemory.value?.governanceEvents?.[0])
+const memoryTypeLabels: Record<string, string> = {
+  emotion: '情绪',
+  preference: '偏好',
+  event: '事件',
+  person: '人物',
+  creative_asset: '素材',
+}
+const memoryStatusLabels: Record<string, string> = {
+  active: '已确认',
+  pending: '待确认',
+  archived: '已归档',
+  rejected: '已拒绝',
+}
+const memoryGovernanceActionLabels: Record<string, string> = {
+  confirm: '确认',
+  downgrade: '降权',
+  archive: '归档',
+  reject: '拒绝',
+}
 const workFilters = [
   { value: 'all', label: '全部', aria: '筛选全部作品' },
   { value: 'image', label: '图片', aria: '筛选图片作品' },
@@ -82,6 +104,25 @@ watch(
   },
 )
 
+watch(
+  () => props.initialView,
+  (view) => {
+    if (view) {
+      activeView.value = props.memoryOnly ? 'planet' : view
+    }
+  },
+)
+
+watch(
+  () => props.memoryOnly,
+  (memoryOnly) => {
+    if (memoryOnly) {
+      activeView.value = 'planet'
+    }
+  },
+  { immediate: true },
+)
+
 function selectMemory(id: string) {
   selectedMemoryId.value = id
   selectedProposalId.value = null
@@ -105,6 +146,11 @@ async function applyMemoryAction(action: MemoryGovernanceAction) {
 }
 
 async function switchView(view: 'planet' | 'timeline' | 'works') {
+  if (props.memoryOnly && view !== 'planet') {
+    activeView.value = 'planet'
+    return
+  }
+
   activeView.value = view
 
   if (view === 'timeline') {
@@ -170,22 +216,49 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
   const payload = work.payload
   return payload && typeof payload.title === 'string' ? payload.title : ''
 }
+
+function getWorkVisibilityLabel(visibility: AgentWorkItem['visibility']) {
+  return visibility === 'public' ? '已公开' : '私密'
+}
+
+function getWorkDisclosureLabel(work: AgentWorkItem) {
+  const disclosure = work.payload?.disclosure
+
+  if (!disclosure || typeof disclosure !== 'object' || Array.isArray(disclosure)) {
+    return ''
+  }
+
+  const explicitLabel = (disclosure as { explicitLabel?: unknown }).explicitLabel
+  return typeof explicitLabel === 'string' && explicitLabel.trim() ? explicitLabel : ''
+}
+
+function getMemoryTypeLabel(type: string) {
+  return memoryTypeLabels[type] ?? type
+}
+
+function getMemoryStatusLabel(status?: string) {
+  return memoryStatusLabels[status ?? 'active'] ?? status ?? '已确认'
+}
+
+function getMemoryGovernanceActionLabel(action: string) {
+  return memoryGovernanceActionLabels[action] ?? action
+}
 </script>
 
 <template>
-  <div v-if="open" class="memory-planet-panel__backdrop" @click.self="$emit('close')">
-  <aside class="memory-planet-panel" role="dialog" aria-label="记忆星球">
+  <div v-if="open" :class="embedded ? 'memory-planet-panel__embedded' : 'memory-planet-panel__backdrop'" @click.self="$emit('close')">
+  <aside class="memory-planet-panel" :class="{ 'memory-planet-panel--embedded': embedded }" role="dialog" aria-label="记忆星球">
     <header>
       <div>
         <p>记忆星球</p>
-        <span>记忆、反思和进化轨道</span>
+        <span>记忆、来源和确认记录</span>
       </div>
-      <button type="button" class="dialog-close-button memory-planet-panel__close" aria-label="关闭记忆星球" @click="$emit('close')">
+      <button v-if="!embedded" type="button" class="dialog-close-button memory-planet-panel__close" aria-label="关闭记忆星球" @click="$emit('close')">
         ×
       </button>
     </header>
 
-    <nav class="memory-planet-panel__tabs" aria-label="记忆星球视图">
+    <nav v-if="!memoryOnly" class="memory-planet-panel__tabs" aria-label="记忆星球视图">
       <button type="button" aria-label="查看记忆星球" :aria-pressed="activeView === 'planet'" @click="switchView('planet')">
         星球
       </button>
@@ -243,6 +316,8 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
           >
           <strong>{{ work.title }}</strong>
           <span>{{ work.summary }}</span>
+          <span>{{ getWorkVisibilityLabel(work.visibility) }}</span>
+          <span v-if="getWorkDisclosureLabel(work)">{{ getWorkDisclosureLabel(work) }}</span>
         </button>
         <button type="button" :aria-label="work.visibility === 'public' ? '设为私密作品' : '公开作品'" @click="toggleWorkVisibility(work)">
           {{ work.visibility === 'public' ? '设为私密' : '公开' }}
@@ -255,14 +330,14 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
       <template v-if="selectedMemory">
         <p>记忆</p>
         <strong>{{ selectedMemory.content }}</strong>
-        <span>{{ selectedMemory.type }}</span>
-        <span>重要性 {{ selectedMemory.importance.toFixed(2) }} · 置信 {{ selectedMemory.confidence.toFixed(2) }}</span>
-        <span>状态 {{ selectedMemory.status ?? 'active' }}</span>
-        <span v-if="selectedMemory.sourceConversationId">来源 {{ selectedMemory.sourceConversationId }}</span>
-        <span v-if="selectedMemory.sourceAttachmentId">附件 {{ selectedMemory.sourceAttachmentId }}</span>
+        <span>{{ getMemoryTypeLabel(selectedMemory.type) }}</span>
+        <span>重要性 {{ selectedMemory.importance.toFixed(2) }} · 置信度 {{ selectedMemory.confidence.toFixed(2) }}</span>
+        <span>状态 {{ getMemoryStatusLabel(selectedMemory.status) }}</span>
+        <span v-if="selectedMemory.sourceConversationId">来源 对话 {{ selectedMemory.sourceConversationId }}</span>
+        <span v-if="selectedMemory.sourceAttachmentId">来源附件 {{ selectedMemory.sourceAttachmentId }}</span>
         <span v-if="selectedMemory.sourceExcerpt">{{ selectedMemory.sourceExcerpt }}</span>
         <span v-if="latestMemoryGovernanceEvent">
-          最近治理动作 {{ latestMemoryGovernanceEvent.action }} · {{ latestMemoryGovernanceEvent.reason }}
+          最近记录 {{ getMemoryGovernanceActionLabel(latestMemoryGovernanceEvent.action) }} · {{ latestMemoryGovernanceEvent.reason }}
         </span>
         <div class="memory-planet-panel__actions">
           <button type="button" aria-label="确认记忆" @click="applyMemoryAction('confirm')">
@@ -277,16 +352,19 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
           <button type="button" aria-label="拒绝记忆" @click="applyMemoryAction('reject')">
             拒绝
           </button>
+          <button type="button" aria-label="删除记忆" @click="applyMemoryAction('delete')">
+            删除
+          </button>
         </div>
       </template>
       <template v-else-if="selectedProposal">
-        <p>待确认进化</p>
+        <p>待确认调整</p>
         <strong>{{ selectedProposal.title }}</strong>
         <span>{{ selectedProposal.summary }}</span>
       </template>
       <template v-else-if="!hasPlanetContent">
         <p>还没有形成星球</p>
-        <span>对话后会出现记忆、反思和进化轨道。</span>
+        <span>还没有记忆</span>
       </template>
       <template v-else>
         <p>星球正在记录</p>
@@ -298,7 +376,8 @@ function getWorkSchemaTitle(work: AgentWorkItem) {
       <p>作品</p>
       <strong>{{ selectedWork.title }}</strong>
       <span>{{ selectedWork.summary }}</span>
-      <span>{{ selectedWork.type }} · {{ selectedWork.visibility }}</span>
+      <span>{{ selectedWork.type }} · {{ getWorkVisibilityLabel(selectedWork.visibility) }}</span>
+      <span v-if="getWorkDisclosureLabel(selectedWork)">{{ getWorkDisclosureLabel(selectedWork) }}</span>
       <span v-if="selectedWork.sourceConversationId">来源 {{ selectedWork.sourceConversationId }}</span>
       <span v-if="selectedWork.sourceDesignVersion">设计版本 {{ selectedWork.sourceDesignVersion }}</span>
       <img v-if="selectedWork.type === 'image' && getWorkPreviewUrl(selectedWork)" :src="getWorkPreviewUrl(selectedWork)!" :alt="selectedWork.title">

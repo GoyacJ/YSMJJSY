@@ -1,26 +1,18 @@
 import { z } from 'zod'
-import { Buffer } from 'node:buffer'
 import { finalConfession, letterParagraphs, memoryMoments } from '../../content/letter'
 import { starLetterPersona } from '../../content/persona'
 import type { AgentContentStrategy, AgentEvolutionProposalRecord, AgentReflectionRecord, ConversationRecord, MemoryRecord } from '../db/sqlite'
-import { getDefaultMusicPrompt, normalizeMediaPrompt } from './media'
 import type { MiniMaxMessage, createMiniMaxClient } from './minimax'
-import type { ResolvedChatIntent } from './chat-intent'
 
 export const chatBodySchema = z.object({
   message: z.string().trim().max(1000).default(''),
-  intent: z.enum(['auto', 'chat', 'audio', 'image', 'music', 'video']).default('auto'),
   attachments: z.array(z.object({
     kind: z.enum(['image', 'video', 'audio']),
     dataUrl: z.string().regex(/^data:(?:image\/(?:png|jpeg|webp)|audio\/(?:mpeg|mp3|mp4|m4a|wav|webm)|video\/(?:mp4|webm|quicktime));base64,[A-Za-z0-9+/=]+$/).max(28_000_000),
     name: z.string().trim().min(1).max(160),
     mimeType: z.string().trim().min(1).max(80),
   })).max(3).default([]),
-  imageDataUrl: z.string()
-    .regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/)
-    .max(3_000_000)
-    .optional(),
-}).refine(data => data.message.length > 0 || data.imageDataUrl || data.attachments.length > 0, {
+}).refine(data => data.message.length > 0 || data.attachments.length > 0, {
   message: 'Message or image is required',
 })
 
@@ -43,8 +35,8 @@ export type StarChatMessagePart =
   | { type: 'text', text: string }
   | { type: 'audio', url?: string, base64?: string }
   | { type: 'image', url?: string, base64?: string }
-  | { type: 'music', url?: string, base64?: string }
-  | { type: 'video', url?: string }
+  | { type: 'music', url?: string, base64?: string, taskId?: string, providerTaskId?: string, status?: string }
+  | { type: 'video', url?: string, base64?: string, providerTaskId?: string, status?: string }
   | { type: 'status', text: string }
 
 export type StarChatApiReply = {
@@ -57,17 +49,44 @@ export type StarChatApiReply = {
   taskId?: string
 }
 
-export type StarChatIntentClient = Pick<
+export type StarChatTextClient = Pick<
   ReturnType<typeof createMiniMaxClient>,
-  'chatStream' | 'textToSpeechStream' | 'generateImage' | 'generateMusicStream' | 'createVideoTask'
+  'chatStream'
 >
 
 export type StarChatStreamEvent =
   | { type: 'delta', text: string }
-  | { type: 'audio-delta', hex: string }
-  | { type: 'music-delta', hex: string }
   | { type: 'status', text: string }
+  | { type: 'tool-status', text: string, visibility?: 'user' | 'debug' }
+  | { type: 'tool-confirmation', taskId: string, inboxItemId: string, title: string, summary: string }
   | StarChatApiReply & { type: 'message' }
+
+export const starChatStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('delta'), text: z.string() }),
+  z.object({ type: z.literal('status'), text: z.string() }),
+  z.object({
+    type: z.literal('tool-status'),
+    text: z.string(),
+    visibility: z.enum(['user', 'debug']).optional(),
+  }),
+  z.object({
+    type: z.literal('tool-confirmation'),
+    taskId: z.string(),
+    inboxItemId: z.string(),
+    title: z.string(),
+    summary: z.string(),
+  }),
+  z.object({
+    type: z.literal('message'),
+    reply: z.string(),
+    message: z.object({
+      role: z.literal('assistant'),
+      content: z.string(),
+      parts: z.array(z.record(z.string(), z.unknown())),
+    }),
+    taskId: z.string().optional(),
+  }),
+])
 
 function buildLetterContext() {
   const paragraphs = letterParagraphs.map(item => `- ${item.text}`).join('\n')
@@ -183,77 +202,11 @@ export function buildMemoryExtractionMessages(userMessage: string, assistantRepl
   ]
 }
 
-export async function streamStarChatReply(input: {
-  client: StarChatIntentClient
-  intent: ResolvedChatIntent
+export async function streamStarChatTextReply(input: {
+  client: StarChatTextClient
   messages: MiniMaxMessage[]
-  prompt: string
-  emit: (event: StarChatStreamEvent) => void | Promise<void>
-}): Promise<StarChatApiReply> {
-  if (input.intent === 'image') {
-    await input.emit({ type: 'status', text: '正在画一张。' })
-    const image = await input.client.generateImage(normalizeMediaPrompt(input.prompt))
-    const reply = '画好了。'
-    const result: StarChatApiReply = {
-      reply,
-      message: {
-        role: 'assistant',
-        content: reply,
-        parts: [
-          { type: 'text', text: reply },
-          { type: 'image', ...image },
-        ],
-      },
-    }
-
-    await input.emit({ type: 'message', ...result })
-    return result
-  }
-
-  if (input.intent === 'video') {
-    await input.emit({ type: 'status', text: '视频开始生成了。' })
-    const task = await input.client.createVideoTask(input.prompt)
-    const reply = '视频开始生成了。'
-    const result: StarChatApiReply = {
-      reply,
-      message: {
-        role: 'assistant',
-        content: reply,
-        parts: [{ type: 'status', text: reply }],
-      },
-      taskId: task.providerTaskId,
-    }
-
-    await input.emit({ type: 'message', ...result })
-    return result
-  }
-
-  if (input.intent === 'music') {
-    await input.emit({ type: 'status', text: '正在写一首。' })
-    let musicHex = ''
-
-    for await (const hex of input.client.generateMusicStream(input.prompt || getDefaultMusicPrompt())) {
-      musicHex += hex
-      await input.emit({ type: 'music-delta', hex })
-    }
-
-    const reply = '写好了。'
-    const result: StarChatApiReply = {
-      reply,
-      message: {
-        role: 'assistant',
-        content: reply,
-        parts: [
-          { type: 'text', text: reply },
-          { type: 'music', base64: Buffer.from(musicHex, 'hex').toString('base64') },
-        ],
-      },
-    }
-
-    await input.emit({ type: 'message', ...result })
-    return result
-  }
-
+  emit: (event: Extract<StarChatStreamEvent, { type: 'delta' }>) => void | Promise<void>
+}) {
   let reply = ''
 
   for await (const delta of input.client.chatStream(input.messages)) {
@@ -261,28 +214,5 @@ export async function streamStarChatReply(input: {
     await input.emit({ type: 'delta', text: delta })
   }
 
-  const parts: StarChatMessagePart[] = [{ type: 'text', text: reply }]
-
-  if (input.intent === 'audio') {
-    let audioHex = ''
-
-    for await (const hex of input.client.textToSpeechStream(reply)) {
-      audioHex += hex
-      await input.emit({ type: 'audio-delta', hex })
-    }
-
-    parts.push({ type: 'audio', base64: Buffer.from(audioHex, 'hex').toString('base64') })
-  }
-
-  const result: StarChatApiReply = {
-    reply,
-    message: {
-      role: 'assistant',
-      content: reply,
-      parts,
-    },
-  }
-
-  await input.emit({ type: 'message', ...result })
-  return result
+  return reply
 }

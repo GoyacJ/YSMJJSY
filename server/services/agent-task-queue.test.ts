@@ -36,7 +36,7 @@ describe('agent task queue', () => {
       execute: vi.fn(async () => ({ ok: true, output: { url: 'u' } })),
     }
 
-    await runAgentTask({
+    await expect(runAgentTask({
       task: {
         id: 'task_1',
         agentId: 'agent_1',
@@ -53,10 +53,61 @@ describe('agent task queue', () => {
       events: { addEvent },
       registry,
       policy: { autoRunLowRiskTasks: true } as any,
-    } as any)
+    } as any)).resolves.toMatchObject({
+      status: 'completed',
+      output: { url: 'u' },
+    })
 
     expect(updateTask).toHaveBeenCalledWith('task_1', expect.objectContaining({ status: 'completed' }))
     expect(addEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'task.completed' }))
+  })
+
+  it('returns ephemeral chat parts without writing them to task result json', async () => {
+    const updateTask = vi.fn()
+    const addEvent = vi.fn()
+    const registry = {
+      get: () => ({
+        name: 'star.generateImage',
+        description: 'Generate image',
+        riskLevel: 'medium',
+        approvalRequired: false,
+        execute: vi.fn(async () => ({
+          ok: true,
+          output: { type: 'image', status: 'created' },
+          chatParts: [{ type: 'image', base64: 'raw-image' }],
+        })),
+      }),
+      execute: vi.fn(async () => ({
+        ok: true,
+        output: { type: 'image', status: 'created' },
+        chatParts: [{ type: 'image', base64: 'raw-image' }],
+      })),
+    }
+
+    await expect(runAgentTask({
+      task: {
+        id: 'task_1',
+        agentId: 'agent_1',
+        type: 'generate_artifact',
+        status: 'queued',
+        title: '生成图片',
+        summary: '生成图片。',
+        inputJson: '{"toolName":"star.generateImage","input":{"prompt":"star"}}',
+        createdAt: '2026-05-18T00:00:00.000Z',
+        updatedAt: '2026-05-18T00:00:00.000Z',
+      },
+      now: '2026-05-18T00:01:00.000Z',
+      tasks: { updateTask },
+      events: { addEvent },
+      registry,
+      policy: { autoRunLowRiskTasks: true } as any,
+    } as any)).resolves.toMatchObject({
+      status: 'completed',
+      chatParts: [{ type: 'image', base64: 'raw-image' }],
+    })
+
+    const completedUpdate = updateTask.mock.calls.find(call => call[1]?.status === 'completed')?.[1]
+    expect(completedUpdate?.resultJson).not.toContain('raw-image')
   })
 
   it('writes tool audit events around task execution', async () => {

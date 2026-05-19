@@ -15,6 +15,7 @@ export type AgentEventType =
   | 'tool.failed'
   | 'provider.failed'
   | 'policy.denied'
+  | 'organizing_report.completed'
 
 export type AgentInboxItemType =
   | 'proposal'

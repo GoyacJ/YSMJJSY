@@ -1,8 +1,9 @@
 import { readonly, ref } from 'vue'
 import type { StarPageDesignSchema } from '../types/design-schema'
+import { withCsrfHeaders } from './useCsrf'
 
 export type AgentCoreProposalAction = 'accept' | 'reject'
-export type MemoryGovernanceAction = 'confirm' | 'downgrade' | 'archive' | 'reject'
+export type MemoryGovernanceAction = 'confirm' | 'downgrade' | 'archive' | 'reject' | 'delete'
 
 export type AgentContentStrategy = {
   replyLength?: 'short' | 'balanced' | 'rich'
@@ -65,6 +66,7 @@ export type AgentCore = {
   memoryCounts: {
     total: number
     active: number
+    pending: number
     archived: number
     rejected: number
   }
@@ -151,6 +153,7 @@ export function useAgentCore() {
     try {
       await $fetch(`/api/agent/proposals/${id}`, {
         method: 'PUT',
+        headers: withCsrfHeaders(),
         body: { action },
       })
       await loadCore()
@@ -172,6 +175,7 @@ export function useAgentCore() {
     try {
       return await $fetch<{ schema: StarPageDesignSchema }>(`/api/agent/design-proposals/${id}`, {
         method: 'POST',
+        headers: withCsrfHeaders(),
       })
     }
     catch {
@@ -190,6 +194,7 @@ export function useAgentCore() {
     try {
       await $fetch(`/api/agent/snapshots/${id}/restore`, {
         method: 'POST',
+        headers: withCsrfHeaders(),
       })
       await loadCore()
       return true
@@ -210,6 +215,7 @@ export function useAgentCore() {
     try {
       await $fetch('/api/agent/sleep', {
         method: 'POST',
+        headers: withCsrfHeaders(),
       })
       await loadCore()
       return true
@@ -230,6 +236,7 @@ export function useAgentCore() {
     try {
       await $fetch(`/api/agent/memories/${id}`, {
         method: 'PUT',
+        headers: withCsrfHeaders(),
         body: { action, reason },
       })
       await loadCore()
@@ -273,6 +280,7 @@ export function useAgentCore() {
     try {
       await $fetch(`/api/agent/works/${id}`, {
         method: 'PUT',
+        headers: withCsrfHeaders(),
         body: { visibility },
       })
       await loadWorks()
