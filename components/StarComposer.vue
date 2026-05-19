@@ -22,10 +22,10 @@ const emit = defineEmits<{
 }>()
 
 const mediaActions: Array<{ kind: MediaIntent, label: string, icon: string }> = [
-  { kind: 'audio', label: '听一听', icon: 'M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4' },
-  { kind: 'image', label: '画一张', icon: 'M4 5h16v14H4zM8 14l2.5-3 2 2.5L15 10l5 6M8 9h.01' },
-  { kind: 'video', label: '做一段', icon: 'M4 6h11v12H4zM15 10l5-3v10l-5-3z' },
-  { kind: 'music', label: '写一首', icon: 'M9 18V5l10-2v13M9 9l10-2M7 18a2 2 0 1 0 4 0 2 2 0 0 0-4 0M17 16a2 2 0 1 0 4 0 2 2 0 0 0-4 0' },
+  { kind: 'audio', label: '生成语音', icon: 'M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4' },
+  { kind: 'image', label: '生成图片', icon: 'M4 5h16v14H4zM8 14l2.5-3 2 2.5L15 10l5 6M8 9h.01' },
+  { kind: 'video', label: '生成视频', icon: 'M4 6h11v12H4zM15 10l5-3v10l-5-3z' },
+  { kind: 'music', label: '生成音乐', icon: 'M9 18V5l10-2v13M9 9l10-2M7 18a2 2 0 1 0 4 0 2 2 0 0 0-4 0M17 16a2 2 0 1 0 4 0 2 2 0 0 0-4 0' },
 ]
 
 function handleInputEnter(event: KeyboardEvent) {

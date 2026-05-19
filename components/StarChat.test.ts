@@ -112,7 +112,7 @@ describe('StarChat', () => {
       })
     const wrapper = mountStarChat({ props: { sendMessageStream } })
 
-    await wrapper.find('textarea').setValue('画一张星空')
+    await wrapper.find('textarea').setValue('生成图片星空')
     await wrapper.find('form').trigger('submit.prevent')
 
     expect(wrapper.text()).toContain('正在生成')
@@ -172,10 +172,10 @@ describe('StarChat', () => {
     expect(wrapper.get('button[aria-label="添加附件"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="语音输入"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="设计模式"]').exists()).toBe(false)
-    expect(wrapper.get('button[aria-label="听一听"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="画一张"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="做一段"]').exists()).toBe(true)
-    expect(wrapper.get('button[aria-label="写一首"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="生成语音"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="生成图片"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="生成视频"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="生成音乐"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="发送"]').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('完全访问权限')
     expect(wrapper.get('textarea').attributes('placeholder')).toBe('把想说的话交给这片星空')
@@ -307,7 +307,7 @@ describe('StarChat', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="画一张"]').trigger('click')
+    await wrapper.get('button[aria-label="生成图片"]').trigger('click')
     await wrapper.find('textarea').setValue('月光星空')
     await wrapper.find('form').trigger('submit.prevent')
 
@@ -662,7 +662,7 @@ describe('StarChat', () => {
     })
     await input.trigger('change')
     await flushPromises()
-    await wrapper.get('button[aria-label="听一听"]').trigger('click')
+    await wrapper.get('button[aria-label="生成语音"]').trigger('click')
     await wrapper.find('textarea').setValue('看看这张图，再读给我听')
     const submitPromise = wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
@@ -775,7 +775,7 @@ describe('StarChat', () => {
 
   it('renders stream status events before final media message', async () => {
     const sendMessageStream = vi.fn(async (_payload, onEvent) => {
-      onEvent({ type: 'status', text: '正在画一张。' })
+      onEvent({ type: 'status', text: '正在生成图片。' })
       await flushPromises()
       onEvent({
         type: 'message',
@@ -803,7 +803,7 @@ describe('StarChat', () => {
     })
     const wrapper = mountStarChat({ props: { sendMessageStream } })
 
-    await wrapper.get('button[aria-label="画一张"]').trigger('click')
+    await wrapper.get('button[aria-label="生成图片"]').trigger('click')
     await wrapper.find('textarea').setValue('月光星空')
     await wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
