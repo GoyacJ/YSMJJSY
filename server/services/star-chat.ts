@@ -6,6 +6,9 @@ import type { AgentContentStrategy, AgentEvolutionProposalRecord, AgentReflectio
 import { getDefaultMusicPrompt, normalizeMediaPrompt } from './media'
 import type { MiniMaxMessage, createMiniMaxClient } from './minimax'
 import type { ResolvedChatIntent } from './chat-intent'
+import type { AgentToolRegistry, NamedAgentModelProvider } from './agent-runtime'
+import { planStarChatTurn } from './star-chat-planner'
+import type { StarChatToolCall, StarChatTurnPlan } from './star-chat-planner'
 
 export const chatBodySchema = z.object({
   message: z.string().trim().max(1000).default(''),
@@ -23,6 +26,8 @@ export const chatBodySchema = z.object({
 }).refine(data => data.message.length > 0 || data.imageDataUrl || data.attachments.length > 0, {
   message: 'Message or image is required',
 })
+
+export type StarChatRequestIntent = z.infer<typeof chatBodySchema>['intent']
 
 type BuildStarChatMessagesInput = {
   userMessage: string
@@ -95,6 +100,107 @@ export const starChatStreamEventSchema = z.discriminatedUnion('type', [
     taskId: z.string().optional(),
   }),
 ])
+
+const emptyToolPlan: StarChatTurnPlan = {
+  reply: '',
+  toolSearches: [],
+  toolCalls: [],
+}
+
+const forcedToolByIntent: Partial<Record<StarChatRequestIntent, string>> = {
+  image: 'star.generateImage',
+  music: 'star.generateMusic',
+  video: 'star.generateVideo',
+  audio: 'star.speakReply',
+}
+
+function defaultReplyForIntent(intent: StarChatRequestIntent) {
+  if (intent === 'image') {
+    return '我来生成图片。'
+  }
+
+  if (intent === 'music') {
+    return '我来生成音乐。'
+  }
+
+  if (intent === 'video') {
+    return '我来生成视频。'
+  }
+
+  return ''
+}
+
+export function buildForcedToolCallFromIntent(
+  intent: StarChatRequestIntent,
+  prompt: string,
+  reply = '$reply',
+): StarChatToolCall | undefined {
+  const toolName = forcedToolByIntent[intent]
+
+  if (!toolName) {
+    return undefined
+  }
+
+  return {
+    toolName,
+    input: toolName === 'star.speakReply'
+      ? { text: reply }
+      : { prompt },
+    mode: 'execute',
+    evidence: '旧版 intent 字段显式指定了工具类型。',
+    reason: '兼容旧聊天请求格式。',
+  }
+}
+
+export async function planStarChatToolsForIntent(input: {
+  intent: StarChatRequestIntent
+  prompt: string
+  reply?: string
+  baseMessages: MiniMaxMessage[]
+  provider: Pick<NamedAgentModelProvider, 'chat'>
+  registry: Pick<AgentToolRegistry, 'list'>
+  commonToolNames: string[]
+}): Promise<{ fallbackToChat: boolean, plan: StarChatTurnPlan }> {
+  const forcedCall = buildForcedToolCallFromIntent(input.intent, input.prompt, input.reply)
+
+  if (forcedCall) {
+    return {
+      fallbackToChat: false,
+      plan: {
+        reply: input.reply || defaultReplyForIntent(input.intent),
+        toolSearches: [],
+        toolCalls: [forcedCall],
+      },
+    }
+  }
+
+  if (input.intent !== 'auto') {
+    return {
+      fallbackToChat: true,
+      plan: { ...emptyToolPlan },
+    }
+  }
+
+  try {
+    const plan = await planStarChatTurn({
+      provider: input.provider,
+      baseMessages: input.baseMessages,
+      registry: input.registry,
+      commonToolNames: input.commonToolNames,
+    })
+
+    return {
+      fallbackToChat: plan.reply.length < 1 && plan.toolCalls.length < 1,
+      plan,
+    }
+  }
+  catch {
+    return {
+      fallbackToChat: true,
+      plan: { ...emptyToolPlan },
+    }
+  }
+}
 
 function buildLetterContext() {
   const paragraphs = letterParagraphs.map(item => `- ${item.text}`).join('\n')
@@ -281,12 +387,11 @@ export async function streamStarChatReply(input: {
     return result
   }
 
-  let reply = ''
-
-  for await (const delta of input.client.chatStream(input.messages)) {
-    reply += delta
-    await input.emit({ type: 'delta', text: delta })
-  }
+  const reply = await streamStarChatTextReply({
+    client: input.client,
+    messages: input.messages,
+    emit: input.emit,
+  })
 
   const parts: StarChatMessagePart[] = [{ type: 'text', text: reply }]
 
@@ -312,4 +417,19 @@ export async function streamStarChatReply(input: {
 
   await input.emit({ type: 'message', ...result })
   return result
+}
+
+export async function streamStarChatTextReply(input: {
+  client: Pick<StarChatIntentClient, 'chatStream'>
+  messages: MiniMaxMessage[]
+  emit: (event: Extract<StarChatStreamEvent, { type: 'delta' }>) => void | Promise<void>
+}) {
+  let reply = ''
+
+  for await (const delta of input.client.chatStream(input.messages)) {
+    reply += delta
+    await input.emit({ type: 'delta', text: delta })
+  }
+
+  return reply
 }

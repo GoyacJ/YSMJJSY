@@ -3,10 +3,14 @@ import { createError, defineEventHandler, readBody, setResponseHeaders } from 'h
 import {
   buildStarChatMessages,
   chatBodySchema,
+  planStarChatToolsForIntent,
   selectAcceptedEvolutionNotes,
   selectActiveMemoryContents,
   selectRecentReflectionSummaries,
+  streamStarChatTextReply,
   streamStarChatReply,
+  type StarChatApiReply,
+  type StarChatMessagePart,
 } from '../../services/star-chat'
 import {
   createAgentEvolutionRepository,
@@ -15,11 +19,13 @@ import {
   createAgentObservationRepository,
   createAgentReflectionRepository,
   createAgentStateRepository,
+  createAgentTaskRepository,
   createAgentWorkRepository,
   createAttachmentRepository,
   createConversationRepository,
   createKeyProfileRepository,
   createMemoryRepository,
+  createMemoryEventRepository,
   createUsageLimitRepository,
   type AgentEvolutionProposalRecord,
   type AgentEventRecord,
@@ -31,11 +37,14 @@ import {
 } from '../../db/sqlite'
 import { buildAgentEvent } from '../../services/agent-events'
 import { withMiniMaxErrorBoundary } from '../../services/api-errors'
-import { resolveChatIntent } from '../../services/chat-intent'
 import { createIpHash } from '../../services/key-access'
 import { markKeyActivity } from '../../services/key-activity'
 import { createMiniMaxClient } from '../../services/minimax'
 import { createDefaultAgentProviderRegistry } from '../../services/agent-providers'
+import { defaultAgentPolicy } from '../../services/agent-policy'
+import { createAgentToolRegistry } from '../../services/agent-runtime'
+import { registerStarAgentTools } from '../../services/star-agent-tools'
+import { executeStarChatToolCalls, normalizeStarChatToolCalls } from '../../services/star-chat-tool-execution'
 import { assertWithinLimit, usageLimits } from '../../services/rate-limit'
 import {
   buildAgentReflectionMessages,
@@ -55,6 +64,45 @@ function getClientIp(event: Parameters<typeof readBody>[0]) {
     || event.node.req.headers['x-real-ip']?.toString()
     || event.node.req.socket.remoteAddress
     || 'unknown'
+}
+
+const commonStarChatToolNames = [
+  'star.speakReply',
+  'star.generateImage',
+  'star.generateMusic',
+  'star.generateVideo',
+  'star.searchMemories',
+  'star.searchWorks',
+]
+
+function matchesSearchText(query: string, values: string[]) {
+  const normalized = query.trim().toLowerCase()
+
+  return !normalized || values.some(value => value.toLowerCase().includes(normalized))
+}
+
+function buildToolStatusPart(text: string): StarChatMessagePart {
+  return { type: 'status', text }
+}
+
+function buildToolStatusText(input: { status: string, title?: string, error?: string }) {
+  if (input.status === 'completed') {
+    return `${input.title ?? '工具'}已完成。`
+  }
+
+  if (input.status === 'waiting_approval') {
+    return `${input.title ?? '工具'}等待确认。`
+  }
+
+  if (input.status === 'denied' || input.status === 'rejected') {
+    return input.error ?? `${input.title ?? '工具'}未执行。`
+  }
+
+  if (input.status === 'failed') {
+    return input.error ?? `${input.title ?? '工具'}执行失败。`
+  }
+
+  return `${input.title ?? '工具'}已更新。`
 }
 
 function buildUserMessageJson(content: string, attachments: Array<{ kind: 'image' | 'audio' | 'video', dataUrl: string }>) {
@@ -373,9 +421,11 @@ export default defineEventHandler(async (event) => {
   const agentState = states.getOrCreateAgentState(keyId, new Date().toISOString())
   const works = createAgentWorkRepository(config.sqlitePath)
   const agentInstances = createAgentInstanceRepository(config.sqlitePath)
+  const agentTasks = createAgentTaskRepository(config.sqlitePath)
   const observations = createAgentObservationRepository(config.sqlitePath)
   const agentEvents = createAgentEventRepository(config.sqlitePath)
   const attachmentRepo = createAttachmentRepository(config.sqlitePath)
+  const memoryEvents = createMemoryEventRepository(config.sqlitePath)
   const profile = createKeyProfileRepository(config.sqlitePath).getKeyProfile(keyId)
   const usage = createUsageLimitRepository(config.sqlitePath)
   const client = createMiniMaxClient({
@@ -456,10 +506,6 @@ export default defineEventHandler(async (event) => {
     memories: savedMemories,
     recentConversation,
   })
-  const intent = resolveChatIntent({
-    message: body.data.message,
-    forcedIntent: body.data.intent,
-  })
   const now = new Date().toISOString()
   const userConversationId = nanoid()
   const encoder = new TextEncoder()
@@ -494,21 +540,145 @@ export default defineEventHandler(async (event) => {
   return new ReadableStream({
     async start(controller) {
       try {
+        let currentAgentId: string | undefined
+        const emit = (streamEvent: Parameters<typeof encodeSse>[0]) => {
+          controller.enqueue(encoder.encode(encodeSse(streamEvent)))
+        }
         const result = await withMiniMaxErrorBoundary(
-          () => streamStarChatReply({
-            client,
-            intent,
-            messages,
-            prompt: body.data.message,
-            emit: streamEvent => controller.enqueue(encoder.encode(encodeSse(streamEvent))),
-          }),
+          async () => {
+            const agent = agentInstances.getOrCreateAgentForOwner({
+              ownerType: 'key',
+              ownerId: keyId,
+              domain: 'star',
+              now,
+            })
+            currentAgentId = agent.id
+
+            const registry = createAgentToolRegistry()
+
+            registerStarAgentTools(registry, {
+              keyId,
+              now,
+              provider: agentModelProvider,
+              media: {
+                generateImage: prompt => client.generateImage(prompt),
+                generateMusic: prompt => client.generateMusic(prompt),
+                createVideoTask: prompt => client.createVideoTask(prompt),
+              },
+              reply: {
+                speak: text => client.textToSpeech(text),
+              },
+              memorySearch: {
+                search: (searchKeyId, query, limit) => memories
+                  .listMemoriesByKey(searchKeyId)
+                  .filter(memory => matchesSearchText(query, [memory.content, memory.type]))
+                  .slice(0, limit),
+              },
+              workSearch: {
+                search: (searchKeyId, query, limit) => works
+                  .listWorksByKey(searchKeyId)
+                  .filter(work => matchesSearchText(query, [work.title, work.summary, work.type]))
+                  .slice(0, limit),
+              },
+              works,
+              memories,
+              memoryEvents,
+            })
+
+            let streamedReply = ''
+
+            if (body.data.intent === 'audio') {
+              streamedReply = await streamStarChatTextReply({
+                client,
+                messages,
+                emit,
+              })
+            }
+
+            const toolPlan = await planStarChatToolsForIntent({
+              intent: body.data.intent,
+              prompt: body.data.message,
+              reply: streamedReply || undefined,
+              baseMessages: messages,
+              provider: agentModelProvider,
+              registry,
+              commonToolNames: commonStarChatToolNames,
+            })
+
+            if (toolPlan.fallbackToChat) {
+              return streamStarChatReply({
+                client,
+                intent: 'chat',
+                messages,
+                prompt: body.data.message,
+                emit,
+              })
+            }
+
+            const reply = toolPlan.plan.reply || streamedReply || '我来处理。'
+            const parts: StarChatMessagePart[] = [{ type: 'text', text: reply }]
+
+            if (!streamedReply) {
+              await emit({ type: 'delta', text: reply })
+            }
+
+            const calls = normalizeStarChatToolCalls({
+              plan: toolPlan.plan,
+              registry,
+              reply,
+            })
+
+            if (calls.length > 0) {
+              await emit({ type: 'tool-status', text: '正在准备工具。' })
+            }
+
+            const toolResults = await executeStarChatToolCalls({
+              agentId: agent.id,
+              now,
+              calls,
+              tasks: agentTasks,
+              events: agentEvents,
+              registry,
+              policy: defaultAgentPolicy,
+            })
+
+            for (const toolResult of toolResults) {
+              const statusText = buildToolStatusText(toolResult)
+
+              parts.push(buildToolStatusPart(statusText))
+
+              if (toolResult.status === 'waiting_approval' && toolResult.taskId && toolResult.inboxItemId) {
+                await emit({
+                  type: 'tool-confirmation',
+                  taskId: toolResult.taskId,
+                  inboxItemId: toolResult.inboxItemId,
+                  title: toolResult.title ?? toolResult.toolName,
+                  summary: toolResult.summary ?? statusText,
+                })
+              }
+              else {
+                await emit({ type: 'tool-status', text: statusText })
+              }
+            }
+
+            const plannedResult: StarChatApiReply = {
+              reply,
+              message: {
+                role: 'assistant',
+                content: reply,
+                parts,
+              },
+            }
+
+            await emit({ type: 'message', ...plannedResult })
+            return plannedResult
+          },
           'Chat generation failed',
         )
 
         const assistantConversationId = nanoid()
 
         const assistantCreatedAt = new Date().toISOString()
-        let currentAgentId: string | undefined
 
         conversations.addConversation({
           id: assistantConversationId,
@@ -520,24 +690,18 @@ export default defineEventHandler(async (event) => {
         })
 
         try {
-          const agent = agentInstances.getOrCreateAgentForOwner({
-            ownerType: 'key',
-            ownerId: keyId,
-            domain: 'star',
-            now: assistantCreatedAt,
-          })
-          currentAgentId = agent.id
-
-          recordChatObservations({
-            agentId: agent.id,
-            userConversationId,
-            assistantConversationId,
-            userSummary: body.data.message ? '用户发送了一条聊天消息。' : '用户发送了一条附件消息。',
-            assistantSummary: '助手完成了一次回复。',
-            now: assistantCreatedAt,
-            observations,
-            events: agentEvents,
-          })
+          if (currentAgentId) {
+            recordChatObservations({
+              agentId: currentAgentId,
+              userConversationId,
+              assistantConversationId,
+              userSummary: body.data.message ? '用户发送了一条聊天消息。' : '用户发送了一条附件消息。',
+              assistantSummary: '助手完成了一次回复。',
+              now: assistantCreatedAt,
+              observations,
+              events: agentEvents,
+            })
+          }
         }
         catch {
           // Observation capture is secondary. A failed insert should not hide the reply.

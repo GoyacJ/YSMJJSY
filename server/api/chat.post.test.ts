@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildWorksFromAssistantMessage, recordChatObservations, runAgentLearning, scheduleAgentSleepAfterChat } from './chat/stream.post'
-import { buildStarChatMessages, starChatStreamEventSchema, streamStarChatReply } from '../services/star-chat'
+import { buildStarChatMessages, planStarChatToolsForIntent, starChatStreamEventSchema, streamStarChatReply } from '../services/star-chat'
 
 describe('chat api helpers', () => {
   it('accepts chat tool stream events', () => {
@@ -20,6 +20,71 @@ describe('chat api helpers', () => {
       inboxItemId: 'task_approval:task_1',
       title: '发布作品',
       summary: '发布前需要确认。',
+    })
+  })
+
+  it('uses the planner for automatic tool routing', async () => {
+    const provider = {
+      chat: vi.fn(async () => ({
+        reply: JSON.stringify({
+          reply: '可以，我来处理。',
+          toolCalls: [{
+            toolName: 'star.generateImage',
+            input: { prompt: '星空' },
+            mode: 'execute',
+            evidence: '用户要求生成图片。',
+            reason: '明确图片请求。',
+          }],
+        }),
+      })),
+    }
+
+    const result = await planStarChatToolsForIntent({
+      intent: 'auto',
+      prompt: '画一张星空',
+      baseMessages: [{ role: 'user', content: '画一张星空' }],
+      provider: provider as never,
+      registry: {
+        list: () => [{
+          name: 'star.generateImage',
+          title: '生成图片',
+          description: 'Generate image.',
+          category: 'media',
+          behavior: 'create',
+          riskLevel: 'medium',
+          approvalRequired: false,
+        }],
+      },
+      commonToolNames: ['star.generateImage'],
+    })
+
+    expect(provider.chat).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({
+      fallbackToChat: false,
+      plan: expect.objectContaining({
+        reply: '可以，我来处理。',
+        toolCalls: [expect.objectContaining({ toolName: 'star.generateImage' })],
+      }),
+    })
+  })
+
+  it('falls back to normal chat when automatic planning fails', async () => {
+    const provider = {
+      chat: vi.fn(async () => {
+        throw new Error('planner failed')
+      }),
+    }
+
+    await expect(planStarChatToolsForIntent({
+      intent: 'auto',
+      prompt: '画一张星空',
+      baseMessages: [{ role: 'user', content: '画一张星空' }],
+      provider: provider as never,
+      registry: { list: () => [] },
+      commonToolNames: [],
+    })).resolves.toEqual({
+      fallbackToChat: true,
+      plan: { reply: '', toolSearches: [], toolCalls: [] },
     })
   })
 
